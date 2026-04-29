@@ -1,0 +1,4 @@
+# Placeholder Fabric connection profile.
+# Remplace ce fichier avec ton profile reseau Hyperledger Fabric.
+name: agri-chain
+version: 1.0.0

@@ -1,0 +1,8 @@
+# Placeholder config pour references MSP/certificats.
+organizations:
+  - name: OrgAgriculteur
+    mspID: AgriculteurMSP
+  - name: OrgTransformateur
+    mspID: TransformateurMSP
+  - name: OrgDistributeur
+    mspID: DistributeurMSP
