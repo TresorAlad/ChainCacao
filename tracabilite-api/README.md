@@ -1,49 +1,115 @@
-# API Go - Tracabilite Blockchain
+# API Go — ChainCacao (tracabilité Fabric)
 
-Backend Golang (Gin) servant de pont entre frontend (React/React Native) et blockchain Hyperledger Fabric, conforme aux routes du cahier des charges.
+Backend Gin reliant Next.js / React Native à **Hyperledger Fabric** (via **fabric-gateway**), avec **PostgreSQL** (dont **Neon**), **Redis**, upload **Cloudinary**, **PDF EUDR** (signature RSA optionnelle) et **QR code PNG**.
 
 ## Architecture
 
-- `cmd/api`: point d'entree HTTP (`:8080` par defaut)
-- `internal/auth`: JWT (generation, validation, middleware, roles)
-- `internal/actors`: registre acteurs/organisations (demo in-memory)
-- `internal/batch`: logique metier (validation, creation, transfert, historique)
-- `internal/fabric`: adaptateur blockchain (client in-memory + interface a brancher au SDK Fabric)
-- `internal/httpapi`: handlers + routage Gin
-- `pkg/models`: structs partages
+| Dossier | Rôle |
+|--------|------|
+| `cmd/api` | Serveur HTTP |
+| `internal/auth` | JWT, middleware, rôles |
+| `internal/actors` | Acteurs : PostgreSQL ou mémoire |
+| `internal/db` | Migrations SQL embarquées |
+| `internal/batch` | Métier lots |
+| `internal/fabric` | `InMemoryClient` **ou** `GatewayClient` (Fabric) |
+| `internal/httpapi` | Routes Gin, CORS, rate limit |
+| `internal/cloudinary` | Upload image (preset non signé) |
+| `internal/media` | Métadonnées `lot_media` en SQL |
+| `internal/report` | Génération PDF EUDR |
+| `pkg/models` | Modèles partagés |
 
-## Prerequis
+## Prérequis
 
-- Go `1.21+`
+- Go **1.23+**
+- Pour la stack complète : Docker / Docker Compose
 
-## Lancer en local
+## Démarrage rapide (Docker : API + Postgres + Redis)
 
 ```bash
 cd tracabilite-api
-go mod tidy
-go run ./cmd/api
+docker compose up --build
 ```
 
-Health check:
+- API : `http://localhost:8080`
+- Sans réseau Fabric local, `USE_INMEMORY_FABRIC=true` (défaut dans `docker-compose.yml`) simule le ledger.
+
+Santé :
 
 ```bash
-curl http://localhost:8080/health
+curl -s http://localhost:8080/health
 ```
 
-## Routes exposees
+## Variables d’environnement (principales)
 
-- `POST /api/v1/auth/login` (public)
-- `POST /api/v1/batch/create` (JWT + role)
-- `POST /api/v1/batch/transfer` (JWT + role)
-- `GET /api/v1/batch/:id` (JWT)
-- `GET /api/v1/batch/:id/history` (JWT)
-- `GET /api/v1/verify/:id` (public)
-- `GET /api/v1/actors` (JWT)
-- `GET /health` (public)
+| Variable | Description |
+|----------|-------------|
+| `PORT` | Port HTTP (défaut `8080`) |
+| `DATABASE_URL` | PostgreSQL, ex. `postgres://...` (**Neon** : ajouter `?sslmode=require`) |
+| `REDIS_URL` | ex. `redis://localhost:6379/0` — rate limit `/verify` |
+| `JWT_SECRET` | Secret HMAC JWT |
+| `ALLOWED_ORIGINS` | CORS, liste séparée par virgules |
+| `USE_INMEMORY_FABRIC` | `true` force le mock ledger |
+| `PUBLIC_VERIFY_BASE_URL` | Base URL des QR (défaut `https://chaincacao.tg/verify`) |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary |
+| `CLOUDINARY_UPLOAD_PRESET` | Preset **unsigned** (recommandé) |
+| `EUDR_RSA_PRIVATE_KEY_PEM` | PEM PKCS1/PKCS8 RSA pour signature PDF |
 
-## Exemple rapide
+### Fabric Gateway (production)
 
-1. Login:
+Si `FABRIC_PEER_ENDPOINT` est défini et `USE_INMEMORY_FABRIC` ≠ `true`, l’API utilise **`internal/fabric/gateway.go`**.
+
+| Variable | Exemple / note |
+|----------|----------------|
+| `FABRIC_MSP_ID` | `Org1MSP` |
+| `FABRIC_PEER_ENDPOINT` | `dns:///peer0.org1.example.com:7051` |
+| `FABRIC_GATEWAY_PEER` | SNI TLS, ex. `peer0.org1.example.com` |
+| `FABRIC_TLS_CERT_PATH` | CA TLS du peer (PEM) |
+| `FABRIC_SIGNCERT_PATH` ou `FABRIC_SIGNCERT_DIR` | Certificat utilisateur |
+| `FABRIC_KEY_PATH` ou `FABRIC_KEYSTORE_DIR` | Clé privée |
+| `FABRIC_CHANNEL` | ex. `mychannel` |
+| `FABRIC_CHAINCODE` | ex. `chaincacao` |
+
+**Contrat chaincode attendu** (arguments `string` ; lectures = JSON) :
+
+- `CreateBatch(batchJSON, actorID)` — submit  
+- `TransferBatch(batchID, fromActorID, toActorID, comment)` — submit  
+- `UpdateBatchWeight(batchID, actorID, newWeight, justification)` — submit  
+- `MarkBatchExported(batchID, actorID)` — submit  
+- `GetBatch(batchID)` — evaluate → JSON `models.Batch`  
+- `GetHistory(batchID)` — evaluate → JSON `[]models.BatchHistoryEvent`  
+- `GetStats()` — evaluate → JSON (optionnel ; sinon message d’erreur dans les stats)
+
+## Neon & Cloudinary
+
+- **Neon** : crée un projet, copie l’URL `DATABASE_URL`, mets `sslmode=require`. Tu peux retirer le service `postgres` du compose et ne passer que l’URL dans `api.environment`.
+- **Cloudinary** : active un **upload preset unsigned** ; renseigne `CLOUDINARY_CLOUD_NAME` + `CLOUDINARY_UPLOAD_PRESET`.  
+  Upload : `POST /api/v1/lot/:id/photo` (multipart, champ `file`).
+
+## Routes (v2.1 + compat)
+
+- `POST /api/v1/auth/login` — public  
+- `POST /api/v1/auth/register` — JWT admin  
+- `POST /api/v1/lot` — JWT agriculteur / admin  
+- `GET /api/v1/lot/:id` — public  
+- `GET /api/v1/lot/:id/history` — public  
+- `POST /api/v1/transfer` — JWT coop / transfo / export / admin  
+- `PUT /api/v1/lot/:id/weight` — JWT  
+- `POST /api/v1/lot/:id/export` — JWT export / admin  
+- `POST /api/v1/lot/:id/photo` — JWT + Cloudinary  
+- `GET /api/v1/eudr/:id/report` — JSON (JWT export / admin)  
+- `GET /api/v1/eudr/:id/report/pdf` — **PDF** (JWT export / admin)  
+- `GET /api/v1/qrcode/:id` — JSON ; **`?format=png`** → image PNG  
+- `GET /api/v1/verify/:id` — public (rate limit Redis ou mémoire)  
+- `POST /api/v1/sync` — JWT agriculteur / admin  
+- `GET /api/v1/dashboard/stats` — JWT admin  
+- `GET /api/v1/actors` — JWT  
+- `GET /health` — public  
+
+Compat : `/api/v1/batch/*` inchangé.
+
+## Exemples
+
+Login PIN :
 
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/auth/login \
@@ -51,22 +117,19 @@ curl -s -X POST http://localhost:8080/api/v1/auth/login \
   -d '{"actor_id":"actor-agri-001","pin":"1111"}'
 ```
 
-2. Creer un batch (utiliser le token recu):
+Avec PostgreSQL, le même mot de passe que le PIN est aussi posé en `password_hash` au démarrage (seed) : login possible avec  
+`{"email":"agri@chaincacao.tg","password":"1111"}`.
+
+QR PNG :
 
 ```bash
-curl -s -X POST http://localhost:8080/api/v1/batch/create \
-  -H "Authorization: Bearer <TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{"culture":"cacao","quantite":120.5,"lieu":"Kpalime","date_recolte":"2026-04-28"}'
+curl -s -o qr.png "http://localhost:8080/api/v1/qrcode/TC-20260429-00001?format=png"
 ```
 
-## Brancher Hyperledger Fabric reel
+## Développement sans Docker
 
-Le projet isole la couche blockchain derriere l'interface `internal/fabric.Client`.
-Pour brancher le SDK Fabric Go:
+```bash
+go run ./cmd/api
+```
 
-- implementer un client `FabricSDKClient` dans `internal/fabric`
-- charger `connection-profile.yaml` et identites MSP
-- mapper `CreateBatch`, `TransferBatch`, `GetBatch`, `GetHistory` sur les invocations chaincode
-
-Le frontend n'aura pas besoin de changer.
+Sans `DATABASE_URL`, les acteurs restent en **mémoire** ; sans `REDIS_URL`, le rate limit `/verify` est **en mémoire**.

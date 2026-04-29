@@ -5,6 +5,7 @@ type Role string
 const (
 	RoleAdmin          Role = "admin"
 	RoleAgriculteur    Role = "agriculteur"
+	RoleCooperative    Role = "cooperative"
 	RoleTransformateur Role = "transformateur"
 	RoleDistributeur   Role = "distributeur"
 )
@@ -12,14 +13,22 @@ const (
 type Batch struct {
 	ID            string  `json:"id"`
 	Culture       string  `json:"culture"`
+	Variete       string  `json:"variete,omitempty"`
 	Quantite      float64 `json:"quantite"`
 	Lieu          string  `json:"lieu"`
+	Latitude      float64 `json:"latitude,omitempty"`
+	Longitude     float64 `json:"longitude,omitempty"`
+	Region        string  `json:"region,omitempty"`
+	Village       string  `json:"village,omitempty"`
+	Parcelle      string  `json:"parcelle,omitempty"`
 	DateRecolte   string  `json:"date_recolte"`
 	Proprietaire  string  `json:"proprietaire_id"`
 	OrgID         string  `json:"org_id"`
 	Statut        string  `json:"statut"`
+	EUDRConforme  bool    `json:"eudr_conforme"`
 	Timestamp     string  `json:"timestamp"`
 	CertificatURL string  `json:"certificat_url,omitempty"`
+	PhotoURL      string  `json:"photo_url,omitempty"`
 	Notes         string  `json:"notes,omitempty"`
 }
 
@@ -36,11 +45,13 @@ type BatchHistoryEvent struct {
 }
 
 type Actor struct {
-	ID    string `json:"id"`
-	Nom   string `json:"nom"`
-	OrgID string `json:"org_id"`
-	Role  Role   `json:"role"`
-	PIN   string `json:"-"`
+	ID           string `json:"id"`
+	Nom          string `json:"nom"`
+	Email        string `json:"email,omitempty"`
+	OrgID        string `json:"org_id"`
+	Role         Role   `json:"role"`
+	PIN          string `json:"-"`
+	PasswordHash string `json:"-"`
 }
 
 type APIResponse struct {

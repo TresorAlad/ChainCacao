@@ -9,7 +9,7 @@ import (
 	"tracabilite-api/pkg/models"
 )
 
-const defaultJWTDuration = 8 * time.Hour
+const defaultJWTDuration = 24 * time.Hour
 
 type Claims struct {
 	ActorID string      `json:"actor_id"`

@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: chaincacao
+      POSTGRES_PASSWORD: chaincacao
+      POSTGRES_DB: chaincacao
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chaincacao -d chaincacao"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://chaincacao:chaincacao@postgres:5432/chaincacao?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-docker}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-*}
+      USE_INMEMORY_FABRIC: ${USE_INMEMORY_FABRIC:-true}
+      PUBLIC_VERIFY_BASE_URL: ${PUBLIC_VERIFY_BASE_URL:-https://chaincacao.tg/verify}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_UPLOAD_PRESET: ${CLOUDINARY_UPLOAD_PRESET:-}
+      EUDR_RSA_PRIVATE_KEY_PEM: ${EUDR_RSA_PRIVATE_KEY_PEM:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:

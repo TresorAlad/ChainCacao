@@ -13,8 +13,11 @@ import (
 type Client interface {
 	CreateBatch(batch models.Batch, actorID string) (txHash string, created models.Batch, err error)
 	TransferBatch(batchID, fromActorID, toActorID, commentaire string) (txHash string, updated models.Batch, err error)
+	UpdateBatchWeight(batchID, actorID string, newWeight float64, justification string) (txHash string, updated models.Batch, err error)
+	MarkBatchExported(batchID, actorID string) (txHash string, updated models.Batch, err error)
 	GetBatch(batchID string) (models.Batch, error)
 	GetHistory(batchID string) ([]models.BatchHistoryEvent, error)
+	GetStats() map[string]any
 }
 
 // InMemoryClient simule Fabric pour le dev local et tests d'integration API.
@@ -98,6 +101,56 @@ func (c *InMemoryClient) GetBatch(batchID string) (models.Batch, error) {
 	return batch, nil
 }
 
+func (c *InMemoryClient) UpdateBatchWeight(batchID, actorID string, newWeight float64, justification string) (string, models.Batch, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	batch, exists := c.batches[batchID]
+	if !exists {
+		return "", models.Batch{}, errors.New("batch introuvable")
+	}
+	if newWeight <= 0 {
+		return "", models.Batch{}, errors.New("poids invalide")
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	batch.Quantite = newWeight
+	batch.Timestamp = now
+	c.batches[batchID] = batch
+	txHash := newTxHash()
+	c.history[batchID] = append(c.history[batchID], models.BatchHistoryEvent{
+		BatchID:      batchID,
+		Type:         "maj_poids",
+		ActorID:      actorID,
+		Commentaire:  justification,
+		TxHash:       txHash,
+		CreatedAtISO: now,
+		Payload:      batch,
+	})
+	return txHash, batch, nil
+}
+
+func (c *InMemoryClient) MarkBatchExported(batchID, actorID string) (string, models.Batch, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	batch, exists := c.batches[batchID]
+	if !exists {
+		return "", models.Batch{}, errors.New("batch introuvable")
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	batch.Statut = "exporte"
+	batch.Timestamp = now
+	c.batches[batchID] = batch
+	txHash := newTxHash()
+	c.history[batchID] = append(c.history[batchID], models.BatchHistoryEvent{
+		BatchID:      batchID,
+		Type:         "export",
+		ActorID:      actorID,
+		TxHash:       txHash,
+		CreatedAtISO: now,
+		Payload:      batch,
+	})
+	return txHash, batch, nil
+}
+
 func (c *InMemoryClient) GetHistory(batchID string) ([]models.BatchHistoryEvent, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -108,6 +161,20 @@ func (c *InMemoryClient) GetHistory(batchID string) ([]models.BatchHistoryEvent,
 	cp := make([]models.BatchHistoryEvent, len(events))
 	copy(cp, events)
 	return cp, nil
+}
+
+func (c *InMemoryClient) GetStats() map[string]any {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	byStatus := map[string]int{}
+	for _, b := range c.batches {
+		byStatus[b.Statut]++
+	}
+	return map[string]any{
+		"total_lots":       len(c.batches),
+		"lots_by_statut":   byStatus,
+		"generated_at_utc": time.Now().UTC().Format(time.RFC3339),
+	}
 }
 
 func newTxHash() string {
