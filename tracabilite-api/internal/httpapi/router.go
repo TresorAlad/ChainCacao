@@ -26,7 +26,7 @@ func NewRouter(handler *Handler, jwt *auth.JWTService, rdb *redis.Client) *gin.E
 		{
 			// Nouvelles routes spec v2.1
 			protected.POST("/lot", auth.RequireAnyRole(models.RoleAgriculteur, models.RoleAdmin), handler.CreateBatch)
-			protected.POST("/transfer", auth.RequireAnyRole(models.RoleCooperative, models.RoleTransformateur, models.RoleDistributeur, models.RoleAdmin), handler.TransferBatch)
+			protected.POST("/transfer", auth.RequireAnyRole(models.RoleAgriculteur, models.RoleCooperative, models.RoleTransformateur, models.RoleDistributeur, models.RoleAdmin), handler.TransferBatch)
 			protected.PUT("/lot/:id/weight", auth.RequireAnyRole(models.RoleTransformateur, models.RoleDistributeur, models.RoleAdmin), handler.UpdateBatchWeight)
 			protected.POST("/lot/:id/export", auth.RequireAnyRole(models.RoleDistributeur, models.RoleAdmin), handler.MarkLotExported)
 			protected.POST("/lot/:id/photo", auth.RequireAnyRole(models.RoleAgriculteur, models.RoleCooperative, models.RoleTransformateur, models.RoleAdmin), handler.UploadLotPhoto)

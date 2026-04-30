@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"tracabilite-api/internal/fabric"
@@ -57,7 +58,6 @@ func NewService(fabricClient fabric.Client, actors ActorLookup) *Service {
 }
 
 func (s *Service) Create(ctx context.Context, input CreateBatchInput, actorID, orgID string) (string, models.Batch, error) {
-	_ = ctx
 	if strings.TrimSpace(input.Culture) == "" || strings.TrimSpace(input.Lieu) == "" || strings.TrimSpace(input.DateRecolte) == "" {
 		return "", models.Batch{}, errors.New("culture, lieu et date_recolte sont obligatoires")
 	}
@@ -78,15 +78,16 @@ func (s *Service) Create(ctx context.Context, input CreateBatchInput, actorID, o
 		Parcelle:      strings.TrimSpace(input.Parcelle),
 		DateRecolte:   strings.TrimSpace(input.DateRecolte),
 		Proprietaire:  actorID,
-		OrgID:         orgID,
+		OrgID:         orgID, // proprietaire courant (org) cote API
 		CertificatURL: strings.TrimSpace(input.CertificatURL),
 		PhotoURL:      strings.TrimSpace(input.PhotoURL),
 		Notes:         strings.TrimSpace(input.Notes),
 	}
-	txHash, created, err := s.fabricClient.CreateBatch(batch, actorID)
+	txHash, created, err := s.fabricClient.CreateBatch(ctx, batch, actorID)
 	if err != nil {
 		return "", models.Batch{}, err
 	}
+	created = s.enrichOwnerOrg(ctx, created)
 	return txHash, created, nil
 }
 
@@ -97,39 +98,73 @@ func (s *Service) Transfer(ctx context.Context, input TransferBatchInput, fromAc
 	if input.ToActorID == fromActorID {
 		return "", models.Batch{}, errors.New("transfert vers soi-meme interdit")
 	}
-	if _, err := s.actors.FindByID(ctx, input.ToActorID); err != nil {
+
+	// Respecte la regle metier Fabric: seul le proprietaire courant peut transferer.
+	current, err := s.fabricClient.GetBatch(ctx, strings.TrimSpace(input.BatchID))
+	if err != nil {
+		return "", models.Batch{}, err
+	}
+	if current.Proprietaire != fromActorID {
+		return "", models.Batch{}, errors.New("seul le proprietaire courant peut transferer")
+	}
+
+	toActor, err := s.actors.FindByID(ctx, input.ToActorID)
+	if err != nil {
 		return "", models.Batch{}, errors.New("destinataire invalide")
 	}
-	return s.fabricClient.TransferBatch(strings.TrimSpace(input.BatchID), fromActorID, input.ToActorID, strings.TrimSpace(input.Commentaire))
+	txHash, updated, err := s.fabricClient.TransferBatch(ctx, strings.TrimSpace(input.BatchID), fromActorID, input.ToActorID, strings.TrimSpace(input.Commentaire))
+	if err != nil {
+		return "", models.Batch{}, err
+	}
+	// Harmonisation API: org proprietaire derive de l'acteur proprietaire (destinataire).
+	updated.OrgID = toActor.OrgID
+	return txHash, updated, nil
 }
 
 func (s *Service) GetBatch(ctx context.Context, id string) (models.Batch, error) {
-	_ = ctx
-	return s.fabricClient.GetBatch(id)
+	b, err := s.fabricClient.GetBatch(ctx, id)
+	if err != nil {
+		return models.Batch{}, err
+	}
+	return s.enrichOwnerOrg(ctx, b), nil
 }
 
 func (s *Service) GetHistory(ctx context.Context, id string) ([]models.BatchHistoryEvent, error) {
-	_ = ctx
-	return s.fabricClient.GetHistory(id)
+	return s.fabricClient.GetHistory(ctx, id)
 }
 
 func (s *Service) UpdateWeight(ctx context.Context, input UpdateWeightInput, actorID string) (string, models.Batch, error) {
-	_ = ctx
 	if strings.TrimSpace(input.BatchID) == "" {
 		return "", models.Batch{}, errors.New("batch_id obligatoire")
 	}
 	if strings.TrimSpace(input.Justification) == "" {
 		return "", models.Batch{}, errors.New("justification obligatoire")
 	}
-	return s.fabricClient.UpdateBatchWeight(strings.TrimSpace(input.BatchID), actorID, input.NewWeight, strings.TrimSpace(input.Justification))
+	txHash, updated, err := s.fabricClient.UpdateBatchWeight(ctx, strings.TrimSpace(input.BatchID), actorID, input.NewWeight, strings.TrimSpace(input.Justification))
+	if err != nil {
+		return "", models.Batch{}, err
+	}
+	updated = s.enrichOwnerOrg(ctx, updated)
+	return txHash, updated, nil
 }
 
 func (s *Service) MarkExported(ctx context.Context, batchID, actorID string) (string, models.Batch, error) {
-	_ = ctx
 	if strings.TrimSpace(batchID) == "" {
 		return "", models.Batch{}, errors.New("batch_id obligatoire")
 	}
-	return s.fabricClient.MarkBatchExported(strings.TrimSpace(batchID), actorID)
+	current, err := s.fabricClient.GetBatch(ctx, strings.TrimSpace(batchID))
+	if err != nil {
+		return "", models.Batch{}, err
+	}
+	if current.Proprietaire != actorID {
+		return "", models.Batch{}, errors.New("seul le proprietaire courant peut marquer comme exporte")
+	}
+	txHash, updated, err := s.fabricClient.MarkBatchExported(ctx, strings.TrimSpace(batchID), actorID)
+	if err != nil {
+		return "", models.Batch{}, err
+	}
+	updated = s.enrichOwnerOrg(ctx, updated)
+	return txHash, updated, nil
 }
 
 func (s *Service) BuildEUDRReport(ctx context.Context, batchID string) (map[string]any, error) {
@@ -141,24 +176,127 @@ func (s *Service) BuildEUDRReport(ctx context.Context, batchID string) (map[stri
 	if err != nil {
 		return nil, err
 	}
+
+	// Enrichissement "humain": noms + orgs depuis la base off-chain.
+	type actorView struct {
+		ID    string `json:"id"`
+		Nom   string `json:"nom,omitempty"`
+		OrgID string `json:"org_id,omitempty"`
+		Role  string `json:"role,omitempty"`
+	}
+	resolveActor := func(id string) actorView {
+		if strings.TrimSpace(id) == "" {
+			return actorView{}
+		}
+		a, err := s.actors.FindByID(ctx, id)
+		if err != nil {
+			return actorView{ID: id}
+		}
+		return actorView{ID: a.ID, Nom: a.Nom, OrgID: a.OrgID, Role: string(a.Role)}
+	}
+
+	var (
+		lastTxHash    string
+		originActorID string
+	)
+	if len(history) > 0 {
+		lastTxHash = history[len(history)-1].TxHash
+		for _, e := range history {
+			if e.Type == "creation" && e.ActorID != "" {
+				originActorID = e.ActorID
+				break
+			}
+		}
+	}
+
+	// Conformite EUDR (heuristique minimale, faute de couche carto/anti-deforestation ici).
+	// Rationale: il faut au moins une geolocalisation + une chronologie non vide.
+	eudrOk := lot.Latitude != 0 && lot.Longitude != 0 && strings.TrimSpace(lot.Region) != "" && strings.TrimSpace(lot.Village) != "" && len(history) > 0
+	var eudrReasons []string
+	if lot.Latitude == 0 || lot.Longitude == 0 {
+		eudrReasons = append(eudrReasons, "coordonnees GPS manquantes")
+	}
+	if strings.TrimSpace(lot.Region) == "" || strings.TrimSpace(lot.Village) == "" {
+		eudrReasons = append(eudrReasons, "region/village manquants")
+	}
+	if len(history) == 0 {
+		eudrReasons = append(eudrReasons, "historique blockchain absent")
+	}
+
+	// Chronologie "lisible" pour rapport.
+	transfers := make([]map[string]any, 0, len(history))
+	for _, e := range history {
+		transfers = append(transfers, map[string]any{
+			"type":        e.Type,
+			"tx_hash":     e.TxHash,
+			"created_at":  e.CreatedAtISO,
+			"actor":       resolveActor(e.ActorID),
+			"from_actor":  resolveActor(e.FromActorID),
+			"to_actor":    resolveActor(e.ToActorID),
+			"commentaire": e.Commentaire,
+			"payload":     e.Payload,
+		})
+	}
+
 	return map[string]any{
-		"lot_id":         lot.ID,
-		"origin":         map[string]any{"region": lot.Region, "village": lot.Village, "latitude": lot.Latitude, "longitude": lot.Longitude},
-		"date_recolte":   lot.DateRecolte,
-		"proprietaire":   lot.Proprietaire,
-		"blockchain_txs": len(history),
-		"history":        history,
-		"generated_at":   time.Now().UTC().Format(time.RFC3339),
-		"format":         "json-report-simulating-pdf-payload",
+		"lot_id": lot.ID,
+		"origin": map[string]any{
+			"actor":     resolveActor(originActorID),
+			"region":    lot.Region,
+			"village":   lot.Village,
+			"parcelle":  lot.Parcelle,
+			"latitude":  lot.Latitude,
+			"longitude": lot.Longitude,
+			"photo_url": lot.PhotoURL,
+		},
+		"date_recolte": lot.DateRecolte,
+		"product": map[string]any{
+			"culture":  lot.Culture,
+			"variete":  lot.Variete,
+			"quantite": lot.Quantite,
+		},
+		"current_owner": map[string]any{
+			"actor": resolveActor(lot.Proprietaire),
+			"org_id": lot.OrgID,
+		},
+		"eudr": map[string]any{
+			"conforme": eudrOk,
+			"reasons":  eudrReasons,
+		},
+		"blockchain": map[string]any{
+			"tx_count":     len(history),
+			"last_tx_hash": lastTxHash,
+		},
+		"timeline":     transfers,
+		"generated_at": time.Now().UTC().Format(time.RFC3339),
 	}, nil
 }
 
 func (s *Service) GetStats(ctx context.Context) map[string]any {
-	_ = ctx
-	return s.fabricClient.GetStats()
+	return s.fabricClient.GetStats(ctx)
 }
+
+func (s *Service) enrichOwnerOrg(ctx context.Context, b models.Batch) models.Batch {
+	owner, err := s.actors.FindByID(ctx, b.Proprietaire)
+	if err != nil {
+		return b
+	}
+	b.OrgID = owner.OrgID
+	return b
+}
+
+var (
+	lastBatchDate atomic.Value // string YYYYMMDD
+	batchSeq      atomic.Uint32
+)
 
 func buildBatchID() string {
 	datePart := time.Now().UTC().Format("20060102")
-	return fmt.Sprintf("TC-%s-%05d", datePart, time.Now().UTC().Nanosecond()%100000)
+	if v := lastBatchDate.Load(); v == nil || v.(string) != datePart {
+		lastBatchDate.Store(datePart)
+		// Seed non deterministe raisonnable, sans dependance externe.
+		batchSeq.Store(uint32(time.Now().UTC().UnixNano() % 100000))
+	}
+	n := batchSeq.Add(1) % 100000
+	return fmt.Sprintf("TC-%s-%05d", datePart, n)
 }

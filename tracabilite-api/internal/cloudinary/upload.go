@@ -3,6 +3,7 @@ package cloudinary
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,11 @@ import (
 	"time"
 )
 
+func sha1sum(data []byte) []byte {
+	h := sha1.Sum(data)
+	return h[:]
+}
+
 // UploadResult reponse partielle API Cloudinary.
 type UploadResult struct {
 	PublicID   string `json:"public_id"`
@@ -20,17 +26,34 @@ type UploadResult struct {
 	Bytes      int    `json:"bytes"`
 }
 
-// UploadImage envoie une image vers Cloudinary (upload non signe via preset, recommande cote front / mobile).
-// Variables: CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET (unsigned preset active sur le dashboard).
+// UploadImage envoie une image vers Cloudinary.
+// Si CLOUDINARY_UPLOAD_PRESET est defini -> upload non signe (unsigned preset).
+// Sinon, si CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET sont definis -> upload signe (timestamp + sha1).
+// Variables: CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET ou CLOUDINARY_API_KEY+CLOUDINARY_API_SECRET.
 func UploadImage(ctx context.Context, fileName string, r io.Reader) (*UploadResult, error) {
 	cloud := os.Getenv("CLOUDINARY_CLOUD_NAME")
 	preset := os.Getenv("CLOUDINARY_UPLOAD_PRESET")
-	if cloud == "" || preset == "" {
-		return nil, fmt.Errorf("CLOUDINARY_CLOUD_NAME et CLOUDINARY_UPLOAD_PRESET requis")
+	apiKey := os.Getenv("CLOUDINARY_API_KEY")
+	apiSecret := os.Getenv("CLOUDINARY_API_SECRET")
+	if cloud == "" {
+		return nil, fmt.Errorf("CLOUDINARY_CLOUD_NAME requis")
+	}
+	if preset == "" && (apiKey == "" || apiSecret == "") {
+		return nil, fmt.Errorf("CLOUDINARY_UPLOAD_PRESET ou (CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET) requis")
 	}
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
-	_ = w.WriteField("upload_preset", preset)
+	if preset != "" {
+		_ = w.WriteField("upload_preset", preset)
+	} else {
+		// Upload signé: timestamp + signature sha1(timestamp+secret)
+		ts := fmt.Sprintf("%d", time.Now().Unix())
+		raw := fmt.Sprintf("timestamp=%s%s", ts, apiSecret)
+		sig := fmt.Sprintf("%x", sha1sum([]byte(raw)))
+		_ = w.WriteField("timestamp", ts)
+		_ = w.WriteField("api_key", apiKey)
+		_ = w.WriteField("signature", sig)
+	}
 	part, err := w.CreateFormFile("file", fileName)
 	if err != nil {
 		return nil, err

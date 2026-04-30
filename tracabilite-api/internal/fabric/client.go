@@ -1,6 +1,7 @@
 package fabric
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -11,13 +12,13 @@ import (
 )
 
 type Client interface {
-	CreateBatch(batch models.Batch, actorID string) (txHash string, created models.Batch, err error)
-	TransferBatch(batchID, fromActorID, toActorID, commentaire string) (txHash string, updated models.Batch, err error)
-	UpdateBatchWeight(batchID, actorID string, newWeight float64, justification string) (txHash string, updated models.Batch, err error)
-	MarkBatchExported(batchID, actorID string) (txHash string, updated models.Batch, err error)
-	GetBatch(batchID string) (models.Batch, error)
-	GetHistory(batchID string) ([]models.BatchHistoryEvent, error)
-	GetStats() map[string]any
+	CreateBatch(ctx context.Context, batch models.Batch, actorID string) (txHash string, created models.Batch, err error)
+	TransferBatch(ctx context.Context, batchID, fromActorID, toActorID, commentaire string) (txHash string, updated models.Batch, err error)
+	UpdateBatchWeight(ctx context.Context, batchID, actorID string, newWeight float64, justification string) (txHash string, updated models.Batch, err error)
+	MarkBatchExported(ctx context.Context, batchID, actorID string) (txHash string, updated models.Batch, err error)
+	GetBatch(ctx context.Context, batchID string) (models.Batch, error)
+	GetHistory(ctx context.Context, batchID string) ([]models.BatchHistoryEvent, error)
+	GetStats(ctx context.Context) map[string]any
 }
 
 // InMemoryClient simule Fabric pour le dev local et tests d'integration API.
@@ -34,7 +35,7 @@ func NewInMemoryClient() *InMemoryClient {
 	}
 }
 
-func (c *InMemoryClient) CreateBatch(batch models.Batch, actorID string) (string, models.Batch, error) {
+func (c *InMemoryClient) CreateBatch(_ context.Context, batch models.Batch, actorID string) (string, models.Batch, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if _, exists := c.batches[batch.ID]; exists {
@@ -58,7 +59,7 @@ func (c *InMemoryClient) CreateBatch(batch models.Batch, actorID string) (string
 	return txHash, batch, nil
 }
 
-func (c *InMemoryClient) TransferBatch(batchID, fromActorID, toActorID, commentaire string) (string, models.Batch, error) {
+func (c *InMemoryClient) TransferBatch(_ context.Context, batchID, fromActorID, toActorID, commentaire string) (string, models.Batch, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -91,7 +92,7 @@ func (c *InMemoryClient) TransferBatch(batchID, fromActorID, toActorID, commenta
 	return txHash, batch, nil
 }
 
-func (c *InMemoryClient) GetBatch(batchID string) (models.Batch, error) {
+func (c *InMemoryClient) GetBatch(_ context.Context, batchID string) (models.Batch, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	batch, exists := c.batches[batchID]
@@ -101,7 +102,7 @@ func (c *InMemoryClient) GetBatch(batchID string) (models.Batch, error) {
 	return batch, nil
 }
 
-func (c *InMemoryClient) UpdateBatchWeight(batchID, actorID string, newWeight float64, justification string) (string, models.Batch, error) {
+func (c *InMemoryClient) UpdateBatchWeight(_ context.Context, batchID, actorID string, newWeight float64, justification string) (string, models.Batch, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	batch, exists := c.batches[batchID]
@@ -128,7 +129,7 @@ func (c *InMemoryClient) UpdateBatchWeight(batchID, actorID string, newWeight fl
 	return txHash, batch, nil
 }
 
-func (c *InMemoryClient) MarkBatchExported(batchID, actorID string) (string, models.Batch, error) {
+func (c *InMemoryClient) MarkBatchExported(_ context.Context, batchID, actorID string) (string, models.Batch, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	batch, exists := c.batches[batchID]
@@ -151,7 +152,7 @@ func (c *InMemoryClient) MarkBatchExported(batchID, actorID string) (string, mod
 	return txHash, batch, nil
 }
 
-func (c *InMemoryClient) GetHistory(batchID string) ([]models.BatchHistoryEvent, error) {
+func (c *InMemoryClient) GetHistory(_ context.Context, batchID string) ([]models.BatchHistoryEvent, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	events, exists := c.history[batchID]
@@ -163,7 +164,7 @@ func (c *InMemoryClient) GetHistory(batchID string) ([]models.BatchHistoryEvent,
 	return cp, nil
 }
 
-func (c *InMemoryClient) GetStats() map[string]any {
+func (c *InMemoryClient) GetStats(_ context.Context) map[string]any {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	byStatus := map[string]int{}

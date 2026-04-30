@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/skip2/go-qrcode"
@@ -186,15 +187,66 @@ func (h *Handler) GetBatchHistory(c *gin.Context) {
 
 func (h *Handler) VerifyBatch(c *gin.Context) {
 	id := c.Param("id")
-	events, err := h.batch.GetHistory(c.Request.Context(), id)
+	ctx := c.Request.Context()
+	lot, err := h.batch.GetBatch(ctx, id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
+	events, err := h.batch.GetHistory(ctx, id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	var (
+		lastTxHash     string
+		originActorID  string
+		originActorNom string
+		ownerNom       string
+	)
+	if len(events) > 0 {
+		lastTxHash = events[len(events)-1].TxHash
+		for _, e := range events {
+			if e.Type == "creation" && e.ActorID != "" {
+				originActorID = e.ActorID
+				break
+			}
+		}
+	}
+	if originActorID != "" {
+		if a, err := h.actors.FindByID(ctx, originActorID); err == nil {
+			originActorNom = a.Nom
+		}
+	}
+	if lot.Proprietaire != "" {
+		if a, err := h.actors.FindByID(ctx, lot.Proprietaire); err == nil {
+			ownerNom = a.Nom
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"success":  true,
-		"batch_id": id,
-		"timeline": events,
+		"success": true,
+		"lot":     lot,
+		"origin": gin.H{
+			"actor_id":  originActorID,
+			"actor_nom": originActorNom,
+			"region":    lot.Region,
+			"village":   lot.Village,
+			"parcelle":  lot.Parcelle,
+			"latitude":  lot.Latitude,
+			"longitude": lot.Longitude,
+			"photo_url": lot.PhotoURL,
+		},
+		"owner": gin.H{
+			"actor_id": lot.Proprietaire,
+			"actor_nom": ownerNom,
+			"org_id":   lot.OrgID,
+		},
+		"timeline":          events,
+		"eudr_conforme":     lot.EUDRConforme,
+		"blockchain_txhash": lastTxHash,
+		"verified_at_utc":   time.Now().UTC().Format(time.RFC3339),
 	})
 }
 
@@ -238,13 +290,18 @@ func (h *Handler) GenerateQRCode(c *gin.Context) {
 		c.Data(http.StatusOK, "image/png", png)
 		return
 	}
-	encoded := base64.StdEncoding.EncodeToString([]byte(verifyURL))
+	png, err := qrcode.Encode(verifyURL, qrcode.Medium, 256)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	encoded := base64.StdEncoding.EncodeToString(png)
 	c.JSON(http.StatusOK, gin.H{
-		"success":       true,
-		"lot_id":        id,
-		"verify_url":    verifyURL,
-		"qrcode_base64": encoded,
-		"hint":          "Ajoutez ?format=png pour l'image PNG",
+		"success":           true,
+		"lot_id":            id,
+		"verify_url":        verifyURL,
+		"qrcode_png_base64": encoded,
+		"hint":              "Ajoutez ?format=png pour obtenir directement l'image PNG",
 	})
 }
 

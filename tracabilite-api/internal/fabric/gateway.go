@@ -163,7 +163,8 @@ func newGrpcConnection(peerEndpoint, gatewayPeer, tlsCertPath string) (*grpc.Cli
 	pool := x509.NewCertPool()
 	pool.AddCert(certificate)
 	transportCredentials := credentials.NewClientTLSFromCert(pool, gatewayPeer)
-	return grpc.NewClient(peerEndpoint, grpc.WithTransportCredentials(transportCredentials))
+	// grpc.Dial reste supporte en 1.x et fonctionne avec les targets dns:///...
+	return grpc.Dial(peerEndpoint, grpc.WithTransportCredentials(transportCredentials))
 }
 
 func readFirstFile(dirPath string) ([]byte, error) {
@@ -180,10 +181,20 @@ func readFirstFile(dirPath string) ([]byte, error) {
 }
 
 func (g *GatewayClient) submit(ctx context.Context, fn string, args ...string) (txID string, result []byte, err error) {
-	_ = ctx
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return "", nil, err
+		}
+	}
 	submitResult, commit, err := g.contract.SubmitAsync(fn, client.WithArguments(args...))
 	if err != nil {
 		return "", nil, err
+	}
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			// La transaction a ete envoyee a l'orderer; on ne bloque pas davantage ici.
+			return "", submitResult, err
+		}
 	}
 	st, err := commit.Status()
 	if err != nil {
@@ -195,50 +206,55 @@ func (g *GatewayClient) submit(ctx context.Context, fn string, args ...string) (
 	return st.TransactionID, submitResult, nil
 }
 
-func (g *GatewayClient) CreateBatch(batch models.Batch, actorID string) (string, models.Batch, error) {
+func (g *GatewayClient) CreateBatch(ctx context.Context, batch models.Batch, actorID string) (string, models.Batch, error) {
 	payload, err := json.Marshal(batch)
 	if err != nil {
 		return "", models.Batch{}, err
 	}
-	txID, _, err := g.submit(context.Background(), "CreateBatch", string(payload), actorID)
+	txID, _, err := g.submit(ctx, "CreateBatch", string(payload), actorID)
 	if err != nil {
 		return "", models.Batch{}, err
 	}
-	got, err := g.GetBatch(batch.ID)
+	got, err := g.GetBatch(ctx, batch.ID)
 	if err != nil {
 		return txID, batch, nil
 	}
 	return txID, got, nil
 }
 
-func (g *GatewayClient) TransferBatch(batchID, fromActorID, toActorID, commentaire string) (string, models.Batch, error) {
-	txID, _, err := g.submit(context.Background(), "TransferBatch", batchID, fromActorID, toActorID, commentaire)
+func (g *GatewayClient) TransferBatch(ctx context.Context, batchID, fromActorID, toActorID, commentaire string) (string, models.Batch, error) {
+	txID, _, err := g.submit(ctx, "TransferBatch", batchID, fromActorID, toActorID, commentaire)
 	if err != nil {
 		return "", models.Batch{}, err
 	}
-	b, err := g.GetBatch(batchID)
+	b, err := g.GetBatch(ctx, batchID)
 	return txID, b, err
 }
 
-func (g *GatewayClient) UpdateBatchWeight(batchID, actorID string, newWeight float64, justification string) (string, models.Batch, error) {
-	txID, _, err := g.submit(context.Background(), "UpdateBatchWeight", batchID, actorID, strconv.FormatFloat(newWeight, 'f', -1, 64), justification)
+func (g *GatewayClient) UpdateBatchWeight(ctx context.Context, batchID, actorID string, newWeight float64, justification string) (string, models.Batch, error) {
+	txID, _, err := g.submit(ctx, "UpdateBatchWeight", batchID, actorID, strconv.FormatFloat(newWeight, 'f', -1, 64), justification)
 	if err != nil {
 		return "", models.Batch{}, err
 	}
-	b, err := g.GetBatch(batchID)
+	b, err := g.GetBatch(ctx, batchID)
 	return txID, b, err
 }
 
-func (g *GatewayClient) MarkBatchExported(batchID, actorID string) (string, models.Batch, error) {
-	txID, _, err := g.submit(context.Background(), "MarkBatchExported", batchID, actorID)
+func (g *GatewayClient) MarkBatchExported(ctx context.Context, batchID, actorID string) (string, models.Batch, error) {
+	txID, _, err := g.submit(ctx, "MarkBatchExported", batchID, actorID)
 	if err != nil {
 		return "", models.Batch{}, err
 	}
-	b, err := g.GetBatch(batchID)
+	b, err := g.GetBatch(ctx, batchID)
 	return txID, b, err
 }
 
-func (g *GatewayClient) GetBatch(batchID string) (models.Batch, error) {
+func (g *GatewayClient) GetBatch(ctx context.Context, batchID string) (models.Batch, error) {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return models.Batch{}, err
+		}
+	}
 	data, err := g.contract.EvaluateTransaction("GetBatch", batchID)
 	if err != nil {
 		return models.Batch{}, err
@@ -250,7 +266,12 @@ func (g *GatewayClient) GetBatch(batchID string) (models.Batch, error) {
 	return b, nil
 }
 
-func (g *GatewayClient) GetHistory(batchID string) ([]models.BatchHistoryEvent, error) {
+func (g *GatewayClient) GetHistory(ctx context.Context, batchID string) ([]models.BatchHistoryEvent, error) {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+	}
 	data, err := g.contract.EvaluateTransaction("GetHistory", batchID)
 	if err != nil {
 		return nil, err
@@ -262,7 +283,12 @@ func (g *GatewayClient) GetHistory(batchID string) ([]models.BatchHistoryEvent, 
 	return ev, nil
 }
 
-func (g *GatewayClient) GetStats() map[string]any {
+func (g *GatewayClient) GetStats(ctx context.Context) map[string]any {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return map[string]any{"fabric_stats_error": err.Error()}
+		}
+	}
 	data, err := g.contract.EvaluateTransaction("GetStats")
 	if err != nil {
 		return map[string]any{"fabric_stats_error": err.Error()}
