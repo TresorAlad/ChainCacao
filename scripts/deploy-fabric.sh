@@ -68,9 +68,9 @@ echo "Nettoyage du réseau existant..."
 cd "$FABRIC_DIR"
 ./network.sh down 2>/dev/null || true
 
-# 4. Démarrer le réseau avec CA et CouchDB
-echo "Démarrage réseau Fabric (CA + CouchDB)..."
-./network.sh up createChannel -ca -c "$CHANNEL" -s couchdb
+# 4. Démarrer le réseau avec CA (LevelDB — pas de CouchDB pour éviter les race conditions)
+echo "Démarrage réseau Fabric (CA + LevelDB)..."
+./network.sh up createChannel -ca -c "$CHANNEL"
 
 # 5. Déployer le chaincode
 echo "Déploiement du chaincode $CC_NAME v$CC_VERSION..."
