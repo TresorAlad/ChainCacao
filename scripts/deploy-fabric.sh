@@ -20,7 +20,13 @@ echo "Répertoire Fabric: $FABRIC_DIR"
 command -v docker >/dev/null 2>&1 || { echo "Docker requis"; exit 1; }
 docker compose version >/dev/null 2>&1 || { echo "docker compose plugin requis (lance scripts/install-compose.sh)"; exit 1; }
 
-# 2. Télécharger les binaires Fabric si nécessaire
+# 2. Cloner fabric-samples si nécessaire
+if [ ! -d "$ROOT/fabric-samples" ]; then
+  echo "Clonage de fabric-samples..."
+  git clone --depth 1 https://github.com/hyperledger/fabric-samples.git "$ROOT/fabric-samples"
+fi
+
+# 2b. Télécharger les binaires Fabric si nécessaire
 FABRIC_BIN="$ROOT/fabric-samples/bin"
 cd "$ROOT/fabric-samples"
 
@@ -44,6 +50,7 @@ fi
 
 # 3. Arrêter tout réseau existant
 echo "Nettoyage du réseau existant..."
+cd "$FABRIC_DIR"
 ./network.sh down 2>/dev/null || true
 
 # 4. Démarrer le réseau avec CA et CouchDB
@@ -56,7 +63,8 @@ echo "Déploiement du chaincode $CC_NAME v$CC_VERSION..."
   -ccn "$CC_NAME" \
   -ccp "$CHAINCODE_DIR" \
   -ccl go \
-  -c "$CHANNEL"
+  -c "$CHANNEL" \
+  -ccep "OR('Org1MSP.peer','Org2MSP.peer')"
 
 echo ""
 echo "=== Réseau Fabric prêt ==="
