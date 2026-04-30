@@ -1,6 +1,6 @@
 module chaincacao-chaincode
 
-go 1.25.0
+go 1.25
 
 require github.com/hyperledger/fabric-contract-api-go v1.2.2
 
