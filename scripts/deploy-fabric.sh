@@ -20,10 +20,19 @@ echo "Répertoire Fabric: $FABRIC_DIR"
 command -v docker >/dev/null 2>&1 || { echo "Docker requis"; exit 1; }
 docker compose version >/dev/null 2>&1 || { echo "docker compose plugin requis (lance scripts/install-compose.sh)"; exit 1; }
 
-# 2. Cloner fabric-samples si nécessaire
-if [ ! -d "$ROOT/fabric-samples" ]; then
-  echo "Clonage de fabric-samples..."
+# 2. Cloner fabric-samples si test-network absent
+if [ ! -d "$ROOT/fabric-samples/test-network" ]; then
+  echo "Clonage de fabric-samples (test-network manquant)..."
+  # Sauvegarder les binaires déjà présents si dossier existant
+  if [ -d "$ROOT/fabric-samples/bin" ]; then
+    mv "$ROOT/fabric-samples/bin" /tmp/fabric-bin-backup
+  fi
+  rm -rf "$ROOT/fabric-samples"
   git clone --depth 1 https://github.com/hyperledger/fabric-samples.git "$ROOT/fabric-samples"
+  # Restaurer les binaires sauvegardés
+  if [ -d /tmp/fabric-bin-backup ]; then
+    mv /tmp/fabric-bin-backup "$ROOT/fabric-samples/bin"
+  fi
 fi
 
 # 2b. Télécharger les binaires Fabric si nécessaire
