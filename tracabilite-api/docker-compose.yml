@@ -37,10 +37,9 @@ services:
       DATABASE_URL: postgres://chaincacao:chaincacao@postgres:5432/chaincacao?sslmode=disable
       REDIS_URL: redis://redis:6379/0
     volumes:
-      - /home/tresor/chaincacao/fabric-samples/test-network/organizations:/fabric-crypto:ro
+      - ../fabric-samples/test-network/organizations:/fabric-crypto:ro
     extra_hosts:
-      - "peer0.org1.example.com:172.19.0.1"
-      - "orderer.example.com:172.19.0.1"
+      - "host.docker.internal:host-gateway"
     dns:
       - 127.0.0.11
       - 192.168.1.254
