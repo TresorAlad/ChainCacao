@@ -49,6 +49,20 @@ type registerRequest struct {
 	Role     models.Role `json:"role" binding:"required"`
 }
 
+// Signup public (mobile agriculteur). Role est force a "agriculteur".
+// Les champs supplementaires (GPS, surface, etc.) peuvent etre ajoutes cote SQL plus tard.
+type signupRequest struct {
+	Nom          string `json:"nom" binding:"required"`
+	Email        string `json:"email" binding:"required"`
+	Password     string `json:"password" binding:"required"`
+	OrgID        string `json:"org_id"`
+	Role         string `json:"role"` // ignore/compat
+	GPSLocation  string `json:"gps_location"`
+	FieldSurface string `json:"field_surface"`
+	OrgName      string `json:"org_name"`
+	PINCode      string `json:"pin_code"`
+}
+
 func (h *Handler) Login(c *gin.Context) {
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -93,6 +107,38 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"success": true, "actor": actor})
+}
+
+func (h *Handler) Signup(c *gin.Context) {
+	var req signupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payload signup invalide"})
+		return
+	}
+
+	orgID := req.OrgID
+	if orgID == "" {
+		orgID = "AgriculteurMSP"
+	}
+
+	actor, err := h.actors.Register(c.Request.Context(), req.Nom, req.Email, req.Password, orgID, models.RoleAgriculteur)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Auto-login: retourner un JWT directement
+	token, err := h.jwt.Generate(actor.ID, actor.OrgID, actor.Role)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "echec generation token"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"token":   token,
+		"actor":   actor,
+	})
 }
 
 func (h *Handler) CreateBatch(c *gin.Context) {

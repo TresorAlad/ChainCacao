@@ -25,7 +25,7 @@
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#1B5E20"
       },
       "permissions": [
         "ACCESS_COARSE_LOCATION",

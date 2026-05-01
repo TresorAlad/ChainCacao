@@ -15,6 +15,7 @@ func NewRouter(handler *Handler, jwt *auth.JWTService, rdb *redis.Client) *gin.E
 	v1 := r.Group("/api/v1")
 	{
 		v1.POST("/auth/login", handler.Login)
+		v1.POST("/auth/signup", handler.Signup)
 		v1.POST("/auth/register", auth.JWTMiddleware(jwt), auth.RequireAnyRole(models.RoleAdmin), handler.Register)
 		v1.GET("/verify/:id", PublicVerifyRateLimitRedis(rdb, 100), handler.VerifyBatch)
 		v1.GET("/lot/:id", handler.GetBatch) // lecture publique optionnelle

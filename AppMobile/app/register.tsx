@@ -2,13 +2,15 @@ import React, { useState } from 'react';
 import { 
   View, Text, ImageBackground, StyleSheet, TextInput, 
   TouchableOpacity, StatusBar, Dimensions, KeyboardAvoidingView, 
-  Platform, ScrollView, Switch, ActivityIndicator 
+  Platform, ScrollView, Switch, ActivityIndicator, Alert
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { authApi, getApiError, TOKEN_KEY, USER_KEY } from '@/services/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -69,14 +71,54 @@ export default function RegisterScreen() {
     }
   };
 
-  // --- LOGIQUE DE TEST (SANS API) ---
-  const handleRegister = () => {
+  const handleRegister = async () => {
+    // validations
+    if (!name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
+      Alert.alert('Champs requis', "Veuillez remplir le nom, l'email et le mot de passe.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert('Mot de passe', 'Les mots de passe ne correspondent pas.');
+      return;
+    }
+    if (usePin && pinCode.trim().length !== 4) {
+      Alert.alert('Code PIN', 'Le PIN doit contenir 4 chiffres.');
+      return;
+    }
+    if (!gpsLocation.trim()) {
+      Alert.alert('Localisation', 'Veuillez récupérer vos coordonnées GPS.');
+      return;
+    }
+
     setIsLoading(true);
-    // Simulation d'attente
-    setTimeout(() => {
+    try {
+      const { data } = await authApi.signup({
+        nom: name.trim(),
+        email: email.trim(),
+        password: password.trim(),
+        role,
+        gps_location: gpsLocation.trim(),
+        field_surface: fieldSurface.trim(),
+        org_name: orgName.trim(),
+        pin_code: usePin ? pinCode.trim() : undefined,
+      });
+
+      // Auto-login: stocker token + actor pour passer directement à l'app
+      if (data.token) {
+        await AsyncStorage.setItem(TOKEN_KEY, data.token);
+      }
+      if (data.actor) {
+        await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.actor));
+      }
+
+      Alert.alert('Compte créé ✓', 'Votre compte a été créé. Vous êtes connecté.', [
+        { text: 'OK', onPress: () => router.replace('/(tabs)/accueil') },
+      ]);
+    } catch (e) {
+      Alert.alert('Inscription impossible', getApiError(e));
+    } finally {
       setIsLoading(false);
-      router.replace('/'); // Retour à la connexion
-    }, 1500);
+    }
   };
 
   return (

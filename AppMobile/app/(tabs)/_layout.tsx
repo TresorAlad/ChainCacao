@@ -1,34 +1,74 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSync } from '@/hooks/use-sync';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+const BRAND_GREEN = '#2E7D32';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  // Démarrer le service de synchronisation hors-ligne (tourne toute la session)
+  useSync();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: BRAND_GREEN,
+        tabBarInactiveTintColor: '#999',
         headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
+        tabBarStyle: {
+          height: 65,
+          paddingBottom: 8,
+          paddingTop: 5,
+          borderTopWidth: 1,
+          borderTopColor: '#EEE',
+          backgroundColor: 'white',
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+        },
+      }}
+    >
       <Tabs.Screen
-        name="index"
+        name="accueil"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: 'Accueil',
+          tabBarIcon: ({ color }) => (
+            <MaterialCommunityIcons name="home" size={26} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="production"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'Production',
+          tabBarIcon: ({ color }) => (
+            <MaterialCommunityIcons name="sprout" size={26} color={color} />
+          ),
         }}
+      />
+      <Tabs.Screen
+        name="scan"
+        options={{
+          title: 'Scanner',
+          tabBarIcon: ({ color }) => (
+            <MaterialCommunityIcons name="qrcode-scan" size={26} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profil"
+        options={{
+          title: 'Profil',
+          tabBarIcon: ({ color }) => (
+            <MaterialCommunityIcons name="account-circle" size={26} color={color} />
+          ),
+        }}
+      />
+      {/* index masqué de la barre — redirige vers accueil */}
+      <Tabs.Screen
+        name="index"
+        options={{ href: null }}
       />
     </Tabs>
   );

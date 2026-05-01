@@ -12,129 +12,178 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLots } from '@/hooks/use-storage';
+import { batchApi, isNetworkError, getApiError } from '@/services/api';
 
 export default function CreationLotScreen() {
   const router = useRouter();
+  const { saveLot } = useLots();
 
-  // État du formulaire
   const [form, setForm] = useState({
     reference: '',
     typeCacao: '',
     localisation: '',
     quantite: '',
-    producteur: "Koffi Mensah", // Valeur par défaut
-    statut: "En cours"
+    producteur: 'Koffi Mensah',
+    statut: 'En cours' as 'En cours' | 'Terminé' | 'Problème',
   });
 
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // Gestion du changement de date
   const onDateChange = (event: any, selectedDate?: Date) => {
-    // Sur Android, on ferme le picker immédiatement après sélection
-    if (Platform.OS === 'android') {
-      setShowDatePicker(false);
-    }
-
+    if (Platform.OS === 'android') setShowDatePicker(false);
     if (selectedDate) {
-      // Sécurité : Bloquer les dates futures
       if (selectedDate > new Date()) {
-        Alert.alert("Date invalide", "La date de récolte ne peut pas être dans le futur.");
+        Alert.alert('Date invalide', 'La date de récolte ne peut pas être dans le futur.');
         return;
       }
       setDate(selectedDate);
     }
   };
 
-  const handleSave = () => {
-    // 1. Validation des champs obligatoires
+  const handleSave = async () => {
     if (!form.reference.trim() || !form.quantite.trim()) {
-      Alert.alert("Champs manquants", "Veuillez remplir au moins la référence et la quantité.");
+      Alert.alert('Champs manquants', 'Veuillez remplir au moins la référence et la quantité.');
+      return;
+    }
+    const quantiteNum = parseFloat(form.quantite);
+    if (isNaN(quantiteNum) || quantiteNum <= 0) {
+      Alert.alert('Quantité invalide', 'Veuillez entrer une quantité valide en kg.');
       return;
     }
 
-    // 2. Formatage de la date en chaîne (JJ/MM/AAAA) pour le transport dans l'URL
-    const dateString = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+    setSaving(true);
 
-    // 3. Envoi des données via les paramètres de navigation
-    // On utilise router.push vers /production avec les params
-    router.push({
-      pathname: "/production",
-      params: {
-        newLotTitle: form.reference,
-        newLotStatus: form.statut,
-        newLotDate: dateString,
-        newLotQty: form.quantite,
-        newLotZone: form.localisation,
-        newLotType: form.typeCacao
-      }
+    // Date format JJ/MM/AAAA pour affichage et AAAA-MM-JJ pour l'API
+    const dd = date.getDate().toString().padStart(2, '0');
+    const mm = (date.getMonth() + 1).toString().padStart(2, '0');
+    const yyyy = date.getFullYear();
+    const dateDisplay = `${dd}/${mm}/${yyyy}`;
+    const dateISO = `${yyyy}-${mm}-${dd}`;
+
+    const localId = `${form.reference.toUpperCase().replace(/\s/g, '-')}-${Date.now()}`;
+
+    // 1. Sauvegarder localement en premier (garantie hors-ligne)
+    await saveLot({
+      id: localId,
+      title: form.reference.trim(),
+      status: form.statut,
+      date: dateDisplay,
+      poids: form.quantite.trim(),
+      destination: form.localisation.trim() || 'Non définie',
+      typeCacao: form.typeCacao.trim(),
+      acheteur: 'En attente',
+      synced: false,
     });
+
+    // 2. Tenter l'envoi immédiat vers l'API
+    try {
+      const { data } = await batchApi.create({
+        culture: form.typeCacao.trim() || form.reference.trim(),
+        quantite: quantiteNum,
+        lieu: form.localisation.trim() || 'Non définie',
+        dateRecolte: dateISO,
+        notes: form.reference.trim(),
+      });
+
+      // Mettre à jour le lot local avec l'ID blockchain
+      await saveLot({
+        id: data.id || localId,
+        title: form.reference.trim(),
+        status: form.statut,
+        date: dateDisplay,
+        poids: form.quantite.trim(),
+        destination: form.localisation.trim() || 'Non définie',
+        typeCacao: form.typeCacao.trim(),
+        acheteur: 'En attente',
+        synced: true,
+      });
+
+      setSaving(false);
+      Alert.alert(
+        'Lot créé ✓',
+        `Lot "${form.reference}" enregistré sur la blockchain.\nID: ${data.id || localId}`,
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
+    } catch (e) {
+      setSaving(false);
+
+      if (isNetworkError(e)) {
+        // Mode hors-ligne : lot sauvegardé localement, sera sync plus tard
+        Alert.alert(
+          'Enregistré hors-ligne',
+          `Le lot "${form.reference}" a été sauvegardé localement.\nIl sera synchronisé sur la blockchain dès que la connexion sera rétablie.`,
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } else {
+        // Erreur API (lot déjà existe, données invalides, etc.)
+        Alert.alert('Erreur API', getApiError(e));
+      }
+    }
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* --- EN-TÊTE --- */}
       <LinearGradient colors={['#1B5E20', '#2E7D32', '#43A047']} style={styles.header}>
         <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
           <MaterialCommunityIcons name="arrow-left" size={30} color="white" />
         </TouchableOpacity>
-        
         <Text style={styles.headerTitle}>Ajouter un lot</Text>
-        
-        <View style={{ width: 40 }} /> 
+        <View style={{ width: 40 }} />
       </LinearGradient>
 
-      {/* --- FORMULAIRE --- */}
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
         <ScrollView style={styles.body} contentContainerStyle={styles.scrollContent}>
-          
-          <InputLabel label="Référence du Lot" icon="barcode-scan" />
-          <TextInput 
+
+          <InputLabel label="Référence du Lot" icon="barcode-scan" required />
+          <TextInput
             style={styles.input}
             placeholder="Ex: LOT-2026-A1"
             value={form.reference}
-            onChangeText={(t) => setForm({...form, reference: t})}
+            onChangeText={(t) => setForm({ ...form, reference: t })}
           />
 
-          <InputLabel label="Type de Cacao" icon="clover" />
-          <TextInput 
+          <InputLabel label="Culture / Type de Cacao" icon="clover" />
+          <TextInput
             style={styles.input}
-            placeholder="Ex: Forastero, Criollo..."
+            placeholder="Ex: Forastero, Criollo, Trinitario..."
             value={form.typeCacao}
-            onChangeText={(t) => setForm({...form, typeCacao: t})}
+            onChangeText={(t) => setForm({ ...form, typeCacao: t })}
           />
 
-          <InputLabel label="Localisation / Zone" icon="map-marker" />
-          <TextInput 
+          <InputLabel label="Localisation / Zone GPS" icon="map-marker" required />
+          <TextInput
             style={styles.input}
-            placeholder="Ex: Zone Sud - Kpalimé"
+            placeholder="Ex: Zone Sud - Kpalimé, ou coordonnées GPS"
             value={form.localisation}
-            onChangeText={(t) => setForm({...form, localisation: t})}
+            onChangeText={(t) => setForm({ ...form, localisation: t })}
           />
 
           <View style={styles.row}>
             <View style={{ flex: 1, marginRight: 10 }}>
-              <InputLabel label="Quantité (kg)" icon="weight-kilogram" />
-              <TextInput 
+              <InputLabel label="Quantité (kg)" icon="weight-kilogram" required />
+              <TextInput
                 style={styles.input}
                 placeholder="Ex: 500"
                 keyboardType="numeric"
                 value={form.quantite}
-                onChangeText={(t) => setForm({...form, quantite: t})}
+                onChangeText={(t) => setForm({ ...form, quantite: t })}
               />
             </View>
             <View style={{ flex: 1 }}>
-              <InputLabel label="Date Récolte" icon="calendar" />
-              <TouchableOpacity 
-                style={styles.datePickerBtn} 
+              <InputLabel label="Date Récolte" icon="calendar" required />
+              <TouchableOpacity
+                style={styles.datePickerBtn}
                 onPress={() => setShowDatePicker(true)}
               >
                 <Text style={styles.dateText}>{date.toLocaleDateString('fr-FR')}</Text>
@@ -154,27 +203,46 @@ export default function CreationLotScreen() {
           )}
 
           <InputLabel label="Producteur" icon="account-tie" />
-          <TextInput 
+          <TextInput
             style={[styles.input, styles.disabledInput]}
             value={form.producteur}
             editable={false}
           />
 
           <InputLabel label="Statut initial" icon="clock-outline" />
-          <View style={styles.statusMock}>
-            <Text style={styles.statusText}>{form.statut}</Text>
+          <View style={styles.statusRow}>
+            {(['En cours', 'Terminé', 'Problème'] as const).map(s => (
+              <TouchableOpacity
+                key={s}
+                style={[styles.statusBtn, form.statut === s && styles.statusBtnActive]}
+                onPress={() => setForm({ ...form, statut: s })}
+              >
+                <Text style={[styles.statusBtnText, form.statut === s && styles.statusBtnTextActive]}>
+                  {s}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
-          {/* --- BOUTON VALIDER --- */}
-          <TouchableOpacity style={styles.submitBtn} onPress={handleSave}>
-            <LinearGradient 
-              colors={['#2E7D32', '#1B5E20']} 
-              style={styles.gradientBtn}
-            >
+          <TouchableOpacity
+            style={[styles.submitBtn, saving && { opacity: 0.7 }]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            <LinearGradient colors={['#2E7D32', '#1B5E20']} style={styles.gradientBtn}>
               <MaterialCommunityIcons name="check-circle" size={24} color="white" />
-              <Text style={styles.submitBtnText}>Ajouter le lot</Text>
+              <Text style={styles.submitBtnText}>
+                {saving ? 'Enregistrement...' : 'Ajouter le lot'}
+              </Text>
             </LinearGradient>
           </TouchableOpacity>
+
+          <View style={styles.apiNote}>
+            <MaterialCommunityIcons name="cloud-upload-outline" size={14} color="#2E7D32" />
+            <Text style={styles.apiNoteText}>
+              Envoi vers API → Hyperledger Fabric · Fallback hors-ligne automatique
+            </Text>
+          </View>
 
         </ScrollView>
       </KeyboardAvoidingView>
@@ -182,11 +250,11 @@ export default function CreationLotScreen() {
   );
 }
 
-// Petit composant interne pour les labels stylisés
-const InputLabel = ({ label, icon }: { label: string, icon: string }) => (
+const InputLabel = ({ label, icon, required }: { label: string; icon: string; required?: boolean }) => (
   <View style={styles.labelContainer}>
     <MaterialCommunityIcons name={icon as any} size={18} color="#2E7D32" style={{ marginRight: 8 }} />
     <Text style={styles.label}>{label}</Text>
+    {required && <Text style={{ color: '#C62828', marginLeft: 3 }}>*</Text>}
   </View>
 );
 
@@ -233,21 +301,34 @@ const styles = StyleSheet.create({
   dateText: { fontSize: 14, color: '#333' },
   disabledInput: { backgroundColor: '#F0F0F0', color: '#888' },
   row: { flexDirection: 'row' },
-  statusMock: {
-    backgroundColor: '#E8F5E9',
-    padding: 15,
+  statusRow: { flexDirection: 'row', gap: 10 },
+  statusBtn: {
+    flex: 1,
+    padding: 12,
     borderRadius: 12,
+    backgroundColor: '#EEE',
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#2E7D32',
-    borderStyle: 'dashed'
+    borderColor: 'transparent',
   },
-  statusText: { color: '#2E7D32', fontWeight: 'bold' },
-  submitBtn: { marginTop: 40, borderRadius: 15, overflow: 'hidden', elevation: 5 },
+  statusBtnActive: { backgroundColor: '#E8F5E9', borderColor: '#2E7D32' },
+  statusBtnText: { fontSize: 13, fontWeight: 'bold', color: '#666' },
+  statusBtnTextActive: { color: '#2E7D32' },
+  submitBtn: { marginTop: 35, borderRadius: 15, overflow: 'hidden', elevation: 5 },
   gradientBtn: {
     flexDirection: 'row',
     height: 60,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 10,
   },
-  submitBtnText: { color: 'white', fontSize: 18, fontWeight: 'bold', marginLeft: 10 }
+  submitBtnText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  apiNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+    gap: 6,
+  },
+  apiNoteText: { fontSize: 11, color: '#999', textAlign: 'center' },
 });
