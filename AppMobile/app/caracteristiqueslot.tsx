@@ -1,30 +1,55 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { Stack, useRouter, useLocalSearchParams, Redirect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function CaracteristiqueLotScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { initialized, isAuthenticated } = useAuth();
 
   const isSynced = params.synced === '1';
+
+  if (!initialized) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.authGate}>
+          <ActivityIndicator size="large" color="#2E7D32" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
 
       <LinearGradient colors={['#1B5E20', '#2E7D32', '#43A047']} style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <MaterialCommunityIcons name="arrow-left" size={28} color="white" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Détails du Lot</Text>
-        <TouchableOpacity onPress={() => router.push({
-          pathname: '/historique',
-          params: { lotId: params.lotId || params.title },
-        })}>
-          <MaterialCommunityIcons name="history" size={24} color="white" />
+        <TouchableOpacity
+          style={styles.headerHistoryBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          onPress={() =>
+            router.push({
+              pathname: '/historique',
+              params: { lotId: String(params.lotId || params.title || '') },
+            })
+          }
+          accessibilityLabel="Voir l'historique du lot"
+        >
+          <MaterialCommunityIcons name="history" size={22} color="white" />
+          <Text style={styles.headerHistoryLabel}>Historique</Text>
         </TouchableOpacity>
       </LinearGradient>
 
@@ -88,10 +113,12 @@ export default function CaracteristiqueLotScreen() {
         <View style={styles.actionsContainer}>
           <TouchableOpacity
             style={styles.actionBtn}
-            onPress={() => router.push({
-              pathname: '/historique',
-              params: { lotId: params.lotId || params.title },
-            })}
+            onPress={() =>
+              router.push({
+                pathname: '/historique',
+                params: { lotId: String(params.lotId || params.title || '') },
+              })
+            }
           >
             <MaterialCommunityIcons name="history" size={22} color="#2E7D32" />
             <Text style={styles.actionBtnText}>Voir l'historique blockchain</Text>
@@ -129,6 +156,7 @@ const DetailItem = ({ icon, label, value, isLast = false }: any) => (
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1B5E20' },
+  authGate: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FA' },
   header: {
     height: 70,
     flexDirection: 'row',
@@ -136,7 +164,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
   },
-  headerTitle: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  headerTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', flex: 1, textAlign: 'center' },
+  headerHistoryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    maxWidth: '38%',
+  },
+  headerHistoryLabel: { color: 'white', fontSize: 12, fontWeight: 'bold' },
   body: {
     flex: 1,
     backgroundColor: '#F8F9FA',

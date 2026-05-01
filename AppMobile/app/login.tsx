@@ -7,15 +7,13 @@ import {
 import { useRouter, Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/hooks/use-auth';
-import { TOKEN_KEY } from '@/services/api';
 
 const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, loading, error } = useAuth();
+  const { login, loading, error, initialized, isAuthenticated } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,14 +27,15 @@ export default function LoginScreen() {
     (async () => {
       const compatible = await LocalAuthentication.hasHardwareAsync();
       setIsBiometricSupported(compatible);
-
-      // Si un token valide est déjà stocké, aller directement à l'accueil
-      const token = await AsyncStorage.getItem(TOKEN_KEY);
-      if (token) {
-        router.replace('/(tabs)/accueil');
-      }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!initialized) return;
+    if (isAuthenticated) {
+      router.replace('/(tabs)/accueil');
+    }
+  }, [initialized, isAuthenticated, router]);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -53,8 +52,7 @@ export default function LoginScreen() {
     setBiometricLoading(true);
     try {
       // Vérifier si un token existe déjà (biométrie = accès rapide si déjà connecté)
-      const token = await AsyncStorage.getItem(TOKEN_KEY);
-      if (!token) {
+      if (!isAuthenticated) {
         Alert.alert(
           'Connexion requise',
           'Veuillez vous connecter une première fois avec votre email et mot de passe.'
@@ -170,12 +168,6 @@ export default function LoginScreen() {
                 )}
               </TouchableOpacity>
 
-              {/* Indicateur serveur */}
-              <View style={styles.serverInfo}>
-                <View style={styles.serverDot} />
-                <Text style={styles.serverText}>API: 13.60.214.56:8080</Text>
-              </View>
-
               <View style={styles.footer}>
                 <Text style={styles.footerText}>Besoin d'un compte ? </Text>
                 <TouchableOpacity onPress={() => router.push('/register')}>
@@ -265,20 +257,6 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.7 },
   loginButtonText: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
-  serverInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-    gap: 6,
-  },
-  serverDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#4CAF50',
-  },
-  serverText: { fontSize: 11, color: '#999' },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
   footerText: { color: '#8e8e8e', fontSize: 15 },
   signUpText: { fontSize: 15, fontWeight: 'bold' },

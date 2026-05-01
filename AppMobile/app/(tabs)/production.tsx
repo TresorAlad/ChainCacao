@@ -115,46 +115,57 @@ export default function ProductionScreen() {
             </View>
           }
           renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() => router.push({
-                pathname: '/caracteristiqueslot',
-                params: {
-                  lotId: item.id,
-                  title: item.title,
-                  status: item.status,
-                  dateProd: item.date,
-                  poids: item.poids,
-                  acheteur: item.acheteur || 'En attente',
-                  destination: item.destination || 'En transit',
-                  typeCacao: item.typeCacao || '',
-                  synced: item.synced ? '1' : '0',
+            <View style={styles.card}>
+              <TouchableOpacity
+                style={styles.cardMain}
+                onPress={() => router.push({
+                  pathname: '/caracteristiqueslot',
+                  params: {
+                    lotId: item.id,
+                    title: item.title,
+                    status: item.status,
+                    dateProd: item.date,
+                    poids: item.poids,
+                    acheteur: item.acheteur || 'En attente',
+                    destination: item.destination || 'En transit',
+                    typeCacao: item.typeCacao || '',
+                    synced: item.synced ? '1' : '0',
+                  }
+                })}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardTitleRow}>
+                    <MaterialCommunityIcons
+                      name={item.synced ? 'check-circle' : 'clock-outline'}
+                      size={16}
+                      color={item.synced ? '#2E7D32' : '#F9A825'}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={styles.cardTitle}>{item.title}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <StatusBadge status={item.status} />
+                    <MaterialCommunityIcons name="chevron-right" size={20} color="#CCC" />
+                  </View>
+                </View>
+                <Text style={styles.cardDate}>{item.date} · {item.poids} kg</Text>
+                {!item.synced && (
+                  <Text style={styles.pendingSync}>⏳ En attente de synchronisation blockchain</Text>
+                )}
+                {item.synced && (
+                  <Text style={styles.confirmedSync}>✓ Confirmé sur Hyperledger Fabric</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cardHistoryBtn}
+                onPress={() =>
+                  router.push({ pathname: '/historique', params: { lotId: item.id } })
                 }
-              })}
-            >
-              <View style={styles.cardHeader}>
-                <View style={styles.cardTitleRow}>
-                  <MaterialCommunityIcons
-                    name={item.synced ? 'check-circle' : 'clock-outline'}
-                    size={16}
-                    color={item.synced ? '#2E7D32' : '#F9A825'}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text style={styles.cardTitle}>{item.title}</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <StatusBadge status={item.status} />
-                  <MaterialCommunityIcons name="chevron-right" size={20} color="#CCC" />
-                </View>
-              </View>
-              <Text style={styles.cardDate}>{item.date} · {item.poids} kg</Text>
-              {!item.synced && (
-                <Text style={styles.pendingSync}>⏳ En attente de synchronisation blockchain</Text>
-              )}
-              {item.synced && (
-                <Text style={styles.confirmedSync}>✓ Confirmé sur Hyperledger Fabric</Text>
-              )}
-            </TouchableOpacity>
+                accessibilityLabel="Historique du lot"
+              >
+                <MaterialCommunityIcons name="history" size={22} color="#2E7D32" />
+              </TouchableOpacity>
+            </View>
           )}
         />
       </View>
@@ -233,11 +244,26 @@ const styles = StyleSheet.create({
   filterTextActive: { color: 'white' },
   listContent: { paddingHorizontal: 20, paddingBottom: 100, flexGrow: 1 },
   card: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
     backgroundColor: 'white',
     borderRadius: 15,
-    padding: 15,
     marginBottom: 12,
     elevation: 2,
+    overflow: 'hidden',
+  },
+  cardMain: {
+    flex: 1,
+    padding: 15,
+    paddingRight: 8,
+  },
+  cardHistoryBtn: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    borderLeftWidth: 1,
+    borderLeftColor: '#F0F0F0',
+    backgroundColor: '#FAFAFA',
   },
   cardHeader: {
     flexDirection: 'row',

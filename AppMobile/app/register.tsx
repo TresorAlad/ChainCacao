@@ -9,13 +9,15 @@ import { Picker } from '@react-native-picker/picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Location from 'expo-location';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authApi, getApiError, TOKEN_KEY, USER_KEY } from '@/services/api';
+import { authApi, getApiError } from '@/services/api';
+import { saveProfileExtrasForActor } from '@/hooks/profile-extra';
+import { useAuth } from '@/hooks/use-auth';
 
 const { width, height } = Dimensions.get('window');
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const { applySessionFromSignup } = useAuth();
   const brandGreen = '#228B22'; 
 
   // --- ÉTATS GÉNÉRAUX ---
@@ -103,13 +105,26 @@ export default function RegisterScreen() {
         pin_code: usePin ? pinCode.trim() : undefined,
       });
 
-      // Auto-login: stocker token + actor pour passer directement à l'app
-      if (data.token) {
-        await AsyncStorage.setItem(TOKEN_KEY, data.token);
+      // Auto-login : même état que le AuthProvider (token + user enrichi)
+      if (!data.token || !data.actor) {
+        Alert.alert('Inscription', 'Réponse serveur incomplète : reconnectez-vous.');
+        return;
       }
-      if (data.actor) {
-        await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.actor));
-      }
+      const createdAt = new Date().toISOString();
+      const enriched = {
+        ...data.actor,
+        gps_location: gpsLocation.trim(),
+        field_surface: fieldSurface.trim() || undefined,
+        created_at: createdAt,
+      };
+      await saveProfileExtrasForActor(data.actor.id, {
+        gps_location: gpsLocation.trim(),
+        field_surface: fieldSurface.trim() || undefined,
+        created_at: createdAt,
+        nom: enriched.nom,
+        name: enriched.name,
+      });
+      await applySessionFromSignup(data.token, enriched);
 
       Alert.alert('Compte créé ✓', 'Votre compte a été créé. Vous êtes connecté.', [
         { text: 'OK', onPress: () => router.replace('/(tabs)/accueil') },

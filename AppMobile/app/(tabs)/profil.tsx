@@ -1,5 +1,16 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,18 +18,66 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLots } from '@/hooks/use-storage';
 import { useAuth } from '@/hooks/use-auth';
 
+function formatMemberSince(iso?: string): string {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+  } catch {
+    return '—';
+  }
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { lots } = useLots();
-  const { logout, user } = useAuth();
+  const { logout, user, updateProfile } = useAuth();
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [draftNom, setDraftNom] = useState('');
+  const [draftGps, setDraftGps] = useState('');
+  const [draftSurface, setDraftSurface] = useState('');
+
+  useEffect(() => {
+    if (!editOpen || !user) return;
+    setDraftNom(user.nom || user.name || '');
+    setDraftGps(user.gps_location || '');
+    setDraftSurface(user.field_surface || '');
+  }, [editOpen, user]);
+
+  const openEdit = () => setEditOpen(true);
+
+  const saveEdit = async () => {
+    if (!draftNom.trim()) {
+      Alert.alert('Nom requis', 'Indiquez au moins votre nom.');
+      return;
+    }
+    await updateProfile({
+      nom: draftNom.trim(),
+      name: draftNom.trim(),
+      gps_location: draftGps.trim() || undefined,
+      field_surface: draftSurface.trim() || undefined,
+    });
+    setEditOpen(false);
+  };
+
+  const defaultHistoryLotId =
+    lots.find((l) => l.synced)?.id ?? lots[0]?.id ?? '';
+
+  const surfaceDisplay =
+    user?.field_surface?.trim() ?
+      `${user.field_surface.trim()} ha` :
+      'Non renseignée';
 
   const userData = {
     nom: user?.nom || user?.name || 'Agriculteur',
     role: user?.role || 'Producteur de Cacao',
-    localisation: 'Kpalimé, Togo',
-    coordonnees: '6.9458° N, 0.6333° E',
-    surface: '4.5 Hectares',
-    dateInscription: '15 Avril 2026',
+    localisation: user?.gps_location?.trim() || 'Non renseignée',
+    surface: surfaceDisplay,
+    dateInscription: formatMemberSince(user?.created_at),
   };
 
   const nbLots = lots.length;
@@ -28,7 +87,7 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <LinearGradient colors={['#1B5E20', '#2E7D32']} style={styles.header}>
         <Text style={styles.headerTitle}>Mon Profil</Text>
-        <TouchableOpacity style={styles.editButton}>
+        <TouchableOpacity style={styles.editButton} onPress={openEdit} accessibilityLabel="Modifier le profil">
           <MaterialCommunityIcons name="account-edit" size={26} color="white" />
         </TouchableOpacity>
       </LinearGradient>
@@ -63,9 +122,8 @@ export default function ProfileScreen() {
 
           <InfoCard
             icon="map-marker-radius"
-            label="Localisation"
+            label="Localisation (GPS)"
             value={userData.localisation}
-            subValue={userData.coordonnees}
           />
           <InfoCard
             icon="texture-box"
@@ -74,17 +132,72 @@ export default function ProfileScreen() {
           />
           <InfoCard
             icon="calendar-check"
-            label="Membre depuis"
+            label={'Membre depuis (date d\u2019inscription)'}
             value={userData.dateInscription}
           />
         </View>
+
+        <Modal visible={editOpen} animationType="slide" transparent onRequestClose={() => setEditOpen(false)}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.modalBackdrop}
+          >
+            <TouchableOpacity style={styles.modalBackdropTouchable} activeOpacity={1} onPress={() => setEditOpen(false)} />
+            <View style={styles.modalSheet}>
+              <Text style={styles.modalTitle}>Modifier mon profil</Text>
+              <Text style={styles.modalHint}>
+                Ces informations correspondent à votre inscription (localisation, surface). La date « Membre depuis » reste celle de votre première inscription sur cet appareil.
+              </Text>
+
+              <Text style={styles.inputLbl}>Nom complet</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={draftNom}
+                onChangeText={setDraftNom}
+                placeholder="Nom et prénom"
+              />
+
+              <Text style={styles.inputLbl}>Localisation (GPS ou lieu)</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={draftGps}
+                onChangeText={setDraftGps}
+                placeholder="Ex: 6.9123, 0.5123"
+              />
+
+              <Text style={styles.inputLbl}>Surface exploitée (hectares)</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={draftSurface}
+                onChangeText={setDraftSurface}
+                placeholder="Ex: 2.5"
+                keyboardType="decimal-pad"
+              />
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={[styles.modalBtn, styles.modalBtnGhost]} onPress={() => setEditOpen(false)}>
+                  <Text style={styles.modalBtnGhostText}>Annuler</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalBtn, styles.modalBtnPrimary]} onPress={saveEdit}>
+                  <Text style={styles.modalBtnPrimaryText}>Enregistrer</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
 
         {/* Actions */}
         <View style={styles.actionsSection}>
           <ActionRow
             icon="history"
             label="Voir l'historique complet"
-            onPress={() => router.push('/historique')}
+            onPress={() =>
+              router.push(
+                defaultHistoryLotId ?
+                  { pathname: '/historique', params: { lotId: defaultHistoryLotId } } :
+                  '/historique'
+              )
+            }
           />
           <ActionRow
             icon="transfer"
@@ -116,7 +229,7 @@ export default function ProfileScreen() {
 const InfoCard = ({ icon, label, value, subValue }: any) => (
   <View style={styles.infoCard}>
     <View style={styles.iconCircle}>
-      <MaterialCommunityIcons name={icon} size={22} color="#2E7D32" />
+      <MaterialCommunityIcons name={icon as any} size={22} color="#2E7D32" />
     </View>
     <View style={styles.infoTexts}>
       <Text style={styles.infoLabel}>{label}</Text>
@@ -226,4 +339,37 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   logoutText: { color: '#C62828', fontWeight: 'bold', fontSize: 16 },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  modalBackdropTouchable: { flex: 1 },
+  modalSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 22,
+    paddingTop: 20,
+    paddingBottom: 34,
+    maxHeight: '85%',
+  },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1B5E20', marginBottom: 8 },
+  modalHint: { fontSize: 12, color: '#666', marginBottom: 16, lineHeight: 18 },
+  inputLbl: { fontSize: 12, fontWeight: 'bold', color: '#555', marginBottom: 6, marginTop: 10 },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    backgroundColor: '#FAFAFA',
+  },
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 22 },
+  modalBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  modalBtnGhost: { backgroundColor: '#EEE' },
+  modalBtnGhostText: { fontWeight: 'bold', color: '#555' },
+  modalBtnPrimary: { backgroundColor: '#2E7D32' },
+  modalBtnPrimaryText: { fontWeight: 'bold', color: '#fff' },
 });

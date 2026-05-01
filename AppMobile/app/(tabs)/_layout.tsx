@@ -1,13 +1,26 @@
-import { Tabs } from 'expo-router';
+import { Tabs, Redirect } from 'expo-router';
 import React from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSync } from '@/hooks/use-sync';
+import { useAuth } from '@/hooks/use-auth';
 
 const BRAND_GREEN = '#2E7D32';
 
 export default function TabLayout() {
-  // Démarrer le service de synchronisation hors-ligne (tourne toute la session)
+  const { initialized, isAuthenticated } = useAuth();
   useSync();
+
+  if (!initialized) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FA' }}>
+        <ActivityIndicator size="large" color={BRAND_GREEN} />
+      </View>
+    );
+  }
+  if (!isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
 
   return (
     <Tabs

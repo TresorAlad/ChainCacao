@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,34 +14,16 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import { useLots } from '@/hooks/use-storage';
-import { batchApi, HistoryEvent, getApiError, isNetworkError } from '@/services/api';
+import { batchApi, isNetworkError } from '@/services/api';
+import {
+  eventsFromVerifyResponse,
+  type TimelineDisplayEvent,
+} from '@/utils/historiqueTimeline';
+import type { Lot } from '@/hooks/use-storage';
 
-interface DisplayEvent {
-  type: 'creation' | 'transfert' | 'transformation' | 'certification';
-  date: string;
-  acteur: string;
-  detail: string;
-  txHash?: string;
-  source: 'blockchain' | 'local';
-}
-
-function parseBlockchainHistory(events: HistoryEvent[]): DisplayEvent[] {
-  return events.map((e) => {
-    const v = e.value || {};
-    const statut = v.statut || '';
-    let type: DisplayEvent['type'] = 'creation';
-    if (statut === 'transféré') type = 'transfert';
-    else if (statut === 'transformé') type = 'transformation';
-
-    return {
-      type,
-      date: v.timestamp ? new Date(v.timestamp).toLocaleDateString('fr-FR') : '—',
-      acteur: v.proprietaireID || v.orgID || 'Inconnu',
-      detail: `${v.culture || '—'} · ${v.quantite || 0} kg · ${v.lieu || '—'}`,
-      txHash: e.txId,
-      source: 'blockchain',
-    };
-  });
+function firstParam(v: string | string[] | undefined): string {
+  if (v === undefined || v === null) return '';
+  return Array.isArray(v) ? String(v[0] ?? '').trim() : String(v).trim();
 }
 
 export default function HistoriqueScreen() {
@@ -49,60 +31,76 @@ export default function HistoriqueScreen() {
   const params = useLocalSearchParams();
   const { lots } = useLots();
 
-  const [searchId, setSearchId] = useState((params.lotId as string) || '');
-  const [events, setEvents] = useState<DisplayEvent[]>([]);
+  const lotIdFromRoute = firstParam(params.lotId as string | string[] | undefined);
+
+  const [searchId, setSearchId] = useState(lotIdFromRoute);
+  const [events, setEvents] = useState<TimelineDisplayEvent[]>([]);
   const [lotTitle, setLotTitle] = useState('');
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [fromBlockchain, setFromBlockchain] = useState(false);
 
-  useEffect(() => {
-    if (params.lotId) handleSearch(params.lotId as string);
-  }, [params.lotId]);
-
-  const handleSearch = async (id?: string) => {
-    const query = (id || searchId).trim();
-    if (!query) {
-      Alert.alert('Champ vide', 'Veuillez saisir un identifiant de lot.');
+  const handleSearch = useCallback(async (id?: string) => {
+    const rawQuery = (id ?? searchId).trim();
+    if (!rawQuery) {
+      Alert.alert('Champ vide', 'Veuillez saisir un identifiant de lot ou scanner un QR.');
       return;
     }
+
+    const localMatch = lots.find(
+      (l) =>
+        l.id === rawQuery ||
+        l.title.toLowerCase() === rawQuery.toLowerCase()
+    );
+    const blockchainId =
+      localMatch?.synced && localMatch.id ? localMatch.id : rawQuery;
+
     setLoading(true);
     setSearched(true);
     setEvents([]);
     setFromBlockchain(false);
 
-    // 1. Essayer l'API publique d'abord (GET /api/v1/verify/:id)
+    let loadedFromChain = false;
+    let verifyNetworkError = false;
+
+    // 1. API publique GET /api/v1/verify/:id → { lot, timeline, ... }
     try {
-      const { data } = await batchApi.verify(query);
-      if (data && data.length > 0) {
-        setEvents(parseBlockchainHistory(data));
+      const { data } = await batchApi.verify(blockchainId);
+      const timelineEvents = eventsFromVerifyResponse(data);
+      if (timelineEvents && data.lot) {
+        loadedFromChain = true;
+        const title =
+          (data.lot.notes && String(data.lot.notes).trim()) ||
+          data.lot.culture ||
+          rawQuery;
+        setLotTitle(title);
         setFromBlockchain(true);
-        setLotTitle(data[0]?.value?.culture || query);
+        setEvents(timelineEvents);
         setLoading(false);
         return;
       }
     } catch (e) {
-      if (!isNetworkError(e)) {
-        // Lot non trouvé sur la blockchain → chercher en local
-      }
+      verifyNetworkError = isNetworkError(e);
     }
 
-    // 2. Fallback : chercher dans AsyncStorage
-    const lot = lots.find(
-      l =>
-        l.id === query ||
-        l.title.toLowerCase() === query.toLowerCase() ||
-        l.title.toLowerCase().includes(query.toLowerCase())
-    );
+    // 2. Fallback AsyncStorage (référence utilisateur ou titre)
+    const lot =
+      localMatch ||
+      lots.find(
+        (l) =>
+          l.id === rawQuery ||
+          l.title.toLowerCase() === rawQuery.toLowerCase() ||
+          l.title.toLowerCase().includes(rawQuery.toLowerCase())
+      );
 
     if (lot) {
       setLotTitle(lot.title);
-      const localEvents: DisplayEvent[] = [
+      const localEvents: TimelineDisplayEvent[] = [
         {
           type: 'creation',
           date: lot.date,
-          acteur: 'Agriculteur (local)',
-          detail: `${lot.poids} kg${lot.typeCacao ? ` de ${lot.typeCacao}` : ''}`,
+          acteur: 'Producteur (appareil)',
+          detail: `${lot.poids} kg${lot.typeCacao ? ` · ${lot.typeCacao}` : ''}`,
           txHash: undefined,
           source: 'local',
         },
@@ -111,18 +109,47 @@ export default function HistoriqueScreen() {
         localEvents.push({
           type: 'transfert',
           date: lot.date,
-          acteur: lot.acheteur || 'En transit',
-          detail: `Destination : ${lot.destination}`,
+          acteur: lot.acheteur || 'Destinataire',
+          detail: `Transfert enregistré · Destination : ${lot.destination}`,
           source: 'local',
         });
       }
       setEvents(localEvents);
+    } else if (verifyNetworkError && !loadedFromChain) {
+      Alert.alert(
+        'Réseau',
+        'Connexion indisponible et lot absent du stockage local sur cet appareil.'
+      );
     }
 
     setLoading(false);
-  };
+  }, [searchId, lots]);
 
-  const eventConfig: Record<DisplayEvent['type'], { icon: string; color: string; label: string }> = {
+  useEffect(() => {
+    const next = lotIdFromRoute;
+    if (next) setSearchId(next);
+  }, [lotIdFromRoute]);
+
+  useEffect(() => {
+    if (!lotIdFromRoute) return;
+    void handleSearch(lotIdFromRoute);
+    // Dépendre de `lots` pour rejouer la recherche une fois les lots chargés depuis AsyncStorage.
+    // Ne pas dépendre de `handleSearch` (refait à chaque frappe dans searchId).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lotIdFromRoute, lots]);
+
+  const openLotHistory = useCallback(
+    (lot: Lot) => {
+      setSearchId(lot.id);
+      void handleSearch(lot.id);
+    },
+    [handleSearch]
+  );
+
+  const eventConfig: Record<
+    TimelineDisplayEvent['type'],
+    { icon: string; color: string; label: string }
+  > = {
     creation: { icon: 'sprout', color: '#2E7D32', label: 'Création' },
     transfert: { icon: 'truck-delivery', color: '#1565C0', label: 'Transfert' },
     transformation: { icon: 'cog', color: '#6A1B9A', label: 'Transformation' },
@@ -147,7 +174,7 @@ export default function HistoriqueScreen() {
           <View style={styles.searchRow}>
             <TextInput
               style={styles.searchInput}
-              placeholder="UUID du lot ou référence"
+              placeholder="UUID, référence LOT-… ou coller l’URL du QR"
               value={searchId}
               onChangeText={setSearchId}
               autoCapitalize="none"
@@ -159,7 +186,8 @@ export default function HistoriqueScreen() {
             </TouchableOpacity>
           </View>
           <Text style={styles.publicNote}>
-            <MaterialCommunityIcons name="lock-open" size={12} color="#666" /> Accès public — aucune authentification requise
+            <MaterialCommunityIcons name="lock-open" size={12} color="#666" /> Vérification
+            publique — aucune connexion obligatoire
           </Text>
         </View>
 
@@ -168,10 +196,51 @@ export default function HistoriqueScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          {lots.length > 0 && (
+            <View style={styles.myLotsSection}>
+              <Text style={styles.myLotsTitle}>Mes lots</Text>
+              <Text style={styles.myLotsSubtitle}>
+                Touchez un lot pour afficher son historique (local ou blockchain si synchronisé).
+              </Text>
+              {lots.map((lot) => (
+                <TouchableOpacity
+                  key={lot.id}
+                  style={styles.lotPickRow}
+                  onPress={() => openLotHistory(lot)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons
+                    name={lot.synced ? 'check-circle' : 'clock-outline'}
+                    size={22}
+                    color={lot.synced ? '#2E7D32' : '#F9A825'}
+                  />
+                  <View style={styles.lotPickTexts}>
+                    <Text style={styles.lotPickTitle}>{lot.title}</Text>
+                    <Text style={styles.lotPickSub}>
+                      {lot.date} · {lot.poids} kg
+                      {lot.synced ? '' : ' · en attente synchro'}
+                    </Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color="#CCC" />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {lots.length === 0 && !searched && !loading && (
+            <View style={styles.emptyHint}>
+              <MaterialCommunityIcons name="information-outline" size={40} color="#90A4AE" />
+              <Text style={styles.emptyHintText}>
+                Aucun lot sur cet appareil. Créez un lot depuis l’accueil, ou saisissez un identifiant /
+                URL de vérification ci-dessus.
+              </Text>
+            </View>
+          )}
+
           {loading && (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#2E7D32" />
-              <Text style={styles.loadingText}>Interrogation de la blockchain…</Text>
+              <Text style={styles.loadingText}>Chargement de l’historique…</Text>
             </View>
           )}
 
@@ -180,32 +249,31 @@ export default function HistoriqueScreen() {
               <MaterialCommunityIcons name="alert-circle-outline" size={70} color="#CCC" />
               <Text style={styles.notFoundTitle}>Lot introuvable</Text>
               <Text style={styles.notFoundDesc}>
-                Aucun lot correspondant à "{searchId}" n'a été trouvé sur la blockchain ni en local.
+                Aucune donnée pour « {searchId} ». Utilisez l’UUID du lot (visible après synchro
+                blockchain), ou scannez le QR qui pointe vers /verify/&lt;id&gt;.
               </Text>
             </View>
           )}
 
           {!loading && events.length > 0 && (
             <>
-              {/* En-tête lot */}
               <View style={styles.lotCard}>
                 <Text style={styles.lotCardTitle}>{lotTitle || searchId}</Text>
                 {fromBlockchain ? (
                   <View style={styles.blockchainBadge}>
                     <MaterialCommunityIcons name="check-decagram" size={15} color="#2E7D32" />
-                    <Text style={styles.blockchainBadgeText}>Certifié Hyperledger Fabric</Text>
+                    <Text style={styles.blockchainBadgeText}>Piste Hyperledger Fabric</Text>
                   </View>
                 ) : (
                   <View style={[styles.blockchainBadge, { backgroundColor: '#FFF8E1' }]}>
                     <MaterialCommunityIcons name="clock-outline" size={15} color="#F9A825" />
                     <Text style={[styles.blockchainBadgeText, { color: '#F57F17' }]}>
-                      Données locales — en attente de confirmation
+                      Données locales sur cet appareil
                     </Text>
                   </View>
                 )}
               </View>
 
-              {/* Source badge */}
               <View style={styles.sourceRow}>
                 <MaterialCommunityIcons
                   name={fromBlockchain ? 'link-variant' : 'database-outline'}
@@ -213,7 +281,7 @@ export default function HistoriqueScreen() {
                   color="#999"
                 />
                 <Text style={styles.sourceText}>
-                  Source : {fromBlockchain ? 'Ledger Fabric via GET /api/v1/verify/:id' : 'Stockage local'}
+                  Source : {fromBlockchain ? 'API ChainCacao (blockchain)' : 'Stockage local'}
                 </Text>
               </View>
 
@@ -238,15 +306,17 @@ export default function HistoriqueScreen() {
                         )}
                       </View>
                       <Text style={styles.timelineDetail}>{event.detail}</Text>
-                      <Text style={styles.timelineDate}>{event.date} · {event.acteur}</Text>
-                      {event.txHash && (
+                      <Text style={styles.timelineDate}>
+                        {event.date} · {event.acteur}
+                      </Text>
+                      {event.txHash ? (
                         <View style={styles.hashRow}>
                           <MaterialCommunityIcons name="link" size={12} color="#999" />
-                          <Text style={styles.hashText} numberOfLines={1}>
+                          <Text style={styles.hashText} numberOfLines={2}>
                             {event.txHash}
                           </Text>
                         </View>
-                      )}
+                      ) : null}
                     </View>
                   </View>
                 );
@@ -294,6 +364,41 @@ const styles = StyleSheet.create({
   publicNote: { fontSize: 12, color: '#999', marginTop: 8 },
   scroll: { flex: 1 },
   scrollContent: { padding: 20, paddingBottom: 40 },
+  myLotsSection: { marginBottom: 16 },
+  myLotsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1B5E20',
+    marginBottom: 4,
+  },
+  myLotsSubtitle: { fontSize: 13, color: '#666', marginBottom: 12, lineHeight: 18 },
+  lotPickRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+    gap: 12,
+  },
+  lotPickTexts: { flex: 1 },
+  lotPickTitle: { fontSize: 16, fontWeight: '600', color: '#333' },
+  lotPickSub: { fontSize: 13, color: '#888', marginTop: 2 },
+  emptyHint: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  emptyHintText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 12,
+    lineHeight: 22,
+  },
   loadingContainer: { alignItems: 'center', marginTop: 60 },
   loadingText: { color: '#999', marginTop: 12, fontSize: 14 },
   notFoundContainer: { alignItems: 'center', marginTop: 60 },

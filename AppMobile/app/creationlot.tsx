@@ -1,9 +1,10 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { Stack, useRouter, Redirect } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -16,20 +17,37 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLots } from '@/hooks/use-storage';
+import { useAuth } from '@/hooks/use-auth';
 import { batchApi, isNetworkError, getApiError } from '@/services/api';
+
+function generateLotReference(): string {
+  const y = new Date().getFullYear();
+  const rand = Math.random().toString(36).substring(2, 7).toUpperCase();
+  return `LOT-${y}-${rand}`;
+}
 
 export default function CreationLotScreen() {
   const router = useRouter();
-  const { saveLot } = useLots();
+  const { saveLot, updateLot } = useLots();
+  const { user, initialized, isAuthenticated } = useAuth();
+
+  const initialRef = useMemo(() => generateLotReference(), []);
+
+  const producerName = user?.nom || user?.name || '—';
 
   const [form, setForm] = useState({
-    reference: '',
+    reference: initialRef,
     typeCacao: '',
     localisation: '',
     quantite: '',
-    producteur: 'Koffi Mensah',
+    producteur: producerName,
     statut: 'En cours' as 'En cours' | 'Terminé' | 'Problème',
   });
+
+  useEffect(() => {
+    const name = user?.nom || user?.name;
+    if (name) setForm((f) => ({ ...f, producteur: name }));
+  }, [user?.nom, user?.name]);
 
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -47,8 +65,16 @@ export default function CreationLotScreen() {
   };
 
   const handleSave = async () => {
-    if (!form.reference.trim() || !form.quantite.trim()) {
-      Alert.alert('Champs manquants', 'Veuillez remplir au moins la référence et la quantité.');
+    if (!form.quantite.trim()) {
+      Alert.alert('Champs manquants', 'Veuillez indiquer la quantité (kg).');
+      return;
+    }
+    if (!form.localisation.trim()) {
+      Alert.alert('Champs manquants', 'Veuillez indiquer la localisation / zone GPS.');
+      return;
+    }
+    if (!form.typeCacao.trim()) {
+      Alert.alert('Champs manquants', 'Veuillez indiquer la culture / type de cacao.');
       return;
     }
     const quantiteNum = parseFloat(form.quantite);
@@ -84,30 +110,22 @@ export default function CreationLotScreen() {
     // 2. Tenter l'envoi immédiat vers l'API
     try {
       const { data } = await batchApi.create({
-        culture: form.typeCacao.trim() || form.reference.trim(),
+        culture: form.typeCacao.trim(),
         quantite: quantiteNum,
-        lieu: form.localisation.trim() || 'Non définie',
-        dateRecolte: dateISO,
+        lieu: form.localisation.trim(),
+        date_recolte: dateISO,
         notes: form.reference.trim(),
       });
 
-      // Mettre à jour le lot local avec l'ID blockchain
-      await saveLot({
-        id: data.id || localId,
-        title: form.reference.trim(),
-        status: form.statut,
-        date: dateDisplay,
-        poids: form.quantite.trim(),
-        destination: form.localisation.trim() || 'Non définie',
-        typeCacao: form.typeCacao.trim(),
-        acheteur: 'En attente',
-        synced: true,
-      });
+      const serverId = data.batch?.id ?? localId;
+
+      // Mettre à jour le même lot (évite un doublon : avant localId, après id serveur)
+      await updateLot(localId, { id: serverId, synced: true });
 
       setSaving(false);
       Alert.alert(
         'Lot créé ✓',
-        `Lot "${form.reference}" enregistré sur la blockchain.\nID: ${data.id || localId}`,
+        `Lot "${form.reference}" enregistré sur la blockchain.\nID: ${serverId}`,
         [{ text: 'OK', onPress: () => router.back() }]
       );
     } catch (e) {
@@ -126,6 +144,21 @@ export default function CreationLotScreen() {
       }
     }
   };
+
+  if (!initialized) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.authGate}>
+          <ActivityIndicator size="large" color="#2E7D32" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -147,13 +180,13 @@ export default function CreationLotScreen() {
 
           <InputLabel label="Référence du Lot" icon="barcode-scan" required />
           <TextInput
-            style={styles.input}
-            placeholder="Ex: LOT-2026-A1"
+            style={[styles.input, styles.disabledInput]}
+            placeholder="Générée automatiquement"
             value={form.reference}
-            onChangeText={(t) => setForm({ ...form, reference: t })}
+            editable={false}
           />
 
-          <InputLabel label="Culture / Type de Cacao" icon="clover" />
+          <InputLabel label="Culture / Type de Cacao" icon="clover" required />
           <TextInput
             style={styles.input}
             placeholder="Ex: Forastero, Criollo, Trinitario..."
@@ -237,13 +270,6 @@ export default function CreationLotScreen() {
             </LinearGradient>
           </TouchableOpacity>
 
-          <View style={styles.apiNote}>
-            <MaterialCommunityIcons name="cloud-upload-outline" size={14} color="#2E7D32" />
-            <Text style={styles.apiNoteText}>
-              Envoi vers API → Hyperledger Fabric · Fallback hors-ligne automatique
-            </Text>
-          </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -275,6 +301,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
   },
+  authGate: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FA' },
   scrollContent: { padding: 25, paddingBottom: 50 },
   labelContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, marginTop: 15 },
   label: { fontSize: 14, fontWeight: 'bold', color: '#555' },
@@ -323,12 +350,4 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   submitBtnText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
-  apiNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 14,
-    gap: 6,
-  },
-  apiNoteText: { fontSize: 11, color: '#999', textAlign: 'center' },
 });

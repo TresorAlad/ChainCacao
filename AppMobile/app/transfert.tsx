@@ -12,21 +12,23 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
+import { useRouter, Stack, useLocalSearchParams, Redirect } from 'expo-router';
 import { useLots } from '@/hooks/use-storage';
+import { useAuth } from '@/hooks/use-auth';
 import { actorsApi, batchApi, ActorInfo, getApiError, isNetworkError } from '@/services/api';
 
+/** Alignés sur les IDs seed SQL si l’API est hors ligne */
 const FALLBACK_ACTORS: ActorInfo[] = [
-  { id: 'COOP-001', nom: 'Coopérative Kpalimé', role: 'Coopérative', orgID: 'OrgAgriculteur' },
-  { id: 'TRANS-001', nom: 'Usine Lomé', role: 'Transformateur', orgID: 'OrgTransformateur' },
-  { id: 'DIST-001', nom: 'Exportateur Togo', role: 'Distributeur', orgID: 'OrgDistributeur' },
-  { id: 'DIST-002', nom: 'Marché local Kara', role: 'Distributeur', orgID: 'OrgDistributeur' },
+  { id: 'actor-coop-001', nom: 'Cooperative Plateaux', role: 'cooperative', org_id: 'CooperativeMSP' },
+  { id: 'actor-trans-001', nom: 'Usine Cacao Plus', role: 'transformateur', org_id: 'TransformateurMSP' },
+  { id: 'actor-dist-001', nom: 'Distrib Export SA', role: 'distributeur', org_id: 'DistributeurMSP' },
 ];
 
 export default function TransfertScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { lots, updateLot } = useLots();
+  const { initialized, isAuthenticated } = useAuth();
 
   const [actors, setActors] = useState<ActorInfo[]>(FALLBACK_ACTORS);
   const [loadingActors, setLoadingActors] = useState(false);
@@ -46,7 +48,8 @@ export default function TransfertScreen() {
       setLoadingActors(true);
       try {
         const { data } = await actorsApi.list();
-        if (data && data.length > 0) setActors(data);
+        const list = data?.actors ?? [];
+        if (list.length > 0) setActors(list);
       } catch (_) {
         // Utiliser la liste statique si l'API est indisponible
       } finally {
@@ -79,7 +82,7 @@ export default function TransfertScreen() {
     setLoading(true);
 
     const actorName = selectedActor.nom || selectedActor.name || selectedActor.id;
-    const orgID = selectedActor.orgID || selectedActor.id;
+    const toActorId = selectedActor.id;
 
     // 1. Mettre à jour localement immédiatement
     await updateLot(foundLot.id, {
@@ -92,17 +95,18 @@ export default function TransfertScreen() {
     // 2. Tenter l'appel API
     try {
       const { data } = await batchApi.transfer({
-        batchID: foundLot.id,
-        toOrg: orgID,
+        batch_id: foundLot.id,
+        to_actor_id: toActorId,
         commentaire: commentaire.trim() || undefined,
       });
 
       await updateLot(foundLot.id, { synced: true });
 
       setLoading(false);
+      const tx = data.tx_hash || '';
       Alert.alert(
         'Transfert confirmé ✓',
-        `Lot "${foundLot.title}" transféré vers "${actorName}".\n\nHash blockchain: ${data.txHash || '—'}`,
+        `Lot "${foundLot.title}" transféré vers "${actorName}".\n\nHash blockchain: ${tx || '—'}`,
         [{ text: 'OK', onPress: () => router.back() }]
       );
     } catch (e) {
@@ -119,6 +123,21 @@ export default function TransfertScreen() {
       }
     }
   };
+
+  if (!initialized) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.authGate}>
+          <ActivityIndicator size="large" color="#2E7D32" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -229,7 +248,9 @@ export default function TransfertScreen() {
                 />
                 <View style={{ marginLeft: 12, flex: 1 }}>
                   <Text style={styles.actorName}>{actor.nom || actor.name || actor.id}</Text>
-                  <Text style={styles.actorRole}>{actor.role} · {actor.orgID}</Text>
+                  <Text style={styles.actorRole}>
+                    {actor.role} · {actor.orgID || actor.org_id || '—'}
+                  </Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -270,7 +291,7 @@ export default function TransfertScreen() {
               <ConfirmRow icon="package-variant" label="Lot" value={foundLot.title} />
               <ConfirmRow icon="weight-kilogram" label="Quantité" value={`${foundLot.poids} kg`} />
               <ConfirmRow icon="account-arrow-right" label="Destinataire" value={selectedActor.nom || selectedActor.name || selectedActor.id} />
-              <ConfirmRow icon="office-building" label="Organisation" value={selectedActor.orgID || '—'} />
+              <ConfirmRow icon="office-building" label="Organisation" value={selectedActor.orgID || selectedActor.org_id || '—'} />
               {commentaire ? (
                 <ConfirmRow icon="comment-text" label="Commentaire" value={commentaire} />
               ) : null}
@@ -363,6 +384,7 @@ const badgeStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1B5E20' },
+  authGate: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FA' },
   header: { height: 70, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 },
   headerTitle: { color: 'white', fontSize: 20, fontWeight: 'bold' },
   backBtn: { padding: 5 },

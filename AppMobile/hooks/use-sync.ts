@@ -1,10 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
+import { DeviceEventEmitter } from 'react-native';
 import { useEffect, useRef, useCallback } from 'react';
 import { batchApi, isNetworkError, TOKEN_KEY } from '@/services/api';
-import { Lot } from '@/hooks/use-storage';
+import { Lot, LOTS_STORAGE_KEY, LOTS_UPDATED_EVENT } from '@/hooks/use-storage';
 
-const STORAGE_KEY = 'chaincacao_lots';
 const SYNC_INTERVAL_MS = 30000; // 30 secondes (requis par le CDC)
 
 async function syncPendingLots(): Promise<void> {
@@ -13,7 +13,7 @@ async function syncPendingLots(): Promise<void> {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
     if (!token) return;
 
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    const raw = await AsyncStorage.getItem(LOTS_STORAGE_KEY);
     if (!raw) return;
 
     const lots: Lot[] = JSON.parse(raw);
@@ -26,20 +26,27 @@ async function syncPendingLots(): Promise<void> {
     for (const lot of pending) {
       try {
         const dateISO = convertDateToISO(lot.date);
+        const culture = (lot.typeCacao || '').trim() || 'Cacao';
+        const lieu = (lot.destination || '').trim();
+        if (!lieu) continue;
+
+        const idx = updated.findIndex(l => l.id === lot.id);
+
         const { data } = await batchApi.create({
-          culture: lot.typeCacao || lot.title,
+          culture,
           quantite: parseFloat(lot.poids) || 0,
-          lieu: lot.destination || 'Non définie',
-          dateRecolte: dateISO,
+          lieu,
+          date_recolte: dateISO,
           notes: lot.title !== lot.typeCacao ? lot.title : undefined,
         });
 
+        const serverId = data.batch?.id ?? lot.id;
+
         // Mettre à jour le lot avec l'UUID blockchain et le marquer synced
-        const idx = updated.findIndex(l => l.id === lot.id);
         if (idx !== -1) {
           updated[idx] = {
             ...updated[idx],
-            id: data.id || updated[idx].id,
+            id: serverId,
             synced: true,
           };
           changed = true;
@@ -57,7 +64,8 @@ async function syncPendingLots(): Promise<void> {
     }
 
     if (changed) {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      await AsyncStorage.setItem(LOTS_STORAGE_KEY, JSON.stringify(updated));
+      DeviceEventEmitter.emit(LOTS_UPDATED_EVENT);
     }
   } catch (_) {}
 }

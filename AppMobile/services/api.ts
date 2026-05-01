@@ -1,9 +1,30 @@
 import axios, { AxiosError } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
-export const API_BASE = 'http://13.60.214.56:8080';
 export const TOKEN_KEY = 'chaincacao_jwt';
 export const USER_KEY = 'chaincacao_user';
+
+type ExpoExtra = { apiUrl?: string };
+
+/** URL de base depuis app.config.js (extra.apiUrl) ou valeur historique. */
+export function getApiBaseUrl(): string {
+  const fromExtra = (Constants.expoConfig?.extra as ExpoExtra | undefined)?.apiUrl;
+  return (
+    fromExtra ??
+    process.env.EXPO_PUBLIC_API_URL ??
+    'http://13.60.214.56:8080'
+  );
+}
+
+export const API_BASE = getApiBaseUrl();
+
+let sessionInvalidateHandler: (() => Promise<void>) | null = null;
+
+/** Appelé depuis `_layout` : déconnexion + redirection login sur HTTP 401. */
+export function setSessionInvalidateHandler(fn: (() => Promise<void>) | null) {
+  sessionInvalidateHandler = fn;
+}
 
 // Instance Axios centrale
 export const api = axios.create({
@@ -20,6 +41,20 @@ api.interceptors.request.use(async (config) => {
   }
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    if (error.response?.status === 401 && sessionInvalidateHandler) {
+      try {
+        await sessionInvalidateHandler();
+      } catch {
+        /* laisser rejeter l’erreur originale */
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Normaliser les erreurs API
 export function getApiError(e: unknown): string {
@@ -58,7 +93,12 @@ export interface ActorInfo {
   name?: string;
   role?: string;
   orgID?: string;
+  org_id?: string;
   email?: string;
+  /** Enrichi côté mobile à l'inscription (non renvoyé par le backend actuel) */
+  gps_location?: string;
+  field_surface?: string;
+  created_at?: string;
 }
 
 export const authApi = {
@@ -74,69 +114,108 @@ export interface CreateBatchPayload {
   culture: string;       // type de produit (cacao, maïs…)
   quantite: number;      // poids en kg
   lieu: string;          // localisation / GPS
-  dateRecolte: string;   // ISO 8601 (YYYY-MM-DD)
+  /** ISO YYYY-MM-DD — JSON snake_case pour Gin */
+  date_recolte: string;
   notes?: string;
 }
 
 export interface BatchResponse {
   id: string;            // UUID du lot
-  txHash?: string;       // hash de transaction Fabric
+  tx_hash?: string;
   culture?: string;
   quantite?: number;
   lieu?: string;
-  dateRecolte?: string;
-  proprietaireID?: string;
+  date_recolte?: string;
+  proprietaire_id?: string;
+  org_id?: string;
   statut?: string;
   timestamp?: string;
+  notes?: string;
 }
 
-export interface TransferPayload {
-  batchID: string;
-  toOrg: string;
+/** Événement renvoyé par Fabric dans `timeline` / `events` (verify & history). */
+export interface BatchTimelineEvent {
+  batch_id?: string;
+  type?: string;
+  from_actor_id?: string;
+  to_actor_id?: string;
   commentaire?: string;
-}
-
-export const batchApi = {
-  create: (payload: CreateBatchPayload) =>
-    api.post<BatchResponse>('/api/v1/batch/create', payload),
-
-  transfer: (payload: TransferPayload) =>
-    api.post<{ txHash: string }>('/api/v1/batch/transfer', payload),
-
-  get: (id: string) =>
-    api.get<BatchResponse>(`/api/v1/batch/${id}`),
-
-  history: (id: string) =>
-    api.get<HistoryEvent[]>(`/api/v1/batch/${id}/history`),
-
-  verify: (id: string) =>
-    api.get<HistoryEvent[]>(`/api/v1/verify/${id}`),
-};
-
-// ─── ACTORS ───────────────────────────────────────────────────────────────────
-
-export const actorsApi = {
-  list: () => api.get<ActorInfo[]>('/api/v1/actors'),
-};
-
-// ─── HISTORY ──────────────────────────────────────────────────────────────────
-
-export interface HistoryEvent {
-  txId?: string;
-  timestamp?: string;
-  isDelete?: boolean;
-  value?: {
+  tx_hash?: string;
+  actor_id?: string;
+  created_at?: string;
+  payload?: {
     id?: string;
     culture?: string;
     quantite?: number;
     lieu?: string;
-    dateRecolte?: string;
-    proprietaireID?: string;
-    orgID?: string;
+    date_recolte?: string;
+    proprietaire_id?: string;
+    org_id?: string;
     statut?: string;
     timestamp?: string;
+    notes?: string;
   };
 }
+
+export interface VerifyBatchResponse {
+  success?: boolean;
+  lot?: BatchResponse;
+  timeline?: BatchTimelineEvent[];
+  origin?: Record<string, unknown>;
+  owner?: Record<string, unknown>;
+}
+
+export interface BatchHistoryApiResponse {
+  success?: boolean;
+  events?: BatchTimelineEvent[];
+}
+
+/** Réponse POST /api/v1/batch/create */
+export interface CreateBatchResponse {
+  success?: boolean;
+  tx_hash?: string;
+  batch?: BatchResponse;
+}
+
+export interface TransferPayload {
+  batch_id: string;
+  to_actor_id: string;
+  commentaire?: string;
+}
+
+export interface TransferApiResponse {
+  success?: boolean;
+  tx_hash?: string;
+  batch?: BatchResponse;
+}
+
+export const batchApi = {
+  create: (payload: CreateBatchPayload) =>
+    api.post<CreateBatchResponse>('/api/v1/batch/create', payload),
+
+  transfer: (payload: TransferPayload) =>
+    api.post<TransferApiResponse>('/api/v1/batch/transfer', payload),
+
+  get: (id: string) =>
+    api.get<BatchResponse>(`/api/v1/batch/${encodeURIComponent(id)}`),
+
+  history: (id: string) =>
+    api.get<BatchHistoryApiResponse>(`/api/v1/batch/${encodeURIComponent(id)}/history`),
+
+  verify: (id: string) =>
+    api.get<VerifyBatchResponse>(`/api/v1/verify/${encodeURIComponent(id)}`),
+};
+
+// ─── ACTORS ───────────────────────────────────────────────────────────────────
+
+export interface ActorsListResponse {
+  success?: boolean;
+  actors?: ActorInfo[];
+}
+
+export const actorsApi = {
+  list: () => api.get<ActorsListResponse>('/api/v1/actors'),
+};
 
 // ─── HEALTH ───────────────────────────────────────────────────────────────────
 

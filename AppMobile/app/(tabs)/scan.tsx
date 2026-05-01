@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLots } from '@/hooks/use-storage';
+import { extractLotIdFromScanPayload } from '@/utils/lotQr';
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -29,7 +30,8 @@ export default function ScanScreen() {
     navigateToLot(data.trim());
   };
 
-  const navigateToLot = (lotId: string) => {
+  const navigateToLot = (rawId: string) => {
+    const lotId = extractLotIdFromScanPayload(rawId);
     const lot = lots.find(
       l => l.id === lotId || l.title.toLowerCase() === lotId.toLowerCase()
     );

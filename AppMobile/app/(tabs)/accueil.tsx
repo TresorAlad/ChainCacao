@@ -34,6 +34,9 @@ export default function AccueilScreen() {
   const nbTotalLots = lots.length;
   const nbEnAttente = lots.filter(lot => !lot.synced).length;
 
+  const defaultHistoryLotId =
+    lots.find((lot) => lot.synced)?.id ?? lots[0]?.id ?? '';
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" />
@@ -122,7 +125,11 @@ export default function AccueilScreen() {
               icon="history"
               label="Historique"
               color="#00695C"
-              onPress={() => router.push('/historique')}
+              onPress={() =>
+                defaultHistoryLotId ?
+                  router.push({ pathname: '/historique', params: { lotId: defaultHistoryLotId } }) :
+                  router.push('/historique')
+              }
             />
           </View>
 
@@ -137,12 +144,15 @@ export default function AccueilScreen() {
                   onPress={() => router.push({
                     pathname: '/caracteristiqueslot',
                     params: {
+                      lotId: lot.id,
                       title: lot.title,
                       status: lot.status,
                       dateProd: lot.date,
                       poids: lot.poids,
                       acheteur: lot.acheteur || 'En attente',
                       destination: lot.destination || 'Non définie',
+                      typeCacao: lot.typeCacao || '',
+                      synced: lot.synced ? '1' : '0',
                     }
                   })}
                 >
