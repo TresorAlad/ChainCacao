@@ -16,7 +16,6 @@ import {
   getApiError,
   actorsApi,
 } from '@/services/api';
-import { LOTS_STORAGE_KEY } from '@/hooks/use-storage';
 import {
   loadProfileExtrasForActor,
   saveProfileExtrasForActor,
@@ -67,12 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } catch (e) {
             const status = (e as AxiosError).response?.status;
             if (status === 401 || status === 403) {
-              await AsyncStorage.multiRemove([
-                TOKEN_KEY,
-                USER_KEY,
-                LOTS_STORAGE_KEY,
-                PROFILE_EXTRA_KEY,
-              ]);
+              await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
               setToken(null);
               setUser(null);
             }
@@ -116,13 +110,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  /** Session uniquement : lots et extras profil restent sur l’appareil (par acteur) pour retrouver les données au prochain login. */
   const logout = useCallback(async () => {
-    await Promise.all([
-      AsyncStorage.removeItem(TOKEN_KEY),
-      AsyncStorage.removeItem(USER_KEY),
-      AsyncStorage.removeItem(LOTS_STORAGE_KEY),
-      AsyncStorage.removeItem(PROFILE_EXTRA_KEY),
-    ]);
+    await Promise.all([AsyncStorage.removeItem(TOKEN_KEY), AsyncStorage.removeItem(USER_KEY)]);
     setToken(null);
     setUser(null);
   }, []);

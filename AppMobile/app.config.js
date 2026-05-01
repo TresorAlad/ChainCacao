@@ -1,10 +1,9 @@
 /* eslint-env node */
 /**
- * Configuration Expo : URL API via EXPO_PUBLIC_API_URL (HTTPS recommandé en prod).
+ * URL de l’API : définie uniquement ici (pas de .env / EXPO_PUBLIC_*).
  * Cleartext Android uniquement si l’URL commence par http://
  */
-const apiUrl =
-  process.env.EXPO_PUBLIC_API_URL ?? 'http://13.60.214.56:8080';
+const apiUrl = 'http://13.60.214.56:8080';
 const usesCleartextTraffic = apiUrl.startsWith('http://');
 
 module.exports = {
@@ -68,9 +67,10 @@ module.exports = {
       ],
       '@react-native-community/datetimepicker',
     ],
+    /** Projet EAS (@tresor_228/ChainCacao) — avec app.config.js dynamique, l’ID doit rester défini ici. */
     extra: {
       eas: {
-        projectId: 'votre-project-id',
+        projectId: 'f6a18683-7b87-4986-8742-0bf31e0078a3',
       },
       apiUrl,
     },

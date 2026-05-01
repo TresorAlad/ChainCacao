@@ -7,14 +7,12 @@ export const USER_KEY = 'chaincacao_user';
 
 type ExpoExtra = { apiUrl?: string };
 
-/** URL de base depuis app.config.js (extra.apiUrl) ou valeur historique. */
+/** URL de base : `extra.apiUrl` injecté par app.config.js (source unique, pas d’environnement). */
 export function getApiBaseUrl(): string {
   const fromExtra = (Constants.expoConfig?.extra as ExpoExtra | undefined)?.apiUrl;
-  return (
-    fromExtra ??
-    process.env.EXPO_PUBLIC_API_URL ??
-    'http://13.60.214.56:8080'
-  );
+  if (typeof fromExtra === 'string' && fromExtra.trim()) return fromExtra.trim();
+  /* Secours tests / hors Expo — doit rester aligné avec app.config.js */
+  return 'http://13.60.214.56:8080';
 }
 
 export const API_BASE = getApiBaseUrl();

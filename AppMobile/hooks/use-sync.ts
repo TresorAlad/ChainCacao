@@ -2,22 +2,33 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { DeviceEventEmitter } from 'react-native';
 import { useEffect, useRef, useCallback } from 'react';
-import { batchApi, isNetworkError, TOKEN_KEY } from '@/services/api';
-import { Lot, LOTS_STORAGE_KEY, LOTS_UPDATED_EVENT } from '@/hooks/use-storage';
+import { batchApi, isNetworkError, TOKEN_KEY, USER_KEY } from '@/services/api';
+import { readLotsListForActor, writeLotsListForActor } from '@/hooks/use-storage';
+import { LOTS_UPDATED_EVENT } from '@/lib/storage-keys';
 
 const SYNC_INTERVAL_MS = 30000; // 30 secondes (requis par le CDC)
 
+async function getActorIdFromStorage(): Promise<string | undefined> {
+  const raw = await AsyncStorage.getItem(USER_KEY);
+  if (!raw) return undefined;
+  try {
+    const u = JSON.parse(raw) as { id?: string };
+    return u.id;
+  } catch {
+    return undefined;
+  }
+}
+
 async function syncPendingLots(): Promise<void> {
   try {
-    // Vérifier qu'on a un token JWT
     const token = await AsyncStorage.getItem(TOKEN_KEY);
     if (!token) return;
 
-    const raw = await AsyncStorage.getItem(LOTS_STORAGE_KEY);
-    if (!raw) return;
+    const actorId = await getActorIdFromStorage();
+    if (!actorId) return;
 
-    const lots: Lot[] = JSON.parse(raw);
-    const pending = lots.filter(l => !l.synced);
+    const lots = await readLotsListForActor(actorId);
+    const pending = lots.filter((l) => !l.synced);
     if (pending.length === 0) return;
 
     let changed = false;
@@ -30,7 +41,7 @@ async function syncPendingLots(): Promise<void> {
         const lieu = (lot.destination || '').trim();
         if (!lieu) continue;
 
-        const idx = updated.findIndex(l => l.id === lot.id);
+        const idx = updated.findIndex((l) => l.id === lot.id);
 
         const { data } = await batchApi.create({
           culture,
@@ -42,7 +53,6 @@ async function syncPendingLots(): Promise<void> {
 
         const serverId = data.batch?.id ?? lot.id;
 
-        // Mettre à jour le lot avec l'UUID blockchain et le marquer synced
         if (idx !== -1) {
           updated[idx] = {
             ...updated[idx],
@@ -52,10 +62,8 @@ async function syncPendingLots(): Promise<void> {
           changed = true;
         }
       } catch (e) {
-        // Erreur réseau → arrêter la sync (réessayer au prochain cycle)
         if (isNetworkError(e)) break;
-        // Erreur API spécifique (ex: doublon) → marquer comme problème
-        const idx = updated.findIndex(l => l.id === lot.id);
+        const idx = updated.findIndex((l) => l.id === lot.id);
         if (idx !== -1 && !isNetworkError(e)) {
           updated[idx] = { ...updated[idx], status: 'Problème' };
           changed = true;
@@ -64,14 +72,13 @@ async function syncPendingLots(): Promise<void> {
     }
 
     if (changed) {
-      await AsyncStorage.setItem(LOTS_STORAGE_KEY, JSON.stringify(updated));
+      await writeLotsListForActor(actorId, updated);
       DeviceEventEmitter.emit(LOTS_UPDATED_EVENT);
     }
   } catch (_) {}
 }
 
 function convertDateToISO(frDate: string): string {
-  // Convertir JJ/MM/AAAA → AAAA-MM-JJ
   const parts = frDate.split('/');
   if (parts.length === 3) {
     return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
@@ -90,14 +97,11 @@ export function useSync() {
   }, []);
 
   useEffect(() => {
-    // Lancer une sync immédiate au montage
     triggerSync();
 
-    // Sync toutes les 30 secondes (CDC §6.2)
     intervalRef.current = setInterval(triggerSync, SYNC_INTERVAL_MS);
 
-    // Sync dès qu'on se reconnecte
-    const unsubscribe = NetInfo.addEventListener(state => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
       if (state.isConnected) {
         syncPendingLots();
       }
