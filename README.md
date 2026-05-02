@@ -377,7 +377,3 @@ Projet développé pour la **demi-finale du concours du MBH** — *Système de t
 
 - Architecture : Hyperledger Fabric · Go API · React Native
 - Version du cahier des charges : 1.0 — 29 avril 2026
-
----
-
-> **Note de sécurité** : Ne versionnez jamais les fichiers `.env`, `chaincacao.pem` ni les clés cryptographiques Fabric en production. Utilisez un gestionnaire de secrets (Vault, AWS Secrets Manager, etc.).
