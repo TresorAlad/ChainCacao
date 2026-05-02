@@ -93,8 +93,25 @@ export default function DashboardPage() {
     <div className="page-container">
       {/* Page Header */}
       <header className="page-header animate-fade-in">
-        <h1 className="page-title">Tableau de Bord</h1>
-        <p className="page-description">Vue d'ensemble de votre activité et de vos indicateurs clés</p>
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-primary)]">
+              Tableau de Bord
+            </h1>
+            <p className="text-[var(--color-muted)] mt-2">
+              Vue d'ensemble de votre activité et de vos indicateurs clés
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] text-sm font-medium">
+              <span className="w-2 h-2 rounded-full bg-[var(--color-secondary)] animate-pulse"></span>
+              Synchronisé
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-[var(--color-primary)]/10 flex items-center justify-center">
+              <UsersIcon className="w-5 h-5 text-[var(--color-primary)]" />
+            </div>
+          </div>
+        </div>
       </header>
 
       {/* Stats Grid */}
@@ -102,19 +119,28 @@ export default function DashboardPage() {
         {stats.map((stat, index) => (
           <div 
             key={index}
-            className="stat-card animate-fade-in"
+            className="stat-card group hover:shadow-lg transition-all duration-300"
             style={{ animationDelay: `${index * 0.1}s` }}
           >
             <div className="flex items-start justify-between">
               <div>
-                <p className="stat-label">{stat.label}</p>
-                <p className="stat-value mt-1">{stat.value}</p>
-                <div className={`stat-change ${stat.changePositive ? 'positive' : 'negative'}`}>
+                <p className="text-body-sm text-[var(--color-muted)] font-medium">{stat.label}</p>
+                <p className="text-3xl font-bold text-[var(--color-primary)] mt-2 group-hover:scale-105 transition-transform">
+                  {stat.value}
+                </p>
+                <div className={`flex items-center gap-1 mt-3 text-sm ${
+                  stat.changePositive ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'
+                }`}>
                   <ArrowTrendingUpIcon className="w-4 h-4" />
                   <span>{stat.change} vs mois dernier</span>
                 </div>
               </div>
-              <div className={`stat-card-icon-bg-${['primary', 'secondary', 'accent', 'success'][index]} w-12 h-12 rounded-xl flex items-center justify-center`}>
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform ${
+                index === 0 ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]' :
+                index === 1 ? 'bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' :
+                index === 2 ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]' :
+                'bg-[var(--color-success)]/10 text-[var(--color-success)]'
+              }`}>
                 <stat.icon className="w-6 h-6" />
               </div>
             </div>
@@ -125,15 +151,17 @@ export default function DashboardPage() {
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         {/* Chart Section */}
-        <div className="lg:col-span-2 card animate-fade-in" style={{ animationDelay: '0.2s' }}>
-          <div className="card-header">
-            <div className="flex items-center justify-between">
-              <h2 className="card-title">Évolution des lots</h2>
+        <div className="lg:col-span-2 card group">
+          <div className="card-header border-b border-[var(--color-border)]/50">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <h2 className="text-title-lg font-semibold text-[var(--color-primary)]">
+                Évolution des lots
+              </h2>
               <div className="flex gap-2">
                 <button 
-                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     timeRange === 'week' 
-                      ? 'bg-[var(--color-primary)] text-white' 
+                      ? 'bg-[var(--color-primary)] text-white shadow-md' 
                       : 'bg-[var(--color-bg)] text-[var(--color-muted)] hover:text-[var(--color-earth)]'
                   }`}
                   onClick={() => setTimeRange('week')}
@@ -141,9 +169,9 @@ export default function DashboardPage() {
                   Semaine
                 </button>
                 <button 
-                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     timeRange === 'month' 
-                      ? 'bg-[var(--color-primary)] text-white' 
+                      ? 'bg-[var(--color-primary)] text-white shadow-md' 
                       : 'bg-[var(--color-bg)] text-[var(--color-muted)] hover:text-[var(--color-earth)]'
                   }`}
                   onClick={() => setTimeRange('month')}
@@ -151,9 +179,9 @@ export default function DashboardPage() {
                   Mois
                 </button>
                 <button 
-                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     timeRange === 'year' 
-                      ? 'bg-[var(--color-primary)] text-white' 
+                      ? 'bg-[var(--color-primary)] text-white shadow-md' 
                       : 'bg-[var(--color-bg)] text-[var(--color-muted)] hover:text-[var(--color-earth)]'
                   }`}
                   onClick={() => setTimeRange('year')}
@@ -164,57 +192,67 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="card-body">
-            <div className="h-64 flex items-center justify-center bg-[var(--color-bg)] rounded-lg">
+            <div className="h-72 flex items-center justify-center bg-gradient-to-br from-[var(--color-bg)] to-[var(--color-surface)] rounded-xl border border-dashed border-[var(--color-border)] group-hover:border-[var(--color-secondary)]/30 transition-all">
               <div className="text-center">
-                <ChartBarIcon className="w-16 h-16 text-[var(--color-border)] mx-auto mb-4" />
-                <p className="text-[var(--color-muted)]">Graphique en cours de chargement...</p>
-                <p className="text-body-sm text-[var(--color-muted)] mt-1">Intégration des données de traçabilité en cours</p>
+                <div className="w-20 h-20 rounded-full bg-[var(--color-primary)]/5 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                  <ChartBarIcon className="w-10 h-10 text-[var(--color-primary)]" />
+                </div>
+                <p className="text-[var(--color-muted)] font-medium">Graphique en cours de chargement...</p>
+                <p className="text-body-sm text-[var(--color-muted)] mt-2">Intégration des données de traçabilité en cours</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Quick Actions */}
-        <div className="card animate-fade-in" style={{ animationDelay: '0.3s' }}>
-          <div className="card-header">
-            <h2 className="card-title">Actions Rapides</h2>
+        <div className="card group">
+          <div className="card-header border-b border-[var(--color-border)]/50">
+            <h2 className="text-title-lg font-semibold text-[var(--color-primary)]">
+              Actions Rapides
+            </h2>
           </div>
           <div className="card-body">
             <div className="space-y-3">
-              <button className="w-full flex items-center gap-3 p-3 rounded-lg bg-[var(--color-primary)]/5 hover:bg-[var(--color-primary)]/10 transition-all text-left">
-                <div className="w-10 h-10 rounded-lg bg-[var(--color-primary)]/10 flex items-center justify-center">
-                  <PlusIcon className="w-5 h-5 text-[var(--color-primary)]" />
+              <button className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[var(--color-primary)]/5 to-transparent hover:from-[var(--color-primary)]/10 transition-all text-left group/btn">
+                <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)]/10 flex items-center justify-center group-hover/btn:scale-110 transition-transform">
+                  <svg className="w-6 h-6 text-[var(--color-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
                 </div>
                 <div>
-                  <p className="text-body-sm font-medium text-[var(--color-primary)]">Nouveau Lot</p>
-                  <p className="text-caption">Créer un lot agricole</p>
+                  <p className="text-body-sm font-semibold text-[var(--color-primary)]">Nouveau Lot</p>
+                  <p className="text-caption text-[var(--color-muted)]">Créer un lot agricole</p>
                 </div>
               </button>
-              <button className="w-full flex items-center gap-3 p-3 rounded-lg bg-[var(--color-secondary)]/10 hover:bg-[var(--color-secondary)]/20 transition-all text-left">
-                <div className="w-10 h-10 rounded-lg bg-[var(--color-secondary)]/10 flex items-center justify-center">
-                  <ArrowRightLeftIcon className="w-5 h-5 text-[var(--color-secondary)]" />
+              <button className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[var(--color-secondary)]/5 to-transparent hover:from-[var(--color-secondary)]/10 transition-all text-left group/btn">
+                <div className="w-12 h-12 rounded-xl bg-[var(--color-secondary)]/10 flex items-center justify-center group-hover/btn:scale-110 transition-transform">
+                  <svg className="w-6 h-6 text-[var(--color-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                  </svg>
                 </div>
                 <div>
-                  <p className="text-body-sm font-medium text-[var(--color-secondary)]">Transférer</p>
-                  <p className="text-caption">Effectuer un transfert</p>
+                  <p className="text-body-sm font-semibold text-[var(--color-secondary)]">Transférer</p>
+                  <p className="text-caption text-[var(--color-muted)]">Effectuer un transfert</p>
                 </div>
               </button>
-              <button className="w-full flex items-center gap-3 p-3 rounded-lg bg-[var(--color-accent)]/10 hover:bg-[var(--color-accent)]/20 transition-all text-left">
-                <div className="w-10 h-10 rounded-lg bg-[var(--color-accent)]/10 flex items-center justify-center">
-                  <FileTextIcon className="w-5 h-5 text-[var(--color-accent)]" />
+              <button className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[var(--color-accent)]/5 to-transparent hover:from-[var(--color-accent)]/10 transition-all text-left group/btn">
+                <div className="w-12 h-12 rounded-xl bg-[var(--color-accent)]/10 flex items-center justify-center group-hover/btn:scale-110 transition-transform">
+                  <svg className="w-6 h-6 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
                 </div>
                 <div>
-                  <p className="text-body-sm font-medium text-[var(--color-accent)]">Rapport EUDR</p>
-                  <p className="text-caption">Générer un rapport</p>
+                  <p className="text-body-sm font-semibold text-[var(--color-accent)]">Rapport EUDR</p>
+                  <p className="text-caption text-[var(--color-muted)]">Générer un rapport</p>
                 </div>
               </button>
-              <button className="w-full flex items-center gap-3 p-3 rounded-lg bg-[var(--color-blockchain)]/10 hover:bg-[var(--color-blockchain)]/20 transition-all text-left">
-                <div className="w-10 h-10 rounded-lg bg-[var(--color-blockchain)]/10 flex items-center justify-center">
-                  <QrCodeIcon className="w-5 h-5 text-[var(--color-blockchain)]" />
+              <button className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[var(--color-blockchain)]/5 to-transparent hover:from-[var(--color-blockchain)]/10 transition-all text-left group/btn">
+                <div className="w-12 h-12 rounded-xl bg-[var(--color-blockchain)]/10 flex items-center justify-center group-hover/btn:scale-110 transition-transform">
+                  <QrCodeIcon className="w-6 h-6 text-[var(--color-blockchain)]" />
                 </div>
                 <div>
-                  <p className="text-body-sm font-medium text-[var(--color-blockchain)]">QR Code</p>
-                  <p className="text-caption">Générer un QR</p>
+                  <p className="text-body-sm font-semibold text-[var(--color-blockchain)]">QR Code</p>
+                  <p className="text-caption text-[var(--color-muted)]">Générer un QR</p>
                 </div>
               </button>
             </div>
@@ -223,39 +261,48 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent Lots */}
-      <div className="card animate-fade-in" style={{ animationDelay: '0.4s' }}>
-        <div className="card-header">
-          <div className="flex items-center justify-between">
-            <h2 className="card-title">Lots Récents</h2>
-            <button className="text-body-sm text-[var(--color-primary)] font-medium hover:underline">
+      <div className="card group">
+        <div className="card-header border-b border-[var(--color-border)]/50">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <h2 className="text-title-lg font-semibold text-[var(--color-primary)]">
+              Lots Récents
+            </h2>
+            <button className="text-body-sm text-[var(--color-primary)] font-medium hover:underline flex items-center gap-1 group/btn">
               Voir tous
+              <svg className="w-4 h-4 transition-transform group-hover/btn:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
             </button>
           </div>
         </div>
         <div className="card-body p-0">
-          <div className="table-container">
-            <table className="table">
+          <div className="overflow-x-auto">
+            <table className="w-full caption-bottom text-sm">
               <thead>
-                <tr>
-                  <th>ID du Lot</th>
-                  <th>Type</th>
-                  <th>Quantité</th>
-                  <th>Statut</th>
-                  <th>Date</th>
+                <tr className="border-b border-[var(--color-border)]">
+                  <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">ID du Lot</th>
+                  <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Type</th>
+                  <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Quantité</th>
+                  <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Statut</th>
+                  <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Date</th>
                 </tr>
               </thead>
               <tbody>
                 {recentLots.map((lot, index) => (
-                  <tr key={lot.id} className="animate-fade-in" style={{ animationDelay: `${0.4 + index * 0.05}s` }}>
-                    <td className="font-medium text-[var(--color-primary)]">{lot.id}</td>
-                    <td>{lot.type}</td>
-                    <td>{lot.quantity}</td>
-                     <td>
-                       <span className={`badge ${badgeClass(lot.statusColor)}`}>
-                         {lot.status}
-                       </span>
-                     </td>
-                    <td className="text-[var(--color-muted)]">{lot.date}</td>
+                  <tr 
+                    key={lot.id} 
+                    className="border-b border-[var(--color-border)]/50 hover:bg-[var(--color-bg)]/50 transition-all"
+                    style={{ animationDelay: `${0.2 + index * 0.05}s` }}
+                  >
+                    <td className="px-6 py-4 font-medium text-[var(--color-primary)]">{lot.id}</td>
+                    <td className="px-6 py-4 text-[var(--color-earth)]">{lot.type}</td>
+                    <td className="px-6 py-4 text-[var(--color-earth)]">{lot.quantity}</td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${badgeClass(lot.statusColor)}`}>
+                        {lot.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-[var(--color-muted)]">{lot.date}</td>
                   </tr>
                 ))}
               </tbody>

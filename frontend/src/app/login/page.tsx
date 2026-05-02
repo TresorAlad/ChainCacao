@@ -30,30 +30,33 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg)] relative overflow-hidden">
-      {/* Background Pattern */}
-      <div className="absolute inset-0 bg-pattern opacity-30"></div>
-      <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-primary)]/10 via-transparent to-[var(--color-secondary)]/10"></div>
-      
+    <div className="auth-layout">
+      {/* Animated background elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-[var(--color-secondary)]/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute top-1/3 right-1/4 w-48 h-48 bg-[var(--color-accent)]/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute bottom-1/4 left-1/3 w-32 h-32 bg-[var(--color-primary)]/20 rounded-full blur-2xl animate-pulse delay-2000"></div>
+      </div>
+
       <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          {/* Logo */}
+          {/* Logo & Header */}
           <div className="text-center mb-10 animate-fade-in">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-secondary)] shadow-lg mb-6">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-secondary)] shadow-lg shadow-[var(--color-primary)]/30 mb-6 border border-white/10">
               <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
             </div>
-            <h1 className="text-display-md font-bold text-[var(--color-primary)] mb-2">
+            <h1 className="text-display-md font-bold text-white mb-2 drop-shadow-lg">
               ChainCacao
             </h1>
-            <p className="text-body-md text-[var(--color-muted)]">
+            <p className="text-body-md text-white/80">
               Plateforme de traçabilité cacao
             </p>
           </div>
 
           {/* Card */}
-          <div className="card p-8 md:p-10 animate-slide-in">
+          <div className="card p-8 md:p-10 animate-slide-in border border-white/20 bg-white/95 backdrop-blur-sm">
             <h2 className="text-title-lg font-semibold text-[var(--color-primary)] mb-2 text-center">
               Connexion
             </h2>
@@ -62,7 +65,7 @@ export default function LoginPage() {
             </p>
 
             {error && (
-              <div className="alert alert-error mb-6 animate-fade-in">
+              <div className="alert alert-error mb-6 animate-fade-in border border-red-200">
                 <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                 </svg>
@@ -125,7 +128,10 @@ export default function LoginPage() {
                 >
                   {isLoading ? (
                     <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2"></div>
+                      <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
                       Connexion en cours...
                     </>
                   ) : (
@@ -147,7 +153,7 @@ export default function LoginPage() {
 
           {/* Footer */}
           <div className="text-center mt-8 animate-fade-in">
-            <p className="text-caption text-[var(--color-muted)]">
+            <p className="text-caption text-white/50">
               © 2026 ChainCacao. Tous droits réservés.
             </p>
           </div>
