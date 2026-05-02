@@ -336,17 +336,17 @@ export default function HomePage() {
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[var(--color-border)] to-transparent"></div>
         </div>
         
-         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-           <div className="text-center mb-20">
-             <h2 className="text-3xl sm:text-4xl font-bold text-[var(--color-primary)] mb-6">
-               Fonctionnalités Clés
-             </h2>
-             <p className="text-lg text-[var(--color-muted)] max-w-3xl mx-auto leading-relaxed">
-               Des outils puissants conçus pour simplifier votre gestion et garantir la traçabilité de chaque lot
-             </p>
-           </div>
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-20">
+            <h2 className="text-3xl sm:text-4xl font-bold text-[var(--color-primary)] mb-6">
+              Fonctionnalités Clés
+            </h2>
+            <p className="text-lg text-[var(--color-muted)] max-w-3xl mx-auto leading-relaxed">
+              Des outils puissants conçus pour simplifier votre gestion et garantir la traçabilité de chaque lot
+            </p>
+          </div>
 
-           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+<div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
              {features.map((feature, index) => (
                <div
                  key={index}
@@ -384,47 +384,26 @@ export default function HomePage() {
         </section>
 
         {/* Stats Section */}
-        <section id="stats" className="relative py-24 bg-[var(--color-bg)] overflow-hidden">
-          <div className="absolute inset-0">
-            <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[var(--color-border)] to-transparent"></div>
-          </div>
-          
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-20">
-              <h2 className="text-3xl sm:text-4xl font-bold text-[var(--color-primary)] mb-6">
-                Notre Impact
-              </h2>
-              <p className="text-lg text-[var(--color-muted)]">
-                Chaque jour, nous aidons la filière cacao à devenir plus transparente et durable
-              </p>
-            </div>
 
-            <div className="grid md:grid-cols-4 gap-8">
-              {stats.map((stat, index) => (
-                <div
-                  key={index}
-                  className="bg-[var(--color-surface)] rounded-2xl p-8 text-center group hover:scale-105 transition-all duration-500 cursor-pointer border border-[var(--color-border)]/50"
-                  style={{
-                    animationDelay: `${index * 0.1}s`,
-                    opacity: isVisible ? 1 : 0,
-                    transform: isVisible ? 'translateY(0)' : 'translateY(30px)'
-                  }}
-                >
-                  <div className="stat-value text-4xl sm:text-5xl font-bold bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] bg-clip-text text-transparent">
-                    {stat.value}
-                  </div>
-                  <div className="stat-label mt-2 text-[var(--color-muted)]">{stat.label}</div>
-                  <div className={`text-sm mt-2 font-medium ${stat.positive ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}`}>
-                    {stat.suffix}
-                  </div>
-                </div>
-              ))}
-            </div>
+      {/* Stats Section */}
+      <section id="stats" className="relative py-24 bg-[var(--color-bg)] overflow-hidden">
+        <div className="absolute inset-0">
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[var(--color-border)] to-transparent"></div>
+        </div>
+        
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-20">
+            <h2 className="text-3xl sm:text-4xl font-bold text-[var(--color-primary)] mb-6">
+              Notre Impact
+            </h2>
+            <p className="text-lg text-[var(--color-muted)]">
+              Chaque jour, nous aidons la filière cacao à devenir plus transparente et durable
+            </p>
           </div>
-        </section>
 
-        {/* Stats Section */}
-        <section id="stats" className="relative py-24 bg-[var(--color-bg)] overflow-hidden">
+          <div className="grid md:grid-cols-4 gap-8">
+            {stats.map((stat, index) => (
+<div
                   key={index}
                   className="bg-[var(--color-surface)] rounded-2xl p-8 text-center group hover:scale-105 transition-all duration-500 cursor-pointer border border-[var(--color-border)]/50"
                   style={{
