@@ -272,6 +272,19 @@ func (s *Service) BuildEUDRReport(ctx context.Context, batchID string) (map[stri
 	}, nil
 }
 
+func (s *Service) GetMyLots(ctx context.Context, actorID string) ([]models.Batch, error) {
+	batches, err := s.fabricClient.GetBatchesByOwner(ctx, actorID)
+	if err != nil {
+		return nil, err
+	}
+	// Enrichir l'orgID depuis la table acteurs pour chaque lot.
+	enriched := make([]models.Batch, 0, len(batches))
+	for _, b := range batches {
+		enriched = append(enriched, s.enrichOwnerOrg(ctx, b))
+	}
+	return enriched, nil
+}
+
 func (s *Service) GetStats(ctx context.Context) map[string]any {
 	return s.fabricClient.GetStats(ctx)
 }

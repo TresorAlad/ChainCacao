@@ -58,6 +58,8 @@ func NewRouter(handler *Handler, jwt *auth.JWTService, rdb *redis.Client) *gin.E
 			protected.GET("/batch/:id", handler.GetBatch)
 			protected.GET("/batch/:id/history", handler.GetBatchHistory)
 			protected.GET("/actors", handler.ListActors)
+			// Lots appartenant à l'acteur connecté (propriétaire courant).
+			protected.GET("/actors/me/lots", handler.GetMyLots)
 		}
 	}
 	return r

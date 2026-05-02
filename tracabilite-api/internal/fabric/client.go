@@ -18,6 +18,8 @@ type Client interface {
 	MarkBatchExported(ctx context.Context, batchID, actorID string) (txHash string, updated models.Batch, err error)
 	GetBatch(ctx context.Context, batchID string) (models.Batch, error)
 	GetHistory(ctx context.Context, batchID string) ([]models.BatchHistoryEvent, error)
+	// GetBatchesByOwner retourne tous les lots dont Proprietaire == actorID.
+	GetBatchesByOwner(ctx context.Context, actorID string) ([]models.Batch, error)
 	GetStats(ctx context.Context) map[string]any
 	GetRecentTransfers(ctx context.Context) ([]map[string]any, error)
 	GetActivityChart(ctx context.Context) ([]map[string]any, error)
@@ -154,6 +156,18 @@ func (c *InMemoryClient) MarkBatchExported(_ context.Context, batchID, actorID s
 		Payload:      batch,
 	})
 	return txHash, batch, nil
+}
+
+func (c *InMemoryClient) GetBatchesByOwner(_ context.Context, actorID string) ([]models.Batch, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var result []models.Batch
+	for _, b := range c.batches {
+		if b.Proprietaire == actorID {
+			result = append(result, b)
+		}
+	}
+	return result, nil
 }
 
 func (c *InMemoryClient) GetHistory(_ context.Context, batchID string) ([]models.BatchHistoryEvent, error) {

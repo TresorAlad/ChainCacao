@@ -482,6 +482,19 @@ func (h *Handler) AlertsCount(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "alerts": alerts})
 }
 
+func (h *Handler) GetMyLots(c *gin.Context) {
+	actorID := c.GetString(auth.ContextActorID)
+	lots, err := h.batch.GetMyLots(c.Request.Context(), actorID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if lots == nil {
+		lots = []models.Batch{}
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "lots": lots})
+}
+
 func (h *Handler) ListActors(c *gin.Context) {
 	list, err := h.actors.List(c.Request.Context())
 	if err != nil {

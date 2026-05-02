@@ -57,8 +57,16 @@ export default function NouveauLotPage() {
     }
     try {
       const res = await api.post<{ success: boolean; batch: { id: string } }>('/lot', payload)
-      toast.success(`Lot créé avec succès${res.data.batch?.id ? ` (ID: ${res.data.batch.id})` : ''}`)
-      router.push('/lots')
+      const newId = res.data.batch?.id
+      if (newId && typeof window !== 'undefined') {
+        const stored = JSON.parse(localStorage.getItem('chaincacao_my_lots') || '[]') as string[]
+        if (!stored.includes(newId)) {
+          stored.unshift(newId)
+          localStorage.setItem('chaincacao_my_lots', JSON.stringify(stored.slice(0, 50)))
+        }
+      }
+      toast.success(`Lot créé avec succès${newId ? ` (ID: ${newId})` : ''}`)
+      router.push('/dashboard-agriculteur')
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Erreur lors de la création du lot'))
     } finally {

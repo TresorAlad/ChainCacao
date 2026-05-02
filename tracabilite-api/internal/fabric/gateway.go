@@ -283,6 +283,18 @@ func (g *GatewayClient) GetHistory(ctx context.Context, batchID string) ([]model
 	return ev, nil
 }
 
+func (g *GatewayClient) GetBatchesByOwner(ctx context.Context, actorID string) ([]models.Batch, error) {
+	data, err := g.contract.EvaluateTransaction("GetBatchesByOwner", actorID)
+	if err != nil {
+		return nil, err
+	}
+	var batches []models.Batch
+	if err := json.Unmarshal(data, &batches); err != nil {
+		return nil, err
+	}
+	return batches, nil
+}
+
 func (g *GatewayClient) GetStats(ctx context.Context) map[string]any {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {

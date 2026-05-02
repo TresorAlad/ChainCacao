@@ -139,6 +139,14 @@ func (c *ProxyClient) GetHistory(ctx context.Context, batchID string) ([]models.
 	return out.Events, err
 }
 
+func (c *ProxyClient) GetBatchesByOwner(ctx context.Context, actorID string) ([]models.Batch, error) {
+	var out struct {
+		Batches []models.Batch `json:"batches"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/v1/fabric/batches/owner/"+actorID, nil, &out)
+	return out.Batches, err
+}
+
 func (c *ProxyClient) GetStats(ctx context.Context) map[string]any {
 	var out map[string]any
 	if err := c.doJSON(ctx, http.MethodGet, "/v1/fabric/stats", nil, &out); err != nil {
