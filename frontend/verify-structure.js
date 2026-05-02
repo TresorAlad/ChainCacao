@@ -3,7 +3,7 @@
 const fs = require('fs')
 const path = require('path')
 
-const root = '/home/george/Documents/Projet/MBH/ChainCacao/frontend'
+const root = path.resolve(__dirname)
 
 console.log('🔍 Vérification de la structure frontend...\n')
 

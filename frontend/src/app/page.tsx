@@ -4,22 +4,22 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import Link from 'next/link'
-import { 
-  ChartBarIcon, 
-  CubeIcon, 
-  ShieldCheckIcon, 
+import { BrandLogo } from '@/components/BrandLogo'
+import {
+  ChartBarIcon,
+  CubeIcon,
+  ShieldCheckIcon,
   TruckIcon,
   DocumentCheckIcon,
   QrCodeIcon,
   CpuChipIcon,
   SparklesIcon,
   GiftIcon,
-  ScaleIcon
 } from '@heroicons/react/24/outline'
 
 export default function HomePage() {
   const router = useRouter()
-  const { isAuthenticated, loading, user } = useAuth()
+  const { isAuthenticated, loading } = useAuth()
   const [isVisible, setIsVisible] = useState(false)
 
   useEffect(() => {
@@ -96,11 +96,23 @@ export default function HomePage() {
     }
   ]
 
-  const stats = [
-    { label: 'Lots Traçables', value: '2,847', suffix: '+12%', positive: true },
-    { label: 'Acteurs Enregistrés', value: '156', suffix: 'pays', positive: true },
-    { label: 'Transferts Effectués', value: '1,234', suffix: 'cette année', positive: true },
-    { label: 'Certificats EUDR', value: '89', suffix: 'validés', positive: true }
+  const impactPillars = [
+    {
+      title: 'Traçabilité bout en bout',
+      description: 'Suivez chaque lot depuis la parcelle jusqu’à l’export, avec des événements vérifiables.',
+    },
+    {
+      title: 'Acteurs de la chaîne',
+      description: 'Coordonnez coopératives, transformateurs et distributeurs sur une même source de vérité.',
+    },
+    {
+      title: 'Transferts et historique',
+      description: 'Enregistrez les changements de propriété et consultez l’historique associé à chaque lot.',
+    },
+    {
+      title: 'Conformité EUDR',
+      description: 'Appuyez vos déclarations sur des preuves géographiques et documentaires rattachées au lot.',
+    },
   ]
 
   const floatingElements = [
@@ -135,11 +147,8 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 md:h-20">
             <Link href="/" className="flex items-center gap-3 group">
-              <div className="relative w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-secondary)] flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-[var(--color-primary)]/30">
-                <svg className="w-6 h-6 md:w-7 md:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-                <div className="absolute inset-0 rounded-xl bg-[var(--color-primary)] blur-md opacity-50"></div>
+              <div className="relative w-10 h-10 md:w-12 md:h-12 rounded-xl overflow-hidden ring-2 ring-[var(--color-border)]/60 shadow-md flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <BrandLogo className="w-full h-full" />
               </div>
               <span className="text-xl md:text-2xl font-bold bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] bg-clip-text text-transparent">
                 ChainCacao
@@ -265,51 +274,50 @@ export default function HomePage() {
                         <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
                         <div className="w-3 h-3 rounded-full bg-red-500"></div>
                       </div>
-                      <span className="text-xs text-[var(--color-muted)]">Lot #LC-2024-0892</span>
+                      <span className="text-xs text-[var(--color-muted)]">Fiche lot (aperçu)</span>
                     </div>
 
-{/* Product Info */}
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-4 p-4 rounded-xl bg-[var(--color-bg)]/50 border border-[var(--color-border)]/50">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--color-primary)]/20 to-[var(--color-secondary)]/20 flex items-center justify-center">
-                        <GiftIcon className="w-6 h-6 text-[var(--color-primary)]" />
+                    {/* Product Info — illustration sans données fictives */}
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-4 p-4 rounded-xl bg-[var(--color-bg)]/50 border border-[var(--color-border)]/50">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--color-primary)]/20 to-[var(--color-secondary)]/20 flex items-center justify-center">
+                          <GiftIcon className="w-6 h-6 text-[var(--color-primary)]" />
+                        </div>
+                        <div>
+                          <p className="text-sm text-[var(--color-muted)]">Culture</p>
+                          <p className="font-semibold text-[var(--color-earth)]">—</p>
+                        </div>
                       </div>
                       <div>
-                        <p className="text-sm text-[var(--color-muted)]">Cacao Forastero</p>
-                        <p className="font-semibold text-[var(--color-earth)]">Variété National</p>
+                        <p className="text-sm text-[var(--color-muted)]">Quantité</p>
+                        <p className="font-semibold text-[var(--color-earth)]">—</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-[var(--color-muted)]">Origine</p>
+                        <p className="font-semibold text-[var(--color-earth)]">—</p>
                       </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-[var(--color-muted)]">Quantité</p>
-                      <p className="font-semibold text-[var(--color-earth)]">2,500 kg</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-[var(--color-muted)]">Origine</p>
-                      <p className="font-semibold text-[var(--color-earth)]">Huila, CO</p>
-                    </div>
-                  </div>
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="p-3 rounded-xl bg-gradient-to-br from-green-500/10 to-green-500/5 border border-green-500/20">
-                          <p className="text-xs text-green-500 mb-1">Quantité</p>
-                          <p className="font-bold text-green-500">2,500 kg</p>
-                        </div>
-                        <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-500/20">
-                          <p className="text-xs text-blue-500 mb-1">Origine</p>
-                          <p className="font-bold text-blue-500">Huila, CO</p>
-                        </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 rounded-xl bg-gradient-to-br from-green-500/10 to-green-500/5 border border-green-500/20">
+                        <p className="text-xs text-green-500 mb-1">Quantité</p>
+                        <p className="font-bold text-green-600">—</p>
                       </div>
+                      <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-500/20">
+                        <p className="text-xs text-blue-500 mb-1">Origine</p>
+                        <p className="font-bold text-blue-600">—</p>
+                      </div>
+                    </div>
 
-                      {/* Progress Bar */}
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-[var(--color-muted)]">Traçabilité</span>
-                          <span className="font-semibold text-[var(--color-success)]">100%</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-[var(--color-border)] overflow-hidden">
-                          <div className="h-full w-full bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] rounded-full animate-pulse"></div>
-                        </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-[var(--color-muted)]">Traçabilité (blockchain)</span>
+                        <span className="font-semibold text-[var(--color-muted)]">Données réelles après connexion</span>
                       </div>
+                      <div className="h-2 rounded-full bg-[var(--color-border)] overflow-hidden">
+                        <div className="h-full w-1/3 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] rounded-full opacity-60" />
+                      </div>
+                    </div>
                     </div>
                   </div>
                 </div>
@@ -327,7 +335,6 @@ export default function HomePage() {
               </div>
             </div>
           </div>
-        </div>
       </section>
 
       {/* Features Section */}
@@ -399,52 +406,28 @@ export default function HomePage() {
               </p>
             </div>
 
-            <div className="grid md:grid-cols-4 gap-8">
-              {stats.map((stat, index) => (
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+              {impactPillars.map((pillar, index) => (
                 <div
                   key={index}
-                  className="bg-[var(--color-surface)] rounded-2xl p-8 text-center group hover:scale-105 transition-all duration-500 cursor-pointer border border-[var(--color-border)]/50"
+                  className="bg-[var(--color-surface)] rounded-2xl p-8 text-left group hover:scale-[1.02] transition-all duration-500 border border-[var(--color-border)]/50"
                   style={{
                     animationDelay: `${index * 0.1}s`,
                     opacity: isVisible ? 1 : 0,
                     transform: isVisible ? 'translateY(0)' : 'translateY(30px)'
                   }}
                 >
-                  <div className="stat-value text-4xl sm:text-5xl font-bold bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] bg-clip-text text-transparent">
-                    {stat.value}
-                  </div>
-                  <div className="stat-label mt-2 text-[var(--color-muted)]">{stat.label}</div>
-                  <div className={`text-sm mt-2 font-medium ${stat.positive ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}`}>
-                    {stat.suffix}
-                  </div>
+                  <h3 className="text-lg font-semibold text-[var(--color-primary)] mb-3">
+                    {pillar.title}
+                  </h3>
+                  <p className="text-body-sm text-[var(--color-muted)] leading-relaxed">
+                    {pillar.description}
+                  </p>
                 </div>
               ))}
             </div>
           </div>
         </section>
-
-        {/* Stats Section */}
-        <section id="stats" className="relative py-24 bg-[var(--color-bg)] overflow-hidden">
-                  key={index}
-                  className="bg-[var(--color-surface)] rounded-2xl p-8 text-center group hover:scale-105 transition-all duration-500 cursor-pointer border border-[var(--color-border)]/50"
-                  style={{
-                    animationDelay: `${index * 0.1}s`,
-                    opacity: isVisible ? 1 : 0,
-                    transform: isVisible ? 'translateY(0)' : 'translateY(30px)'
-                  }}
-                >
-                <div className="stat-value text-4xl sm:text-5xl font-bold bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] bg-clip-text text-transparent">
-                  {stat.value}
-                </div>
-                <div className="stat-label mt-2 text-[var(--color-muted)]">{stat.label}</div>
-                <div className={`text-sm mt-2 font-medium ${stat.positive ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}`}>
-                  {stat.suffix}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* CTA Section */}
       <section className="relative py-24 overflow-hidden">
@@ -456,7 +439,7 @@ export default function HomePage() {
             Prêt à optimiser votre traçabilité ?
           </h2>
           <p className="text-lg text-white/80 mb-10 max-w-2xl mx-auto leading-relaxed">
-            Rejoignez des centaines d'acteurs qui utilisent déjà ChainCacao pour simplifier leur gestion et garantir la qualité de leurs produits.
+            Connectez-vous pour enregistrer vos lots, suivre les transferts et produire vos justificatifs de traçabilité.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/register" className="btn-accent inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white font-semibold hover:shadow-lg hover:shadow-[var(--color-primary)]/30 transition-all duration-300 group">
@@ -484,10 +467,8 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-secondary)] flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
+              <div className="w-8 h-8 rounded-lg overflow-hidden ring-1 ring-[var(--color-border)] shadow-sm shrink-0">
+                <BrandLogo className="w-full h-full" />
               </div>
               <span className="text-lg font-bold bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] bg-clip-text text-transparent">
                 ChainCacao
@@ -500,21 +481,6 @@ export default function HomePage() {
         </div>
       </footer>
 
-      <style jsx>{`
-        @keyframes float {
-          0%, 100% { transform: translate(var(--x, 0), var(--y, 0)) translateY(0px); }
-          50% { transform: translate(var(--x, 0), var(--y, 0)) translateY(-20px); }
-        }
-        .animate-float {
-          animation: float 6s ease-in-out infinite;
-        }
-        :global(.grid-cols-responsive) {
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        }
-        :global(.grid-cols-stats) {
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        }
-      `}</style>
     </div>
   )
 }

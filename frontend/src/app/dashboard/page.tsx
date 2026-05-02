@@ -3,13 +3,15 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import api from '@/lib/api'
+import type { DashboardStats } from '@/lib/dashboard-stats'
 import { 
   ChartBarIcon, 
   CubeIcon, 
   DocumentCheckIcon, 
   TruckIcon,
   CheckCircleIcon,
-  ClockIcon,
   ArrowTrendingUpIcon,
   UsersIcon,
   QrCodeIcon
@@ -18,13 +20,43 @@ import {
 export default function DashboardPage() {
   const router = useRouter()
   const { isAuthenticated, loading } = useAuth()
-  const [timeRange, setTimeRange] = useState('week')
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
+  const [statsNote, setStatsNote] = useState<string | null>(null)
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
       router.replace('/login')
     }
   }, [isAuthenticated, loading, router])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      setStatsNote(null)
+      api
+        .get<{ success: boolean; stats: DashboardStats }>('/dashboard/stats')
+        .then((res) => {
+          setStats(res.data.stats || {})
+        })
+        .catch((err: Error & { status?: number }) => {
+          setStats({})
+          const msg = err.message || ''
+          const forbidden =
+            err.status === 403 ||
+            msg.includes('403') ||
+            msg.toLowerCase().includes('interdit') ||
+            msg.toLowerCase().includes('forbidden')
+          if (forbidden) {
+            setStatsNote(
+              'Les statistiques agrégées sont réservées aux administrateurs. Les autres fonctionnalités (lots, transferts, etc.) restent disponibles selon votre rôle.'
+            )
+          } else {
+            setStatsNote(msg || 'Impossible de charger les statistiques.')
+          }
+        })
+        .finally(() => setStatsLoading(false))
+    }
+  }, [isAuthenticated])
 
   if (loading) {
     return (
@@ -36,61 +68,47 @@ export default function DashboardPage() {
 
   if (!isAuthenticated) return null
 
-  const stats = [
+  const statCards = [
     {
       label: 'Lots Actifs',
-      value: '127',
-      change: '+12%',
-      changePositive: true,
+      value: statsLoading ? '—' : String(stats?.total_batches ?? stats?.total_lots ?? '—'),
       icon: CubeIcon,
+      colorIdx: 0,
     },
     {
-      label: 'Transferts ce mois',
-      value: '34',
-      change: '+8%',
-      changePositive: true,
+      label: 'En Transit',
+      value: statsLoading ? '—' : String(stats?.en_transit ?? '—'),
       icon: TruckIcon,
+      colorIdx: 1,
     },
     {
-      label: 'Certificats EUDR',
-      value: '23',
-      change: '+5%',
-      changePositive: true,
+      label: 'Conformes EUDR',
+      value: statsLoading ? '—' : String(stats?.eudr_conformes ?? '—'),
       icon: DocumentCheckIcon,
+      colorIdx: 2,
     },
     {
-      label: 'Conformité',
-      value: '98.7%',
-      change: '+2.1%',
-      changePositive: true,
+      label: 'Acteurs',
+      value: statsLoading ? '—' : String(stats?.total_actors ?? '—'),
       icon: CheckCircleIcon,
-    }
+      colorIdx: 3,
+    },
   ]
 
-  const recentLots = [
-    { id: 'LOT-2024-0892', type: 'Cacao Forastero', quantity: '2,500 kg', status: 'En Transit', statusColor: 'warning', date: '12 Mai 2026' },
-    { id: 'LOT-2024-0891', type: 'Cacao Criollo', quantity: '1,800 kg', status: 'Exporté', statusColor: 'success', date: '11 Mai 2026' },
-    { id: 'LOT-2024-0890', type: 'Cacao Trinitario', quantity: '3,200 kg', status: 'En Stock', statusColor: 'info', date: '10 Mai 2026' },
-    { id: 'LOT-2024-0889', type: 'Cacao Forastero', quantity: '1,500 kg', status: 'En Inspection', statusColor: 'neutral', date: '09 Mai 2026' }
+  const colorClasses = [
+    'bg-[var(--color-primary)]/10 text-[var(--color-primary)]',
+    'bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]',
+    'bg-[var(--color-accent)]/10 text-[var(--color-accent)]',
+    'bg-[var(--color-success)]/10 text-[var(--color-success)]',
   ]
-
-  const statusColors: Record<string, string> = {
-    success: 'bg-green-100 text-green-800',
-    warning: 'bg-yellow-100 text-yellow-800',
-    info: 'bg-blue-100 text-blue-800',
-    neutral: 'bg-gray-100 text-gray-800',
-    'En Transit': 'bg-yellow-100 text-yellow-800',
-    'Exporté': 'bg-green-100 text-green-800',
-    'En Stock': 'bg-blue-100 text-blue-800',
-    'En Inspection': 'bg-gray-100 text-gray-800'
-  }
-
-  const badgeClass = (statusColor: string) => {
-    return statusColors[statusColor] || 'bg-gray-100 text-gray-800'
-  }
 
   return (
     <div className="page-container">
+      {statsNote && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {statsNote}
+        </div>
+      )}
       {/* Page Header */}
       <header className="page-header animate-fade-in">
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -116,8 +134,8 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid-cols-stats grid gap-6 mb-8">
-        {stats.map((stat, index) => (
-          <div 
+        {statCards.map((stat, index) => (
+          <div
             key={index}
             className="stat-card group hover:shadow-lg transition-all duration-300"
             style={{ animationDelay: `${index * 0.1}s` }}
@@ -128,19 +146,12 @@ export default function DashboardPage() {
                 <p className="text-3xl font-bold text-[var(--color-primary)] mt-2 group-hover:scale-105 transition-transform">
                   {stat.value}
                 </p>
-                <div className={`flex items-center gap-1 mt-3 text-sm ${
-                  stat.changePositive ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'
-                }`}>
+                <div className="flex items-center gap-1 mt-3 text-sm text-[var(--color-success)]">
                   <ArrowTrendingUpIcon className="w-4 h-4" />
-                  <span>{stat.change} vs mois dernier</span>
+                  <span>Données en temps réel</span>
                 </div>
               </div>
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform ${
-                index === 0 ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]' :
-                index === 1 ? 'bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' :
-                index === 2 ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]' :
-                'bg-[var(--color-success)]/10 text-[var(--color-success)]'
-              }`}>
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform ${colorClasses[index]}`}>
                 <stat.icon className="w-6 h-6" />
               </div>
             </div>
@@ -153,53 +164,20 @@ export default function DashboardPage() {
         {/* Chart Section */}
         <div className="lg:col-span-2 card group">
           <div className="card-header border-b border-[var(--color-border)]/50">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <h2 className="text-title-lg font-semibold text-[var(--color-primary)]">
-                Évolution des lots
-              </h2>
-              <div className="flex gap-2">
-                <button 
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    timeRange === 'week' 
-                      ? 'bg-[var(--color-primary)] text-white shadow-md' 
-                      : 'bg-[var(--color-bg)] text-[var(--color-muted)] hover:text-[var(--color-earth)]'
-                  }`}
-                  onClick={() => setTimeRange('week')}
-                >
-                  Semaine
-                </button>
-                <button 
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    timeRange === 'month' 
-                      ? 'bg-[var(--color-primary)] text-white shadow-md' 
-                      : 'bg-[var(--color-bg)] text-[var(--color-muted)] hover:text-[var(--color-earth)]'
-                  }`}
-                  onClick={() => setTimeRange('month')}
-                >
-                  Mois
-                </button>
-                <button 
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    timeRange === 'year' 
-                      ? 'bg-[var(--color-primary)] text-white shadow-md' 
-                      : 'bg-[var(--color-bg)] text-[var(--color-muted)] hover:text-[var(--color-earth)]'
-                  }`}
-                  onClick={() => setTimeRange('year')}
-                >
-                  Année
-                </button>
-              </div>
-            </div>
+            <h2 className="text-title-lg font-semibold text-[var(--color-primary)]">
+              Vue d’ensemble
+            </h2>
           </div>
           <div className="card-body">
-            <div className="h-72 flex items-center justify-center bg-gradient-to-br from-[var(--color-bg)] to-[var(--color-surface)] rounded-xl border border-dashed border-[var(--color-border)] group-hover:border-[var(--color-secondary)]/30 transition-all">
-              <div className="text-center">
-                <div className="w-20 h-20 rounded-full bg-[var(--color-primary)]/5 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                  <ChartBarIcon className="w-10 h-10 text-[var(--color-primary)]" />
-                </div>
-                <p className="text-[var(--color-muted)] font-medium">Graphique en cours de chargement...</p>
-                <p className="text-body-sm text-[var(--color-muted)] mt-2">Intégration des données de traçabilité en cours</p>
-              </div>
+            <div className="h-72 flex flex-col items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)]/40 px-6 text-center">
+              <ChartBarIcon className="w-12 h-12 text-[var(--color-primary)]/40 mb-4" />
+              <p className="text-[var(--color-earth)] font-medium max-w-md">
+                Aucune série temporelle n’est exposée par l’API pour le moment. Les indicateurs agrégés ci-dessus proviennent de{' '}
+                <code className="text-xs bg-[var(--color-surface)] px-1 py-0.5 rounded border border-[var(--color-border)]">GET /dashboard/stats</code>.
+              </p>
+              <Link href="/lots" className="btn btn-secondary-outline btn-sm mt-6">
+                Voir mes lots (chargement par ID)
+              </Link>
             </div>
           </div>
         </div>
@@ -213,7 +191,7 @@ export default function DashboardPage() {
           </div>
           <div className="card-body">
             <div className="space-y-3">
-              <button className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[var(--color-primary)]/5 to-transparent hover:from-[var(--color-primary)]/10 transition-all text-left group/btn">
+              <Link href="/nouveau-lot" className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[var(--color-primary)]/5 to-transparent hover:from-[var(--color-primary)]/10 transition-all text-left group/btn">
                 <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)]/10 flex items-center justify-center group-hover/btn:scale-110 transition-transform">
                   <svg className="w-6 h-6 text-[var(--color-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -223,8 +201,8 @@ export default function DashboardPage() {
                   <p className="text-body-sm font-semibold text-[var(--color-primary)]">Nouveau Lot</p>
                   <p className="text-caption text-[var(--color-muted)]">Créer un lot agricole</p>
                 </div>
-              </button>
-              <button className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[var(--color-secondary)]/5 to-transparent hover:from-[var(--color-secondary)]/10 transition-all text-left group/btn">
+              </Link>
+              <Link href="/transfer" className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[var(--color-secondary)]/5 to-transparent hover:from-[var(--color-secondary)]/10 transition-all text-left group/btn">
                 <div className="w-12 h-12 rounded-xl bg-[var(--color-secondary)]/10 flex items-center justify-center group-hover/btn:scale-110 transition-transform">
                   <svg className="w-6 h-6 text-[var(--color-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
@@ -234,8 +212,8 @@ export default function DashboardPage() {
                   <p className="text-body-sm font-semibold text-[var(--color-secondary)]">Transférer</p>
                   <p className="text-caption text-[var(--color-muted)]">Effectuer un transfert</p>
                 </div>
-              </button>
-              <button className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[var(--color-accent)]/5 to-transparent hover:from-[var(--color-accent)]/10 transition-all text-left group/btn">
+              </Link>
+              <Link href="/eudr-report" className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[var(--color-accent)]/5 to-transparent hover:from-[var(--color-accent)]/10 transition-all text-left group/btn">
                 <div className="w-12 h-12 rounded-xl bg-[var(--color-accent)]/10 flex items-center justify-center group-hover/btn:scale-110 transition-transform">
                   <svg className="w-6 h-6 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -245,8 +223,8 @@ export default function DashboardPage() {
                   <p className="text-body-sm font-semibold text-[var(--color-accent)]">Rapport EUDR</p>
                   <p className="text-caption text-[var(--color-muted)]">Générer un rapport</p>
                 </div>
-              </button>
-              <button className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[var(--color-blockchain)]/5 to-transparent hover:from-[var(--color-blockchain)]/10 transition-all text-left group/btn">
+              </Link>
+              <Link href="/qrcode" className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[var(--color-blockchain)]/5 to-transparent hover:from-[var(--color-blockchain)]/10 transition-all text-left group/btn">
                 <div className="w-12 h-12 rounded-xl bg-[var(--color-blockchain)]/10 flex items-center justify-center group-hover/btn:scale-110 transition-transform">
                   <QrCodeIcon className="w-6 h-6 text-[var(--color-blockchain)]" />
                 </div>
@@ -254,87 +232,38 @@ export default function DashboardPage() {
                   <p className="text-body-sm font-semibold text-[var(--color-blockchain)]">QR Code</p>
                   <p className="text-caption text-[var(--color-muted)]">Générer un QR</p>
                 </div>
-              </button>
+              </Link>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Recent Lots */}
-      <div className="card group">
-        <div className="card-header border-b border-[var(--color-border)]/50">
-          <div className="flex items-center justify-between flex-wrap gap-4">
+      {/* Stats supplémentaires */}
+      {stats && (
+        <div className="card group">
+          <div className="card-header border-b border-[var(--color-border)]/50">
             <h2 className="text-title-lg font-semibold text-[var(--color-primary)]">
-              Lots Récents
+              Statistiques détaillées
             </h2>
-            <button className="text-body-sm text-[var(--color-primary)] font-medium hover:underline flex items-center gap-1 group/btn">
-              Voir tous
-              <svg className="w-4 h-4 transition-transform group-hover/btn:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
+          </div>
+          <div className="card-body">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {Object.entries(stats).map(([key, value]) => (
+                value !== null && value !== undefined && (
+                  <div key={key} className="p-4 rounded-xl bg-[var(--color-bg)]/50 border border-[var(--color-border)]/30">
+                    <p className="text-body-sm text-[var(--color-muted)] capitalize mb-1">
+                      {key.replace(/_/g, ' ')}
+                    </p>
+                    <p className="text-xl font-bold text-[var(--color-primary)]">
+                      {String(value)}
+                    </p>
+                  </div>
+                )
+              ))}
+            </div>
           </div>
         </div>
-        <div className="card-body p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full caption-bottom text-sm">
-              <thead>
-                <tr className="border-b border-[var(--color-border)]">
-                  <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">ID du Lot</th>
-                  <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Type</th>
-                  <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Quantité</th>
-                  <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Statut</th>
-                  <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentLots.map((lot, index) => (
-                  <tr 
-                    key={lot.id} 
-                    className="border-b border-[var(--color-border)]/50 hover:bg-[var(--color-bg)]/50 transition-all"
-                    style={{ animationDelay: `${0.2 + index * 0.05}s` }}
-                  >
-                    <td className="px-6 py-4 font-medium text-[var(--color-primary)]">{lot.id}</td>
-                    <td className="px-6 py-4 text-[var(--color-earth)]">{lot.type}</td>
-                    <td className="px-6 py-4 text-[var(--color-earth)]">{lot.quantity}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${badgeClass(lot.statusColor)}`}>
-                        {lot.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-[var(--color-muted)]">{lot.date}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
-  )
-}
-
-// Icons
-function PlusIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-    </svg>
-  )
-}
-
-function ArrowRightLeftIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-    </svg>
-  )
-}
-
-function FileTextIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-    </svg>
   )
 }

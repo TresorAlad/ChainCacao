@@ -1,20 +1,21 @@
+/** Aligné sur `tracabilite-api/pkg/models` (JSON snake_case). */
 export interface Batch {
   id: string
   culture: string
-  variete: string
-  Quantite: number
+  variete?: string
+  quantite: number
   lieu: string
-  latitude: number
-  longitude: number
-  region: string
-  village: string
-  parcelle: string
+  latitude?: number
+  longitude?: number
+  region?: string
+  village?: string
+  parcelle?: string
   date_recolte: string
   proprietaire_id: string
   org_id: string
-  Statut?: string
-  EUDRConforme: boolean
-  Timestamp: string
+  statut?: string
+  eudr_conforme: boolean
+  timestamp?: string
   certificat_url?: string
   photo_url?: string
   notes?: string
@@ -46,13 +47,4 @@ export interface User {
   actor_id?: string
   role?: string
   email?: string
-}
-
-export interface AuthContextType {
-  user: User | null
-  loading: boolean
-  login: (actor_id: string, pin: string) => Promise<User>
-  register: (email: string, password: string, name: string) => Promise<void>
-  logout: () => void
-  isAuthenticated: boolean
 }

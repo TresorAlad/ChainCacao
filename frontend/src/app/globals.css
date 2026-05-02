@@ -114,7 +114,7 @@ h4 { @apply text-title-sm font-medium text-[var(--color-earth)]; }
 }
 
 .sidebar-logo-icon {
-  @apply w-10 h-10 rounded-xl bg-[var(--color-secondary)] flex items-center justify-center;
+  @apply w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shrink-0 ring-1 ring-white/25 shadow-md;
 }
 
 .sidebar-logo-text {
@@ -586,6 +586,16 @@ h4 { @apply text-title-sm font-medium text-[var(--color-earth)]; }
   inset: 0;
   background: radial-gradient(ellipse at 60% 40%, rgba(92, 201, 122, 0.12) 0%, rgba(212, 168, 118, 0.08) 40%, transparent 70%);
   pointer-events: none;
+}
+
+/* Float animation for home page */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-20px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
 }
 
 .auth-layout::after {

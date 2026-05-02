@@ -1,11 +1,11 @@
-import axios from 'axios'
+import axios, { AxiosError } from 'axios'
+import { getApiBaseUrl, SESSION_EXPIRED_EVENT } from './api-base'
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1',
+  baseURL: getApiBaseUrl(),
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Interceptor pour ajouter le token JWT automatiquement
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('jwt')
@@ -16,35 +16,59 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Interceptor pour gérer les erreurs globalement
+function messageFromAxiosError(err: AxiosError): string {
+  const data = err.response?.data as Record<string, unknown> | undefined
+  if (data && typeof data === 'object') {
+    if (typeof data.error === 'string') return data.error
+    if (typeof data.message === 'string') return data.message
+  }
+  return err.message || 'Erreur réseau'
+}
+
+/** Erreur enrichie avec le code HTTP pour la gestion métier (403, etc.). */
+export function apiErrorFromAxios(err: AxiosError): Error & { status?: number } {
+  const status = err.response?.status
+  const message = messageFromAxiosError(err)
+  return Object.assign(new Error(message), { status })
+}
+
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    const message = err.response?.data?.message || err.message
-    return Promise.reject(new Error(message))
+  (err: AxiosError) => {
+    const status = err.response?.status
+    if (typeof window !== 'undefined' && status === 401) {
+      localStorage.removeItem('jwt')
+      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
+      const path = window.location.pathname
+      const publicPaths = /^\/($|login|register|verify)/
+      if (!publicPaths.test(path)) {
+        window.location.href = '/login'
+      }
+    }
+    return Promise.reject(apiErrorFromAxios(err))
   }
 )
 
 export default api
 
-// Types pour les endpoints principaux (à étendre)
+/** Réponse JSON des handlers Go (`pkg/models`). */
 export interface Batch {
   id: string
   culture: string
-  variete: string
-  Quantite: number
+  variete?: string
+  quantite: number
   lieu: string
-  latitude: number
-  longitude: number
-  region: string
-  village: string
-  parcelle: string
+  latitude?: number
+  longitude?: number
+  region?: string
+  village?: string
+  parcelle?: string
   date_recolte: string
   proprietaire_id: string
   org_id: string
-  Statut?: string
-  EUDRConforme: boolean
-  Timestamp: string
+  statut?: string
+  eudr_conforme: boolean
+  timestamp?: string
   certificat_url?: string
   photo_url?: string
   notes?: string
@@ -62,11 +86,10 @@ export interface BatchHistoryEvent {
   payload: Batch
 }
 
-export interface Stats {
-  totalBatches?: number
-  compliantBatches?: number
-  transitBatches?: number
-  exportedBatches?: number
-  totalWeight?: number
-  totalActors?: number
+export interface ActorDTO {
+  id: string
+  nom: string
+  email?: string
+  org_id: string
+  role: string
 }

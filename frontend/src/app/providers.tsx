@@ -8,7 +8,8 @@ import Sidebar from '@/components/Sidebar'
 export default function Providers({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const isAuthPage = pathname === '/login' || pathname === '/register'
-  const isPublicPage = isAuthPage || pathname === '/'
+  /** Pages sans sidebar : landing, auth, vérification publique */
+  const isPublicPage = isAuthPage || pathname === '/' || pathname === '/verify'
 
   return (
     <AuthProvider>

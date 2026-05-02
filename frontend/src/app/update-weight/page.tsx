@@ -1,16 +1,20 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { useRouter } from 'next/navigation'
-import { WeightIcon, PackageIcon, TrendingUpIcon } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { WeightIcon, TrendingUpIcon } from 'lucide-react'
+import api from '@/lib/api'
+import toast from 'react-hot-toast'
 
-export default function UpdateWeightPage() {
+function UpdateWeightContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { isAuthenticated, loading } = useAuth()
   const [formData, setFormData] = useState({
     lotId: '',
-    newWeight: ''
+    newWeight: '',
+    justification: ''
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -18,27 +22,27 @@ export default function UpdateWeightPage() {
     if (!loading && !isAuthenticated) router.replace('/login')
   }, [isAuthenticated, loading, router])
 
+  useEffect(() => {
+    const lotFromUrl = searchParams.get('lot')
+    if (lotFromUrl) {
+      setFormData((prev) => ({ ...prev, lotId: lotFromUrl }))
+    }
+  }, [searchParams])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     try {
-      const res = await fetch(`/api/v1/lot/${formData.lotId}/weight`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('jwt')}`
-        },
-        body: JSON.stringify({ newWeight: formData.newWeight })
+      await api.put(`/lot/${formData.lotId}/weight`, {
+        new_weight: parseFloat(formData.newWeight),
+        justification: formData.justification,
       })
-      if (res.ok) {
-        alert('Poids mis à jour avec succès')
-        setFormData({ lotId: '', newWeight: '' })
-        router.push('/lots')
-      } else {
-        throw new Error('Erreur lors de la mise à jour')
-      }
-    } catch (err: any) {
-      alert(err.message)
+      toast.success('Poids mis à jour avec succès')
+      setFormData({ lotId: '', newWeight: '', justification: '' })
+      router.push('/lots')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur lors de la mise à jour'
+      toast.error(message)
     } finally {
       setIsSubmitting(false)
     }
@@ -54,12 +58,6 @@ export default function UpdateWeightPage() {
 
   if (!isAuthenticated) return null
 
-  const mockLots = [
-    { id: 'LOT-2024-0892', type: 'Cacao Forastero', currentWeight: '2,500 kg' },
-    { id: 'LOT-2024-0891', type: 'Cacao Criollo', currentWeight: '1,800 kg' },
-    { id: 'LOT-2024-0890', type: 'Cacao Trinitario', currentWeight: '3,200 kg' },
-  ]
-
   return (
     <div className="page-container">
       <header className="page-header">
@@ -72,7 +70,6 @@ export default function UpdateWeightPage() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Formulaire */}
         <div className="card group">
           <div className="card-header border-b border-[var(--color-border)]/50">
             <h2 className="card-title flex items-center gap-2">
@@ -82,25 +79,15 @@ export default function UpdateWeightPage() {
           </div>
           <form onSubmit={handleSubmit} className="card-body">
             <div className="form-group">
-              <label className="form-label">Lot concerné</label>
-              <select 
+              <label className="form-label">ID du lot concerné</label>
+              <input
+                type="text"
                 className="form-input"
+                placeholder="Identifiant du lot"
                 value={formData.lotId}
-                onChange={(e) => {
-                  setFormData({...formData, lotId: e.target.value})
-                  const lot = mockLots.find(l => l.id === e.target.value)
-                  if (lot) {
-                    const currentWeight = lot.currentWeight.replace(/[^0-9]/g, '')
-                    setFormData(prev => ({...prev, newWeight: currentWeight}))
-                  }
-                }}
+                onChange={(e) => setFormData({ ...formData, lotId: e.target.value })}
                 required
-              >
-                <option value="">Sélectionner un lot</option>
-                {mockLots.map(lot => (
-                  <option key={lot.id} value={lot.id}>{lot.id} - {lot.type} ({lot.currentWeight})</option>
-                ))}
-              </select>
+              />
             </div>
 
             <div className="form-group">
@@ -108,10 +95,11 @@ export default function UpdateWeightPage() {
               <input
                 type="number"
                 step="0.01"
+                min="0"
                 className="form-input"
-                placeholder="ex: 2450"
+                placeholder="Poids en kg"
                 value={formData.newWeight}
-                onChange={(e) => setFormData({...formData, newWeight: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, newWeight: e.target.value })}
                 required
               />
             </div>
@@ -122,6 +110,8 @@ export default function UpdateWeightPage() {
                 className="form-input"
                 rows={3}
                 placeholder="perte, ajustement, humidité..."
+                value={formData.justification}
+                onChange={(e) => setFormData({ ...formData, justification: e.target.value })}
               />
             </div>
 
@@ -137,42 +127,43 @@ export default function UpdateWeightPage() {
           </form>
         </div>
 
-        {/* Historique des poids */}
         <div className="card group">
           <div className="card-header border-b border-[var(--color-border)]/50">
             <h2 className="card-title flex items-center gap-2">
               <TrendingUpIcon className="w-5 h-5 text-[var(--color-primary)]" />
-              Évolution du Lot-2024-0892
+              Informations
             </h2>
           </div>
           <div className="card-body">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--color-bg)]/50">
-                <span className="text-body-sm text-[var(--color-muted)]">25 Mars 2026</span>
-                <span className="font-bold text-[var(--color-earth)]">2,500 kg</span>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--color-bg)]/50">
-                <span className="text-body-sm text-[var(--color-muted)]">28 Mars 2026</span>
-                <span className="font-bold text-[var(--color-danger)]">2,450 kg</span>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--color-bg)]/50">
-                <span className="text-body-sm text-[var(--color-muted)]">01 Avril 2026</span>
-                <span className="font-bold text-[var(--color-warning)]">2,400 kg</span>
-              </div>
-            </div>
-            
-            <div className="mt-4 p-3 rounded-lg bg-[var(--color-accent)]/10">
+            <p className="text-body-sm text-[var(--color-muted)] leading-relaxed mb-4">
+              La mise à jour du poids est enregistrée de façon immuable sur la blockchain. Assurez-vous d'entrer la valeur correcte en kilogrammes avant de valider.
+            </p>
+            <div className="p-3 rounded-lg bg-[var(--color-accent)]/10">
               <div className="flex items-center gap-2 text-[var(--color-accent)] mb-1">
                 <TrendingUpIcon className="w-4 h-4" />
-                <span className="font-semibold text-[var(--color-earth)]">Tendance</span>
+                <span className="font-semibold text-[var(--color-earth)]">Conseil</span>
               </div>
               <p className="text-body-sm text-[var(--color-earth)]">
-                Perte moyenne : <span className="font-medium">1.7%</span> par semaine
+                Précisez la raison de l'ajustement dans le champ justification pour une meilleure traçabilité.
               </p>
             </div>
           </div>
         </div>
       </div>
     </div>
+  )
+}
+
+export default function UpdateWeightPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[var(--color-bg)] flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-[var(--color-primary)] border-t-transparent"></div>
+        </div>
+      }
+    >
+      <UpdateWeightContent />
+    </Suspense>
   )
 }

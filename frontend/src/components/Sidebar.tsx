@@ -2,11 +2,11 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { 
-  HomeIcon, 
-  CubeIcon, 
-  TruckIcon, 
+import { usePathname, useRouter } from 'next/navigation'
+import {
+  HomeIcon,
+  CubeIcon,
+  TruckIcon,
   DocumentCheckIcon,
   ChartBarIcon,
   QrCodeIcon,
@@ -14,47 +14,57 @@ import {
   ArrowLeftOnRectangleIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  UsersIcon
+  UsersIcon,
+  ArrowPathIcon,
+  ArrowUpTrayIcon,
 } from '@heroicons/react/24/outline'
+import { BrandLogo } from '@/components/BrandLogo'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const { logout, user } = useAuth()
   const [isCollapsed, setIsCollapsed] = useState(false)
 
   const navItems = [
     { icon: HomeIcon, label: 'Accueil', href: '/dashboard' },
     { icon: CubeIcon, label: 'Lots', href: '/lots' },
-    { icon: TruckIcon, label: 'Transferts', href: '/transfers' },
-    { icon: DocumentCheckIcon, label: 'EUDR', href: '/eudr' },
-    { icon: ChartBarIcon, label: 'Analytiques', href: '/analytics' },
-    { icon: QrCodeIcon, label: 'QR Codes', href: '/qr-codes' },
+    { icon: ArrowUpTrayIcon, label: 'Export', href: '/export' },
+    { icon: TruckIcon, label: 'Transferts', href: '/transfer' },
+    { icon: DocumentCheckIcon, label: 'EUDR', href: '/eudr-report' },
+    { icon: ChartBarIcon, label: 'Historique', href: '/full-history' },
+    { icon: QrCodeIcon, label: 'QR Code', href: '/qrcode' },
     { icon: UsersIcon, label: 'Acteurs', href: '/actors' },
+    { icon: ArrowPathIcon, label: 'Sync', href: '/sync' },
   ]
+
+  const handleLogout = () => {
+    logout()
+    router.replace('/login')
+  }
+
+  const displayName = user?.email || user?.actor_id || 'Utilisateur'
+  const roleLabel = user?.role || '—'
 
   return (
     <aside className={`sidebar transition-all duration-300 ${isCollapsed ? 'w-[80px]' : 'w-[280px]'}`}>
       <button
+        type="button"
         onClick={() => setIsCollapsed(!isCollapsed)}
         className="absolute -right-3 top-6 z-50 w-6 h-6 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] transition-all"
+        aria-label={isCollapsed ? 'Développer le menu' : 'Réduire le menu'}
       >
-        {isCollapsed ? (
-          <ChevronRightIcon className="w-4 h-4" />
-        ) : (
-          <ChevronLeftIcon className="w-4 h-4" />
-        )}
+        {isCollapsed ? <ChevronRightIcon className="w-4 h-4" /> : <ChevronLeftIcon className="w-4 h-4" />}
       </button>
 
       <div className="sidebar-header">
-        <div className="sidebar-logo">
+        <Link href="/dashboard" className="sidebar-logo hover:opacity-90 transition-opacity">
           <div className="sidebar-logo-icon">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
+            <BrandLogo className="w-full h-full min-w-[2.5rem] min-h-[2.5rem]" />
           </div>
-          {!isCollapsed && (
-            <span className="sidebar-logo-text">ChainCacao</span>
-          )}
-        </div>
+          {!isCollapsed && <span className="sidebar-logo-text">ChainCacao</span>}
+        </Link>
       </div>
 
       <nav className="sidebar-nav">
@@ -66,9 +76,7 @@ export default function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`sidebar-nav-item ${
-                  isActive ? 'active' : ''
-                } ${isCollapsed ? 'justify-center' : ''}`}
+                className={`sidebar-nav-item ${isActive ? 'active' : ''} ${isCollapsed ? 'justify-center' : ''}`}
                 title={isCollapsed ? item.label : ''}
               >
                 <item.icon className="w-5 h-5" />
@@ -79,14 +87,14 @@ export default function Sidebar() {
         </div>
 
         <div className="sidebar-section">
-          {!isCollapsed && <span className="sidebar-section-label">Configuration</span>}
+          {!isCollapsed && <span className="sidebar-section-label">Compte</span>}
           <Link
-            href="/settings"
-            className={`sidebar-nav-item ${isCollapsed ? 'justify-center' : ''}`}
-            title={isCollapsed ? 'Paramètres' : ''}
+            href="/profile"
+            className={`sidebar-nav-item ${pathname === '/profile' ? 'active' : ''} ${isCollapsed ? 'justify-center' : ''}`}
+            title={isCollapsed ? 'Profil' : ''}
           >
             <Cog6ToothIcon className="w-5 h-5" />
-            {!isCollapsed && <span>Paramètres</span>}
+            {!isCollapsed && <span>Profil</span>}
           </Link>
         </div>
       </nav>
@@ -94,20 +102,22 @@ export default function Sidebar() {
       <div className="sidebar-footer">
         {!isCollapsed ? (
           <div className="user-profile">
-            <div className="user-avatar">A</div>
-            <div className="user-info">
-              <div className="user-name">Administrateur</div>
-              <div className="user-role">Gestionnaire</div>
+            <div className="user-avatar">{displayName.charAt(0).toUpperCase()}</div>
+            <div className="user-info min-w-0">
+              <div className="user-name truncate" title={displayName}>
+                {displayName}
+              </div>
+              <div className="user-role truncate">{roleLabel}</div>
             </div>
           </div>
         ) : (
           <div className="flex justify-center">
             <div className="w-10 h-10 rounded-full bg-[var(--color-secondary)] flex items-center justify-center text-sm font-bold text-[var(--color-primary)]">
-              A
+              {displayName.charAt(0).toUpperCase()}
             </div>
           </div>
         )}
-        <button className="logout-btn mt-3">
+        <button type="button" className="logout-btn mt-3 w-full" onClick={handleLogout}>
           <ArrowLeftOnRectangleIcon className="w-5 h-5" />
           {!isCollapsed && <span>Déconnexion</span>}
         </button>

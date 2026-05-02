@@ -1,9 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { EyeIcon, EyeOffIcon } from 'lucide-react'
+import { BrandLogo } from '@/components/BrandLogo'
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
@@ -21,8 +23,8 @@ export default function RegisterPage() {
     setIsLoading(true)
 
     try {
-      await register(email, password, name)
-      router.replace('/login')
+      const ok = await register(email, password, name)
+      if (ok) router.replace('/dashboard')
     } catch (err: any) {
       setError(err.message || 'Erreur lors de la création du compte')
     } finally {
@@ -43,26 +45,24 @@ export default function RegisterPage() {
         <div className="w-full max-w-md">
           {/* Logo & Header */}
           <div className="text-center mb-10 animate-fade-in">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-secondary)] shadow-lg shadow-[var(--color-primary)]/30 mb-6 border border-white/10">
-              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
+            <div className="inline-flex mb-6 rounded-2xl overflow-hidden shadow-xl shadow-black/20 ring-2 ring-white/15">
+              <BrandLogo className="w-20 h-20" priority />
             </div>
             <h1 className="text-display-md font-bold text-white mb-2 drop-shadow-lg">
               ChainCacao
             </h1>
             <p className="text-body-md text-white/80">
-              Création de compte administrateur
+              Création de compte agriculteur
             </p>
           </div>
 
           {/* Card */}
-          <div className="card p-8 md:p-10 animate-slide-in border border-white/20 bg-white/95 backdrop-blur-sm">
+          <div className="card p-8 md:p-10 animate-slide-in border border-white/20 bg-white/95 backdrop-blur-sm shadow-xl">
             <h2 className="text-title-lg font-semibold text-[var(--color-primary)] mb-2 text-center">
               Créer un compte
             </h2>
             <p className="text-body-sm text-[var(--color-muted)] text-center mb-8">
-              Inscription pour les administrateurs
+              Inscription agriculteur — accès à la plateforme
             </p>
 
             {error && (
@@ -101,7 +101,7 @@ export default function RegisterPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="form-input"
-                  placeholder="admin@example.com"
+                  placeholder="votre.adresse@email"
                   required
                   disabled={isLoading}
                 />
@@ -165,9 +165,9 @@ export default function RegisterPage() {
             <div className="mt-8 pt-6 border-t border-[var(--color-border)]">
               <p className="text-body-sm text-[var(--color-muted)] text-center">
                 Vous avez déjà un compte ?{' '}
-                <a href="/login" className="text-[var(--color-primary)] font-medium hover:underline">
+                <Link href="/login" className="text-[var(--color-primary)] font-medium hover:underline">
                   Se connecter
-                </a>
+                </Link>
               </p>
             </div>
           </div>

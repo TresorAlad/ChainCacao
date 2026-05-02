@@ -6,9 +6,7 @@ import Link from 'next/link'
 export default function ProfilePage() {
   const { user, logout } = useAuth()
 
-  if (!user) {
-    return <p>Redirection...</p>
-  }
+  if (!user) return null
 
   return (
     <div>

@@ -1,44 +1,58 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { useRouter } from 'next/navigation'
-import { PackageIcon, ArrowRightIcon, UsersIcon, ShieldCheckIcon } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { ArrowRightIcon, ShieldCheckIcon } from 'lucide-react'
+import api, { ActorDTO } from '@/lib/api'
+import toast from 'react-hot-toast'
 
-export default function TransferPage() {
+function TransferContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { isAuthenticated, loading } = useAuth()
   const [formData, setFormData] = useState({
-    lotId: '',
-    toActorId: '',
-    quantity: '',
-    comment: ''
+    batch_id: '',
+    to_actor_id: '',
+    commentaire: ''
   })
+  const [actors, setActors] = useState<ActorDTO[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace('/login')
   }, [isAuthenticated, loading, router])
 
+  useEffect(() => {
+    const lot = searchParams.get('lot')
+    if (lot) {
+      setFormData((prev) => ({ ...prev, batch_id: lot.trim() }))
+    }
+  }, [searchParams])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      api
+        .get<{ success: boolean; actors: ActorDTO[] }>('/actors')
+        .then((res) => setActors(res.data.actors || []))
+        .catch(() => setActors([]))
+    }
+  }, [isAuthenticated])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     try {
-      const res = await fetch('/api/v1/transfer', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('jwt')}`
-        },
-        body: JSON.stringify(formData)
+      await api.post('/transfer', {
+        batch_id: formData.batch_id,
+        to_actor_id: formData.to_actor_id,
+        commentaire: formData.commentaire,
       })
-      if (res.ok) {
-        router.push('/lots')
-      } else {
-        throw new Error('Erreur lors du transfert')
-      }
-    } catch (err: any) {
-      alert(err.message)
+      toast.success('Transfert effectué avec succès')
+      router.push('/lots')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur lors du transfert'
+      toast.error(message)
     } finally {
       setIsSubmitting(false)
     }
@@ -54,12 +68,6 @@ export default function TransferPage() {
 
   if (!isAuthenticated) return null
 
-  const mockLots = [
-    { id: 'LOT-2024-0892', type: 'Cacao Forastero', quantity: '2,500 kg' },
-    { id: 'LOT-2024-0891', type: 'Cacao Criollo', quantity: '1,800 kg' },
-    { id: 'LOT-2024-0890', type: 'Cacao Trinitario', quantity: '3,200 kg' },
-  ]
-
   return (
     <div className="page-container">
       <header className="page-header">
@@ -72,7 +80,6 @@ export default function TransferPage() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Formulaire */}
         <div className="card group">
           <div className="card-header border-b border-[var(--color-border)]/50">
             <h2 className="card-title flex items-center gap-2">
@@ -82,42 +89,43 @@ export default function TransferPage() {
           </div>
           <form onSubmit={handleSubmit} className="card-body">
             <div className="form-group">
-              <label className="form-label">Lot concerné</label>
-              <select 
-                className="form-input"
-                value={formData.lotId}
-                onChange={(e) => setFormData({...formData, lotId: e.target.value})}
-                required
-              >
-                <option value="">Sélectionner un lot</option>
-                {mockLots.map(lot => (
-                  <option key={lot.id} value={lot.id}>{lot.id} - {lot.type} ({lot.quantity})</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">ID de l'acteur destinataire</label>
+              <label className="form-label">ID du lot à transférer</label>
               <input
                 type="text"
                 className="form-input"
-                placeholder="ex: actor-coop-002"
-                value={formData.toActorId}
-                onChange={(e) => setFormData({...formData, toActorId: e.target.value})}
+                placeholder="Identifiant du lot"
+                value={formData.batch_id}
+                onChange={(e) => setFormData({ ...formData, batch_id: e.target.value })}
                 required
               />
             </div>
 
             <div className="form-group">
-              <label className="form-label">Quantité à transférer</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="ex: 500 kg"
-                value={formData.quantity}
-                onChange={(e) => setFormData({...formData, quantity: e.target.value})}
-                required
-              />
+              <label className="form-label">Acteur destinataire</label>
+              {actors.length > 0 ? (
+                <select
+                  className="form-input"
+                  value={formData.to_actor_id}
+                  onChange={(e) => setFormData({ ...formData, to_actor_id: e.target.value })}
+                  required
+                >
+                  <option value="">Sélectionner un acteur</option>
+                  {actors.map((actor) => (
+                    <option key={actor.id} value={actor.id}>
+                      {actor.nom} ({actor.role || '—'})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Identifiant acteur destinataire"
+                  value={formData.to_actor_id}
+                  onChange={(e) => setFormData({ ...formData, to_actor_id: e.target.value })}
+                  required
+                />
+              )}
             </div>
 
             <div className="form-group">
@@ -126,8 +134,8 @@ export default function TransferPage() {
                 className="form-input"
                 rows={3}
                 placeholder="Notes sur ce transfert..."
-                value={formData.comment}
-                onChange={(e) => setFormData({...formData, comment: e.target.value})}
+                value={formData.commentaire}
+                onChange={(e) => setFormData({ ...formData, commentaire: e.target.value })}
               />
             </div>
 
@@ -143,7 +151,6 @@ export default function TransferPage() {
           </form>
         </div>
 
-        {/* Info contextuelle */}
         <div className="space-y-6">
           <div className="card group">
             <div className="card-body">
@@ -188,5 +195,19 @@ export default function TransferPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function TransferPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[var(--color-bg)] flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-[var(--color-primary)] border-t-transparent"></div>
+        </div>
+      }
+    >
+      <TransferContent />
+    </Suspense>
   )
 }

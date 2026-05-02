@@ -1,17 +1,22 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { getApiBaseUrl } from '@/lib/api-base'
 import toast from 'react-hot-toast'
 
 export default function UploadPhotoPage() {
   const [batchId, setBatchId] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
-  const { user } = useAuth()
+  const { user, isAuthenticated, loading } = useAuth()
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!loading && !isAuthenticated) router.replace('/login')
+  }, [isAuthenticated, loading, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -19,34 +24,50 @@ export default function UploadPhotoPage() {
       toast.error('Veuillez sélectionner un fichier')
       return
     }
+    const id = batchId.trim()
+    if (!id) {
+      toast.error('Saisissez un ID de lot')
+      return
+    }
     setUploading(true)
     const formData = new FormData()
     formData.append('file', file)
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/lot/${batchId}/photo`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${user?.token}`,
-          },
-          body: formData,
-        }
-      )
-      if (!res.ok) throw new Error('Upload échoué')
-      const data = await res.json()
-      toast.success('Photo uploadée')
-      console.log('URL:', data.url)
-    } catch (err: any) {
-      toast.error(err.message)
+      const token = user?.token || (typeof window !== 'undefined' ? localStorage.getItem('jwt') : '')
+      const res = await fetch(`${getApiBaseUrl()}/lot/${encodeURIComponent(id)}/photo`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(typeof j.error === 'string' ? j.error : 'Upload échoué')
+      }
+      await res.json().catch(() => ({}))
+      toast.success('Photo uploadée avec succès')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur'
+      toast.error(message)
     } finally {
       setUploading(false)
     }
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-[40vh] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-[var(--color-primary)] border-t-transparent"></div>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) return null
+
   return (
-    <div>
+    <div className="page-container">
       <h1 className="text-h1 mb-6">Upload photo de lot</h1>
       <form onSubmit={handleSubmit} className="form-grid max-w-lg">
         <label>

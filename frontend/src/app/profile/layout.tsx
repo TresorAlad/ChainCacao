@@ -5,23 +5,22 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
 export default function ProfileLayout({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!user) {
-      router.push('/login')
-    }
-  }, [user, router])
+    if (!loading && !user) router.replace('/login')
+  }, [loading, user, router])
 
-  if (!user) {
-    return null
+  if (loading) {
+    return (
+      <div className="min-h-[40vh] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-[var(--color-primary)] border-t-transparent"></div>
+      </div>
+    )
   }
 
-  return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-h1 mb-6">Mon profil</h1>
-      {children}
-    </div>
-  )
+  if (!user) return null
+
+  return <div className="max-w-2xl mx-auto">{children}</div>
 }

@@ -5,7 +5,7 @@
 const fs = require('fs')
 const path = require('path')
 
-const root = '/home/george/Documents/Projet/MBH/ChainCacao/frontend'
+const root = path.resolve(__dirname)
 const apiFile = path.join(root, 'src/lib/api.ts')
 
 // Liste des endpoints attendus (selon README backend)

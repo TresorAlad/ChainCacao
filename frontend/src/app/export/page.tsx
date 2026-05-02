@@ -4,52 +4,92 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { FileTextIcon, DownloadIcon, ShieldCheckIcon, PackageIcon } from 'lucide-react'
+import api from '@/lib/api'
+import toast from 'react-hot-toast'
+
+interface LotEntry {
+  id: string
+  culture: string
+  quantite: number
+  statut: string
+}
 
 export default function ExportPage() {
   const router = useRouter()
   const { isAuthenticated, loading } = useAuth()
-  const [lots, setLots] = useState<Array<{id: string, type: string, quantity: string, status: string}>>([])
+  const [batchIds, setBatchIds] = useState('')
+  const [lots, setLots] = useState<LotEntry[]>([])
   const [selectedLots, setSelectedLots] = useState<string[]>([])
-  const [format, setFormat] = useState('json')
+  const [isLoading, setIsLoading] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace('/login')
-    if (isAuthenticated) {
-      setLots([
-        { id: 'LOT-2024-0892', type: 'Cacao Forastero', quantity: '2,500 kg', status: 'Exporté' },
-        { id: 'LOT-2024-0891', type: 'Cacao Criollo', quantity: '1,800 kg', status: 'En Stock' },
-        { id: 'LOT-2024-0890', type: 'Cacao Trinitario', quantity: '3,200 kg', status: 'En Stock' },
-        { id: 'LOT-2024-0889', type: 'Cacao Forastero', quantity: '1,500 kg', status: 'En Transit' },
-      ])
-    }
   }, [isAuthenticated, loading, router])
 
+  const loadLots = async () => {
+    const ids = batchIds.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean)
+    if (ids.length === 0) {
+      toast.error('Entrez au moins un ID de lot')
+      return
+    }
+    setIsLoading(true)
+    const loaded: LotEntry[] = []
+    for (const id of ids) {
+      try {
+        const res = await api.get<any>(`/lot/${id}`)
+        const b = res.data
+        loaded.push({
+          id: b.id || id,
+          culture: b.culture || '—',
+          quantite: b.quantite ?? 0,
+          statut: b.statut || '—',
+        })
+      } catch {
+        toast.error(`Lot introuvable : ${id}`)
+      }
+    }
+    setLots(loaded)
+    setSelectedLots(loaded.map((l) => l.id))
+    setIsLoading(false)
+  }
+
   const toggleLot = (lotId: string) => {
-    setSelectedLots(prev => 
-      prev.includes(lotId) 
-        ? prev.filter(id => id !== lotId)
-        : [...prev, lotId]
+    setSelectedLots((prev) =>
+      prev.includes(lotId) ? prev.filter((id) => id !== lotId) : [...prev, lotId]
     )
   }
 
   const handleExport = async () => {
     if (selectedLots.length === 0) {
-      alert('Veuillez sélectionner au moins un lot')
+      toast.error('Veuillez sélectionner au moins un lot')
       return
     }
     setIsExporting(true)
     try {
-      // Simulation d'export
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      const data = {
-        exportDate: new Date().toISOString(),
-        lots: selectedLots.map(id => lots.find(l => l.id === id)),
-        format
+      const markedLots: any[] = []
+      const errors: string[] = []
+
+      for (const id of selectedLots) {
+        try {
+          const res = await api.post<any>(`/lot/${id}/export`, {})
+          markedLots.push(res.data.batch || { id })
+        } catch (err: any) {
+          errors.push(`${id}: ${err.message}`)
+        }
       }
-      
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+
+      if (errors.length > 0) {
+        toast.error(`Erreurs pour ${errors.length} lot(s)`)
+      }
+
+      const exportData = {
+        exportDate: new Date().toISOString(),
+        lots: markedLots,
+        totalLots: markedLots.length,
+      }
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -58,10 +98,13 @@ export default function ExportPage() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      
+
+      if (markedLots.length > 0) {
+        toast.success(`${markedLots.length} lot(s) marqué(s) exporté(s) et téléchargés`)
+      }
       setSelectedLots([])
     } catch (err: any) {
-      alert('Erreur lors de l\'export: ' + err.message)
+      toast.error('Erreur lors de l\'export: ' + err.message)
     } finally {
       setIsExporting(false)
     }
@@ -84,77 +127,107 @@ export default function ExportPage() {
           Export de données
         </h1>
         <p className="text-[var(--color-muted)] mt-2">
-          Exportez vos lots au format JSON avec conformité EUDR
+          Marquez des lots comme exportés et téléchargez un rapport JSON
         </p>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Liste des lots */}
-        <div className="lg:col-span-2">
+        {/* Recherche et sélection */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Chargement des lots */}
           <div className="card group">
             <div className="card-header border-b border-[var(--color-border)]/50">
               <h2 className="card-title flex items-center gap-2">
                 <PackageIcon className="w-5 h-5 text-[var(--color-primary)]" />
-                Sélection des lots
+                Charger des lots
               </h2>
-              <span className="text-body-sm text-[var(--color-muted)]">
-                {selectedLots.length} sélectionné(s)
-              </span>
             </div>
-            <div className="card-body p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full caption-bottom text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg)]/50">
-                      <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">
-                        <input
-                          type="checkbox"
-                          checked={selectedLots.length === lots.length && lots.length > 0}
-                          onChange={() => {
-                            if (selectedLots.length === lots.length) {
-                              setSelectedLots([])
-                            } else {
-                              setSelectedLots(lots.map(l => l.id))
-                            }
-                          }}
-                          className="w-4 h-4 rounded border-[var(--color-border)] accent-[var(--color-primary)]"
-                        />
-                      </th>
-                      <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">ID du lot</th>
-                      <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Type</th>
-                      <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Quantité</th>
-                      <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Statut</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lots.map(lot => (
-                      <tr key={lot.id} className="border-b border-[var(--color-border)]/50 hover:bg-[var(--color-bg)]/50 transition-all">
-                        <td className="px-6 py-4">
-                          <input
-                            type="checkbox"
-                            checked={selectedLots.includes(lot.id)}
-                            onChange={() => toggleLot(lot.id)}
-                            className="w-4 h-4 rounded border-[var(--color-border)] accent-[var(--color-primary)]"
-                          />
-                        </td>
-                        <td className="px-6 py-4 font-medium text-[var(--color-primary)]">{lot.id}</td>
-                        <td className="px-6 py-4 text-[var(--color-earth)]">{lot.type}</td>
-                        <td className="px-6 py-4 text-[var(--color-earth)]">{lot.quantity}</td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
-                            lot.status === 'Exporté' ? 'bg-green-100 text-green-800' :
-                            lot.status === 'En Transit' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {lot.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div className="card-body">
+              <div className="form-group">
+                <label className="form-label">IDs des lots (séparés par virgule, point-virgule ou saut de ligne)</label>
+                <textarea
+                  className="form-input font-mono text-sm"
+                  rows={4}
+                  placeholder="Un identifiant par ligne ou séparés par virgule"
+                  value={batchIds}
+                  onChange={(e) => setBatchIds(e.target.value)}
+                />
               </div>
+              <button
+                onClick={loadLots}
+                disabled={isLoading || !batchIds.trim()}
+                className="btn btn-secondary flex items-center gap-2"
+              >
+                {isLoading ? (
+                  <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> Chargement...</>
+                ) : (
+                  'Charger les lots'
+                )}
+              </button>
             </div>
           </div>
+
+          {/* Table des lots chargés */}
+          {lots.length > 0 && (
+            <div className="card group">
+              <div className="card-header border-b border-[var(--color-border)]/50">
+                <h2 className="card-title flex items-center justify-between">
+                  <span>Lots chargés ({lots.length})</span>
+                  <span className="text-body-sm text-[var(--color-muted)]">{selectedLots.length} sélectionné(s)</span>
+                </h2>
+              </div>
+              <div className="card-body p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full caption-bottom text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg)]/50">
+                        <th className="px-6 py-4 text-left">
+                          <input
+                            type="checkbox"
+                            checked={selectedLots.length === lots.length && lots.length > 0}
+                            onChange={() => {
+                              if (selectedLots.length === lots.length) {
+                                setSelectedLots([])
+                              } else {
+                                setSelectedLots(lots.map((l) => l.id))
+                              }
+                            }}
+                            className="w-4 h-4 rounded border-[var(--color-border)] accent-[var(--color-primary)]"
+                          />
+                        </th>
+                        <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">ID du lot</th>
+                        <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Culture</th>
+                        <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Quantité (kg)</th>
+                        <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Statut</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lots.map((lot) => (
+                        <tr key={lot.id} className="border-b border-[var(--color-border)]/50 hover:bg-[var(--color-bg)]/50 transition-all">
+                          <td className="px-6 py-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedLots.includes(lot.id)}
+                              onChange={() => toggleLot(lot.id)}
+                              className="w-4 h-4 rounded border-[var(--color-border)] accent-[var(--color-primary)]"
+                            />
+                          </td>
+                          <td className="px-6 py-4 font-medium text-[var(--color-primary)]">{lot.id}</td>
+                          <td className="px-6 py-4 text-[var(--color-earth)]">{lot.culture}</td>
+                          <td className="px-6 py-4 text-[var(--color-earth)]">{lot.quantite} kg</td>
+                          <td className="px-6 py-4">
+                            <span className="inline-flex px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {lot.statut}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Options d'export */}
@@ -168,29 +241,27 @@ export default function ExportPage() {
             </div>
             <div className="card-body">
               <div className="space-y-3">
-                <label className="flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
+                <label className="flex items-center gap-3 p-3 rounded-lg border-2 border-[var(--color-primary)] cursor-pointer">
                   <input
                     type="radio"
                     name="format"
                     value="json"
-                    checked={format === 'json'}
-                    onChange={(e) => setFormat(e.target.value)}
+                    defaultChecked
                     className="w-4 h-4 text-[var(--color-primary)]"
+                    readOnly
                   />
                   <div>
                     <p className="font-medium text-[var(--color-earth)]">JSON</p>
                     <p className="text-body-sm text-[var(--color-muted)]">Format standard pour intégration API</p>
                   </div>
                 </label>
-                <label className="flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer hover:border-[var(--color-primary)] transition-colors opacity-50">
+                <label className="flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer opacity-50">
                   <input
                     type="radio"
                     name="format"
                     value="csv"
-                    checked={format === 'csv'}
-                    onChange={(e) => setFormat(e.target.value)}
-                    className="w-4 h-4 text-[var(--color-primary)]"
                     disabled
+                    className="w-4 h-4 text-[var(--color-primary)]"
                   />
                   <div>
                     <p className="font-medium text-[var(--color-earth)]">CSV</p>
