@@ -5,16 +5,18 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { RoleLayout } from '@/components/RoleLayout'
 import { getRoleTheme } from '@/lib/role-themes'
-import api, { type ActorDTO } from '@/lib/api'
+import api, { type ActorDTO, type Batch, type BatchHistoryEvent } from '@/lib/api'
 import {
   CalendarIcon,
   CheckCircleIcon,
-  ClockIcon,
   UserGroupIcon,
   ScaleIcon,
   TruckIcon,
+  MagnifyingGlassIcon,
+  ArrowRightIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import toast from 'react-hot-toast'
 
 export default function CooperativeDashboardPage() {
   const { isAuthenticated, loading, user } = useAuth()
@@ -23,6 +25,11 @@ export default function CooperativeDashboardPage() {
 
   const [actors, setActors] = useState<ActorDTO[]>([])
   const [fetching, setFetching] = useState(true)
+
+  const [searchId, setSearchId] = useState('')
+  const [foundLot, setFoundLot] = useState<Batch | null>(null)
+  const [lotHistory, setLotHistory] = useState<BatchHistoryEvent[]>([])
+  const [searching, setSearching] = useState(false)
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace('/login')
@@ -46,6 +53,29 @@ export default function CooperativeDashboardPage() {
         <div className="animate-spin rounded-full h-12 w-12 border-4 border-t-transparent" style={{ borderColor: theme.primary, borderTopColor: 'transparent' }} />
       </div>
     )
+  }
+
+  const fetchLotWithHistory = async () => {
+    const id = searchId.trim()
+    if (!id) { toast.error('Saisissez un ID de lot'); return }
+    setSearching(true)
+    setFoundLot(null)
+    setLotHistory([])
+    try {
+      const [lotRes, histRes] = await Promise.all([
+        api.get<Batch>(`/lot/${id}`),
+        api.get<{ success: boolean; events: BatchHistoryEvent[] }>(`/lot/${id}/history`),
+      ])
+      const lot = (lotRes.data as unknown as { batch?: Batch }).batch ?? lotRes.data
+      setFoundLot(lot)
+      setLotHistory(histRes.data.events || [])
+    } catch {
+      toast.error('Lot introuvable')
+      setFoundLot(null)
+      setLotHistory([])
+    } finally {
+      setSearching(false)
+    }
   }
 
   if (!isAuthenticated || user?.role !== 'cooperative') return null
@@ -152,6 +182,116 @@ export default function CooperativeDashboardPage() {
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+
+        {/* Recherche lot + historique des transferts */}
+        <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)] mb-10">
+          <h3 className="text-2xl font-black text-[var(--color-primary)] mb-6">Suivre un lot & ses transferts</h3>
+
+          <div className="flex gap-3 mb-6">
+            <div className="relative flex-1">
+              <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300" />
+              <input
+                type="text"
+                placeholder="Ex: TC-20260502-00001"
+                value={searchId}
+                onChange={(e) => setSearchId(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && fetchLotWithHistory()}
+                className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-[var(--color-border)] rounded-2xl text-sm font-bold text-[var(--color-primary)] focus:ring-2 focus:ring-[#33691E] outline-none"
+              />
+            </div>
+            <button
+              onClick={fetchLotWithHistory}
+              disabled={searching}
+              className="px-6 py-3 bg-[#33691E] text-white rounded-2xl text-sm font-black shadow-md hover:brightness-110 transition-all disabled:opacity-50 flex items-center gap-2"
+            >
+              {searching
+                ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : <MagnifyingGlassIcon className="w-5 h-5" />}
+              Chercher
+            </button>
+          </div>
+
+          {foundLot && (
+            <div className="space-y-4">
+              {/* Résumé du lot */}
+              <div className="rounded-2xl bg-[#F1F8E9] border border-[#C8E6C9] p-5 flex flex-wrap gap-6 items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Lot</p>
+                  <p className="text-lg font-black text-[#1B5E20]">{foundLot.id}</p>
+                  <p className="text-sm text-gray-600 mt-1">{foundLot.culture}{foundLot.variete ? ` · ${foundLot.variete}` : ''} — {foundLot.quantite} kg</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Propriétaire actuel</p>
+                  <p className="text-sm font-bold text-[var(--color-primary)]">{foundLot.proprietaire_id || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Statut</p>
+                  <span className="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-[#E8F5E9] text-[#2E7D32]">
+                    {foundLot.statut || '—'}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <Link href={`/lot-detail?id=${foundLot.id}`} className="px-4 py-2 text-xs font-black bg-white border border-[#C8E6C9] rounded-xl text-[#33691E] hover:bg-[#E8F5E9] transition-colors">
+                    Détail complet
+                  </Link>
+                  <Link href={`/transfer?lot=${foundLot.id}`} className="flex items-center gap-1 px-4 py-2 text-xs font-black bg-[#33691E] text-white rounded-xl hover:brightness-110 transition-all">
+                    <ArrowRightIcon className="w-4 h-4" /> Transférer
+                  </Link>
+                </div>
+              </div>
+
+              {/* Timeline des transferts */}
+              {lotHistory.length > 0 ? (
+                <div>
+                  <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
+                    Historique blockchain ({lotHistory.length} événement{lotHistory.length > 1 ? 's' : ''})
+                  </p>
+                  <div className="space-y-2">
+                    {lotHistory.map((ev, idx) => (
+                      <div key={idx} className="flex gap-4 items-start p-4 rounded-xl bg-gray-50 border border-gray-100">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-[10px] font-black ${
+                          ev.type === 'transfert' ? 'bg-blue-100 text-blue-700' :
+                          ev.type === 'creation' ? 'bg-green-100 text-green-700' :
+                          ev.type === 'export' ? 'bg-purple-100 text-purple-700' :
+                          'bg-gray-100 text-gray-600'
+                        }`}>
+                          {ev.type === 'transfert' ? '→' : ev.type === 'creation' ? '+' : ev.type === 'export' ? '✓' : '·'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap gap-2 items-center mb-1">
+                            <span className="text-xs font-black text-[var(--color-primary)] uppercase">{ev.type}</span>
+                            {ev.type === 'transfert' && (
+                              <span className="text-xs text-gray-500 font-bold">
+                                {ev.from_actor_id || '?'} <span className="text-[#33691E]">→</span> {ev.to_actor_id || '?'}
+                              </span>
+                            )}
+                            {ev.commentaire && (
+                              <span className="text-xs text-gray-400 italic">{ev.commentaire}</span>
+                            )}
+                          </div>
+                          <div className="flex gap-4 text-[10px] text-gray-400 font-bold">
+                            <span>{new Date(ev.created_at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                            <span className="font-mono truncate">Tx: {ev.tx_hash?.slice(0, 10)}…</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400 text-center py-4">Aucun historique blockchain pour ce lot.</p>
+              )}
+            </div>
+          )}
+
+          {!foundLot && !searching && searchId.trim() !== '' && (
+            <p className="text-sm text-gray-400 text-center py-6">Aucun lot trouvé pour cet ID.</p>
+          )}
+
+          {!foundLot && !searching && searchId.trim() === '' && (
+            <p className="text-sm text-gray-400 text-center py-6">Saisissez un ID de lot pour voir son historique de transferts.</p>
           )}
         </div>
 
