@@ -4,6 +4,7 @@ import { ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
 import { AuthProvider } from '@/contexts/AuthContext'
 import Sidebar from '@/components/Sidebar'
+import Header from '@/components/Header'
 
 export default function Providers({ children }: { children: ReactNode }) {
   const pathname = usePathname()
@@ -20,6 +21,7 @@ export default function Providers({ children }: { children: ReactNode }) {
       ) : (
         <div className="flex min-h-screen">
           <Sidebar />
+          <Header />
           <main className="main-content">
             {children}
           </main>

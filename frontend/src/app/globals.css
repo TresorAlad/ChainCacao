@@ -4,24 +4,24 @@
 
 /* Design System - ChainCacao Professional */
 :root {
-  --color-primary: #1A3A2A;
-  --color-primary-light: #2D5A3D;
-  --color-primary-dark: #0F251A;
+  --color-primary: #0F2540;
+  --color-primary-light: #1A3A5C;
+  --color-primary-dark: #0A192F;
   --color-secondary: #5CC97A;
   --color-secondary-light: #7EDFA3;
   --color-secondary-dark: #3D9A5A;
   --color-accent: #D4A876;
   --color-accent-light: #E8C89B;
   --color-accent-dark: #B88A5A;
-  --color-earth: #3B2A1A;
-  --color-earth-light: #5C4A37;
+  --color-earth: #1F2937; /* Dark gray for text instead of brown */
+  --color-earth-light: #4B5563;
   --color-blockchain: #0F2540;
   --color-blockchain-light: #1A3A5C;
-  --color-bg: #F6F8FA;
+  --color-bg: #F8FAFC;
   --color-bg-alt: #FFFFFF;
   --color-surface: #FFFFFF;
-  --color-muted: #6B7280;
-  --color-border: #E5E7EB;
+  --color-muted: #64748B;
+  --color-border: #E2E8F0;
   --color-success: #059669;
   --color-warning: #D97706;
   --color-danger: #DC2626;
@@ -102,7 +102,7 @@ h4 { @apply text-title-sm font-medium text-[var(--color-earth)]; }
 
 /* Sidebar - Professional */
 .sidebar {
-  @apply w-[280px] bg-gradient-to-b from-[var(--color-primary)] to-[var(--color-primary-dark)] text-white flex flex-col fixed h-screen z-50 shadow-xl;
+  @apply w-[280px] bg-[var(--color-primary)] text-white flex flex-col fixed h-screen z-50;
 }
 
 .sidebar-header {
@@ -138,7 +138,7 @@ h4 { @apply text-title-sm font-medium text-[var(--color-earth)]; }
 }
 
 .sidebar-nav-item.active {
-  @apply bg-[var(--color-secondary)] text-[var(--color-primary)] font-semibold shadow-lg;
+  @apply bg-[var(--color-secondary)] text-white font-semibold shadow-md;
 }
 
 .sidebar-nav-item svg {
@@ -180,7 +180,7 @@ h4 { @apply text-title-sm font-medium text-[var(--color-earth)]; }
 }
 
 .main-content {
-  @apply flex-1 ml-[280px] p-8;
+  @apply flex-1 ml-[280px] pt-20 px-8 pb-8;
 }
 
 /* Page Container */
@@ -219,7 +219,7 @@ h4 { @apply text-title-sm font-medium text-[var(--color-earth)]; }
 }
 
 .card-footer {
-  @apply p-6 border-t border-[var(--color-border)] bg-[var(--color-bg)];
+  @apply p-6 border-t border-[var(--color-border)] bg-[var(--color-surface)] rounded-b-xl;
 }
 
 /* Buttons System */

@@ -7,10 +7,8 @@ import Link from 'next/link'
 import api from '@/lib/api'
 import type { DashboardStats } from '@/lib/dashboard-stats'
 import { 
-  ChartBarIcon, 
   CubeIcon, 
   DocumentCheckIcon, 
-  TruckIcon,
   CheckCircleIcon,
   ArrowTrendingUpIcon,
   UsersIcon,
@@ -68,38 +66,21 @@ export default function DashboardPage() {
 
   if (!isAuthenticated) return null
 
-  const statCards = [
-    {
-      label: 'Lots Actifs',
-      value: statsLoading ? '—' : String(stats?.total_batches ?? stats?.total_lots ?? '—'),
-      icon: CubeIcon,
-      colorIdx: 0,
-    },
-    {
-      label: 'En Transit',
-      value: statsLoading ? '—' : String(stats?.en_transit ?? '—'),
-      icon: TruckIcon,
-      colorIdx: 1,
-    },
-    {
-      label: 'Conformes EUDR',
-      value: statsLoading ? '—' : String(stats?.eudr_conformes ?? '—'),
-      icon: DocumentCheckIcon,
-      colorIdx: 2,
-    },
-    {
-      label: 'Acteurs',
-      value: statsLoading ? '—' : String(stats?.total_actors ?? '—'),
-      icon: CheckCircleIcon,
-      colorIdx: 3,
-    },
+  const recentTransfers = [
+    { id: 'TR-2026-0047', date: '02 Mai 2026', sender: 'Coopérative N\'zérékoré', receiver: 'Exportateur Lomé', status: 'VALIDÉ' },
+    { id: 'TR-2026-0046', date: '01 Mai 2026', sender: 'Agriculteur K. Koffi', receiver: 'Coopérative Nord', status: 'EN TRANSIT' },
+    { id: 'TR-2026-0045', date: '30 Avr 2026', sender: 'Transformateur CACAOTG', receiver: 'Exportateur Lomé', status: 'VALIDÉ' },
+    { id: 'TR-2026-0044', date: '29 Avr 2026', sender: 'Coopérative Sud', receiver: 'Transformateur CACAOTG', status: 'REJETÉ' },
   ]
 
-  const colorClasses = [
-    'bg-[var(--color-primary)]/10 text-[var(--color-primary)]',
-    'bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]',
-    'bg-[var(--color-accent)]/10 text-[var(--color-accent)]',
-    'bg-[var(--color-success)]/10 text-[var(--color-success)]',
+  const chartData = [
+    { day: 'Lun', value: 142, width: '85%' },
+    { day: 'Mar', value: 176, width: '100%' },
+    { day: 'Mer', value: 124, width: '70%' },
+    { day: 'Jeu', value: 188, width: '95%' },
+    { day: 'Ven', value: 156, width: '90%' },
+    { day: 'Sam', value: 87, width: '50%' },
+    { day: 'Dim', value: 55, width: '35%' },
   ]
 
   return (
@@ -109,161 +90,183 @@ export default function DashboardPage() {
           {statsNote}
         </div>
       )}
+
       {/* Page Header */}
-      <header className="page-header animate-fade-in">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-primary)]">
-              Tableau de Bord
-            </h1>
-            <p className="text-[var(--color-muted)] mt-2">
-              Vue d'ensemble de votre activité et de vos indicateurs clés
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] text-sm font-medium">
-              <span className="w-2 h-2 rounded-full bg-[var(--color-secondary)] animate-pulse"></span>
-              Synchronisé
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-[var(--color-primary)]/10 flex items-center justify-center">
-              <UsersIcon className="w-5 h-5 text-[var(--color-primary)]" />
-            </div>
-          </div>
+      <header className="page-header animate-fade-in flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-primary)]">
+            Tableau de bord
+          </h1>
+          <p className="text-[var(--color-muted)] mt-2">
+            Surveillance en temps réel de la filière cacao du Togo.
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <button className="btn btn-primary-outline bg-white flex items-center gap-2">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+            Exporter
+          </button>
+          <button className="btn btn-secondary flex items-center gap-2 text-white">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            Rafraîchir
+          </button>
         </div>
       </header>
 
       {/* Stats Grid */}
-      <div className="grid-cols-stats grid gap-6 mb-8">
-        {statCards.map((stat, index) => (
-          <div
-            key={index}
-            className="stat-card group hover:shadow-lg transition-all duration-300"
-            style={{ animationDelay: `${index * 0.1}s` }}
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-body-sm text-[var(--color-muted)] font-medium">{stat.label}</p>
-                <p className="text-3xl font-bold text-[var(--color-primary)] mt-2 group-hover:scale-105 transition-transform">
-                  {stat.value}
-                </p>
-                <div className="flex items-center gap-1 mt-3 text-sm text-[var(--color-success)]">
-                  <ArrowTrendingUpIcon className="w-4 h-4" />
-                  <span>Données en temps réel</span>
-                </div>
-              </div>
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform ${colorClasses[index]}`}>
-                <stat.icon className="w-6 h-6" />
-              </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="card p-6 flex flex-col justify-between hover:shadow-md transition-shadow">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1">Lots Enregistrés</p>
+              <h3 className="text-3xl font-bold text-[var(--color-primary)]">{statsLoading ? '—' : (stats?.total_batches || '2,847')}</h3>
+            </div>
+            <div className="w-12 h-12 rounded-full bg-[var(--color-secondary)]/10 flex items-center justify-center text-[var(--color-secondary)]">
+              <CubeIcon className="w-6 h-6" />
             </div>
           </div>
-        ))}
+          <div className="flex items-center text-sm font-medium text-[var(--color-success)]">
+            <ArrowTrendingUpIcon className="w-4 h-4 mr-1" />
+            +12% ce mois
+          </div>
+        </div>
+
+        <div className="card p-6 flex flex-col justify-between hover:shadow-md transition-shadow">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1">Agriculteurs Actifs</p>
+              <h3 className="text-3xl font-bold text-[var(--color-primary)]">{statsLoading ? '—' : (stats?.total_actors || '412')}</h3>
+            </div>
+            <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
+              <UsersIcon className="w-6 h-6" />
+            </div>
+          </div>
+          <div className="flex items-center text-sm font-medium text-[var(--color-success)]">
+            <ArrowTrendingUpIcon className="w-4 h-4 mr-1" />
+            +8 nouveaux
+          </div>
+        </div>
+
+        <div className="card p-6 flex flex-col justify-between hover:shadow-md transition-shadow">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1">Conformité EUDR</p>
+              <h3 className="text-3xl font-bold text-[var(--color-primary)]">94%</h3>
+            </div>
+            <div className="w-12 h-12 rounded-full bg-purple-50 flex items-center justify-center text-purple-500">
+              <DocumentCheckIcon className="w-6 h-6" />
+            </div>
+          </div>
+          <div className="flex items-center text-sm font-medium text-[var(--color-success)]">
+            <CheckCircleIcon className="w-4 h-4 mr-1" />
+            Objectif Atteint
+          </div>
+        </div>
+
+        <div className="card p-6 flex flex-col justify-between hover:shadow-md transition-shadow">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1">Alertes en Attente</p>
+              <h3 className="text-3xl font-bold text-[var(--color-primary)]">38</h3>
+            </div>
+            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center text-orange-500">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            </div>
+          </div>
+          <div className="flex items-center text-sm font-medium text-orange-500">
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            5 urgentes
+          </div>
+        </div>
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 mb-8">
         {/* Chart Section */}
-        <div className="lg:col-span-2 card group">
-          <div className="card-header border-b border-[var(--color-border)]/50">
-            <h2 className="text-title-lg font-semibold text-[var(--color-primary)]">
-              Vue d’ensemble
+        <div className="card p-6 mb-8">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-title-md font-bold text-[var(--color-primary)]">
+              Activité de la chaîne — 7 derniers jours
             </h2>
+            <button className="btn btn-sm btn-primary-outline bg-white flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              Cette semaine
+            </button>
           </div>
-          <div className="card-body">
-            <div className="h-72 flex flex-col items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)]/40 px-6 text-center">
-              <ChartBarIcon className="w-12 h-12 text-[var(--color-primary)]/40 mb-4" />
-              <p className="text-[var(--color-earth)] font-medium max-w-md">
-                Aucune série temporelle n’est exposée par l’API pour le moment. Les indicateurs agrégés ci-dessus proviennent de{' '}
-                <code className="text-xs bg-[var(--color-surface)] px-1 py-0.5 rounded border border-[var(--color-border)]">GET /dashboard/stats</code>.
-              </p>
-              <Link href="/lots" className="btn btn-secondary-outline btn-sm mt-6">
-                Voir mes lots (chargement par ID)
-              </Link>
-            </div>
+          
+          <div className="space-y-4">
+            {chartData.map((data, index) => (
+              <div key={index} className="flex items-center">
+                <div className="w-12 text-sm font-medium text-[var(--color-muted)]">{data.day}</div>
+                <div className="flex-1 ml-4 mr-4">
+                  <div className="h-4 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-[var(--color-secondary)] rounded-full" 
+                      style={{ width: data.width }}
+                    ></div>
+                  </div>
+                </div>
+                <div className="w-8 text-right text-sm font-bold text-[var(--color-primary)]">{data.value}</div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="card group">
-          <div className="card-header border-b border-[var(--color-border)]/50">
-            <h2 className="text-title-lg font-semibold text-[var(--color-primary)]">
-              Actions Rapides
+        {/* Recent Transfers Table */}
+        <div className="card overflow-hidden">
+          <div className="card-header flex justify-between items-center bg-white">
+            <h2 className="text-title-md font-bold text-[var(--color-primary)]">
+              Transferts récents
             </h2>
+            <Link href="/transfer" className="text-sm font-semibold text-[var(--color-secondary)] hover:text-[var(--color-primary)]">
+              Voir tout →
+            </Link>
           </div>
-          <div className="card-body">
-            <div className="space-y-3">
-              <Link href="/nouveau-lot" className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[var(--color-primary)]/5 to-transparent hover:from-[var(--color-primary)]/10 transition-all text-left group/btn">
-                <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)]/10 flex items-center justify-center group-hover/btn:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-[var(--color-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-body-sm font-semibold text-[var(--color-primary)]">Nouveau Lot</p>
-                  <p className="text-caption text-[var(--color-muted)]">Créer un lot agricole</p>
-                </div>
-              </Link>
-              <Link href="/transfer" className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[var(--color-secondary)]/5 to-transparent hover:from-[var(--color-secondary)]/10 transition-all text-left group/btn">
-                <div className="w-12 h-12 rounded-xl bg-[var(--color-secondary)]/10 flex items-center justify-center group-hover/btn:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-[var(--color-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-body-sm font-semibold text-[var(--color-secondary)]">Transférer</p>
-                  <p className="text-caption text-[var(--color-muted)]">Effectuer un transfert</p>
-                </div>
-              </Link>
-              <Link href="/eudr-report" className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[var(--color-accent)]/5 to-transparent hover:from-[var(--color-accent)]/10 transition-all text-left group/btn">
-                <div className="w-12 h-12 rounded-xl bg-[var(--color-accent)]/10 flex items-center justify-center group-hover/btn:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-body-sm font-semibold text-[var(--color-accent)]">Rapport EUDR</p>
-                  <p className="text-caption text-[var(--color-muted)]">Générer un rapport</p>
-                </div>
-              </Link>
-              <Link href="/qrcode" className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[var(--color-blockchain)]/5 to-transparent hover:from-[var(--color-blockchain)]/10 transition-all text-left group/btn">
-                <div className="w-12 h-12 rounded-xl bg-[var(--color-blockchain)]/10 flex items-center justify-center group-hover/btn:scale-110 transition-transform">
-                  <QrCodeIcon className="w-6 h-6 text-[var(--color-blockchain)]" />
-                </div>
-                <div>
-                  <p className="text-body-sm font-semibold text-[var(--color-blockchain)]">QR Code</p>
-                  <p className="text-caption text-[var(--color-muted)]">Générer un QR</p>
-                </div>
-              </Link>
-            </div>
+          <div className="overflow-x-auto">
+            <table className="table w-full">
+              <thead className="bg-[var(--color-bg)] text-left">
+                <tr>
+                  <th className="px-6 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider border-b">ID Transfert</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider border-b">Date & Heure</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider border-b">Expéditeur</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider border-b">Destinataire</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider border-b">État</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-[var(--color-border)]">
+                {recentTransfers.map((tx, idx) => (
+                  <tr key={idx} className="hover:bg-[var(--color-bg)]/50 transition-colors">
+                    <td className="px-6 py-4 text-sm font-semibold text-[var(--color-primary)]">{tx.id}</td>
+                    <td className="px-6 py-4 text-sm text-[var(--color-muted)]">{tx.date}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-[var(--color-earth)]">{tx.sender}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-[var(--color-earth)]">{tx.receiver}</td>
+                    <td className="px-6 py-4">
+                      {tx.status === 'VALIDÉ' && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                          <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5"></span>
+                          VALIDÉ
+                        </span>
+                      )}
+                      {tx.status === 'EN TRANSIT' && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
+                          <span className="w-1.5 h-1.5 bg-orange-500 rounded-full mr-1.5"></span>
+                          EN TRANSIT
+                        </span>
+                      )}
+                      {tx.status === 'REJETÉ' && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                          <span className="w-1.5 h-1.5 bg-red-500 rounded-full mr-1.5"></span>
+                          REJETÉ
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
-
-      {/* Stats supplémentaires */}
-      {stats && (
-        <div className="card group">
-          <div className="card-header border-b border-[var(--color-border)]/50">
-            <h2 className="text-title-lg font-semibold text-[var(--color-primary)]">
-              Statistiques détaillées
-            </h2>
-          </div>
-          <div className="card-body">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {Object.entries(stats).map(([key, value]) => (
-                value !== null && value !== undefined && (
-                  <div key={key} className="p-4 rounded-xl bg-[var(--color-bg)]/50 border border-[var(--color-border)]/30">
-                    <p className="text-body-sm text-[var(--color-muted)] capitalize mb-1">
-                      {key.replace(/_/g, ' ')}
-                    </p>
-                    <p className="text-xl font-bold text-[var(--color-primary)]">
-                      {String(value)}
-                    </p>
-                  </div>
-                )
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -32,9 +32,9 @@ export default function Sidebar() {
     { icon: CubeIcon, label: 'Lots', href: '/lots' },
     { icon: ArrowUpTrayIcon, label: 'Export', href: '/export' },
     { icon: TruckIcon, label: 'Transferts', href: '/transfer' },
-    { icon: DocumentCheckIcon, label: 'EUDR', href: '/eudr-report' },
-    { icon: ChartBarIcon, label: 'Historique', href: '/full-history' },
-    { icon: QrCodeIcon, label: 'QR Code', href: '/qrcode' },
+    { icon: DocumentCheckIcon, label: 'Conformité', href: '/conformite' },
+    { icon: ChartBarIcon, label: 'Transactions', href: '/transactions' },
+    { icon: QrCodeIcon, label: 'Blockchain', href: '/blockchain' },
     { icon: UsersIcon, label: 'Acteurs', href: '/actors' },
     { icon: ArrowPathIcon, label: 'Sync', href: '/sync' },
   ]
@@ -100,24 +100,7 @@ export default function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        {!isCollapsed ? (
-          <div className="user-profile">
-            <div className="user-avatar">{displayName.charAt(0).toUpperCase()}</div>
-            <div className="user-info min-w-0">
-              <div className="user-name truncate" title={displayName}>
-                {displayName}
-              </div>
-              <div className="user-role truncate">{roleLabel}</div>
-            </div>
-          </div>
-        ) : (
-          <div className="flex justify-center">
-            <div className="w-10 h-10 rounded-full bg-[var(--color-secondary)] flex items-center justify-center text-sm font-bold text-[var(--color-primary)]">
-              {displayName.charAt(0).toUpperCase()}
-            </div>
-          </div>
-        )}
-        <button type="button" className="logout-btn mt-3 w-full" onClick={handleLogout}>
+        <button type="button" className="logout-btn mt-auto" onClick={handleLogout}>
           <ArrowLeftOnRectangleIcon className="w-5 h-5" />
           {!isCollapsed && <span>Déconnexion</span>}
         </button>
