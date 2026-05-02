@@ -39,11 +39,18 @@ interface AuthResponse {
 }
 
 function networkErrorMessage(): string {
-  return (
-    'Impossible de contacter l’API (réseau ou blocage navigateur). ' +
-    'Si le site est en HTTPS et l’API en HTTP, définissez NEXT_PUBLIC_API_URL=/api/v1 ' +
-    'et API_REWRITE_TARGET=http://<hôte-backend>:8080/api/v1 dans l’environnement du serveur Next.'
-  )
+  return "Impossible de joindre le serveur. Vérifiez votre connexion internet."
+}
+
+/** Extrait un message d'erreur lisible depuis la réponse JSON (data.error peut être un objet ou une string). */
+function extractApiError(data: AuthResponse, fallback: string): string {
+  if (typeof data.error === 'string' && data.error.trim()) return data.error
+  if (typeof data.message === 'string' && data.message.trim()) return data.message
+  if (data.error && typeof data.error === 'object') {
+    const e = data.error as Record<string, unknown>
+    if (typeof e.message === 'string') return e.message
+  }
+  return fallback
 }
 
 async function parseAuthJson(res: Response): Promise<AuthResponse> {
@@ -138,12 +145,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await parseAuthJson(res)
 
     if (!res.ok) {
-      throw new Error(data.error || data.message || 'Identifiants invalides')
+      throw new Error(extractApiError(data, 'Identifiants invalides'))
     }
 
     const token = typeof data.token === 'string' ? data.token : ''
     if (!token) {
-      throw new Error(data.error || data.message || 'Réponse serveur sans jeton de session')
+      throw new Error(extractApiError(data, 'Réponse serveur sans jeton de session'))
     }
 
     localStorage.setItem('jwt', token)
@@ -203,7 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await parseAuthJson(res)
 
     if (!res.ok) {
-      throw new Error(data.error || data.message || 'Erreur lors de la création du compte')
+      throw new Error(extractApiError(data, 'Erreur lors de la création du compte'))
     }
 
     const token = typeof data.token === 'string' ? data.token : ''

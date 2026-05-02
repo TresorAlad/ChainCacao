@@ -112,7 +112,12 @@ export default function RegisterPage() {
       })
       router.replace(getRoleBasedRedirect(jwtRole))
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erreur lors de la création du compte'
+      let message = 'Erreur lors de la création du compte'
+      if (err instanceof Error && err.message) {
+        message = err.message
+      } else if (typeof err === 'string' && err.trim()) {
+        message = err
+      }
       setError(message)
     } finally {
       setIsLoading(false)

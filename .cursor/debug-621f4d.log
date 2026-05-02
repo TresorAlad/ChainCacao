@@ -1,6 +1,0 @@
-{"sessionId":"621f4d","runId":"pre-fix","hypothesisId":"H1","location":"register/page.tsx:handleSubmit","message":"submit_start","data":{"hasName":true,"hasEmail":true,"hasPwd":true,"hasConfirm":true,"pwdMatch":true,"usePin":false,"gpsLen":14,"pinLen":0},"timestamp":1777716325092}
-{"sessionId":"621f4d","runId":"pre-fix","hypothesisId":"H2","location":"register/page.tsx:handleSubmit","message":"calling_register","data":{"role":"cooperative"},"timestamp":1777716325095}
-{"sessionId":"621f4d","runId":"pre-fix","hypothesisId":"H2","location":"AuthContext.tsx:register","message":"signup_response","data":{"httpStatus":201,"ok":true,"hasToken":true,"apiMsgSnippet":""},"timestamp":1777716331341}
-{"sessionId":"621f4d","runId":"pre-fix","hypothesisId":"H3","location":"AuthContext.tsx:register","message":"pre_jwt_decode","data":{"dotSegments":3},"timestamp":1777716331343}
-{"sessionId":"621f4d","runId":"pre-fix","hypothesisId":"H3","location":"AuthContext.tsx:register","message":"jwt_decode_ok","data":{"hasActorId":true},"timestamp":1777716331344}
-{"sessionId":"621f4d","runId":"pre-fix","hypothesisId":"H5","location":"register/page.tsx:handleSubmit","message":"register_ok_navigate","data":{"target":"/dashboard-cooperative"},"timestamp":1777716331345}
