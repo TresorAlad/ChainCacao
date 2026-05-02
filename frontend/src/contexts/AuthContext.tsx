@@ -42,7 +42,7 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   login: (identifier: string, secret: string, mode?: LoginMode) => Promise<User>
-  register: (email: string, password: string, name: string) => Promise<boolean>
+  register: (email: string, password: string, name: string, role?: string) => Promise<boolean>
   logout: () => void
   isAuthenticated: boolean
 }
@@ -125,12 +125,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return u
   }
 
-  const register = async (email: string, password: string, name: string): Promise<boolean> => {
+  const register = async (email: string, password: string, name: string, role?: string): Promise<boolean> => {
     const payloadSignup = {
       nom: name.trim(),
       email: email.trim().toLowerCase(),
       password,
       org_id: '',
+      role: role || 'agriculteur',
     }
 
     let res: Response

@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { EyeIcon, EyeOffIcon } from 'lucide-react'
 import { BrandLogo } from '@/components/BrandLogo'
+import { UserRole, getRoleBasedRedirect } from '@/lib/role-utils'
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
+  const [role, setRole] = useState<UserRole>('agriculteur')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -23,8 +25,11 @@ export default function RegisterPage() {
     setIsLoading(true)
 
     try {
-      const ok = await register(email, password, name)
-      if (ok) router.replace('/dashboard')
+      const ok = await register(email, password, name, role)
+      if (ok) {
+        const redirectPath = getRoleBasedRedirect(role)
+        router.replace(redirectPath)
+      }
     } catch (err: any) {
       setError(err.message || 'Erreur lors de la création du compte')
     } finally {
@@ -66,7 +71,7 @@ export default function RegisterPage() {
               Créer un compte
             </h2>
             <p className="text-[var(--color-muted)]">
-              Inscription agriculteur — accès à la plateforme
+              Rejoignez la filière cacao — sélectionnez votre rôle
             </p>
           </div>
 
@@ -94,6 +99,28 @@ export default function RegisterPage() {
                 required
                 disabled={isLoading}
               />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="role" className="form-label form-label-required">
+                Rôle dans la filière
+              </label>
+              <select
+                id="role"
+                value={role}
+                onChange={(e) => setRole(e.target.value as UserRole)}
+                className="form-input"
+                required
+                disabled={isLoading}
+              >
+                <option value="agriculteur">Agriculteur - Production de cacao</option>
+                <option value="cooperative">Coopérative - Collecte et coordination</option>
+                <option value="transformateur">Transformateur - Traitement des fèves</option>
+                <option value="distributeur">Distributeur - Distribution et export</option>
+              </select>
+              <p className="form-hint">
+                Sélectionnez votre rôle dans la chaîne de valeur du cacao
+              </p>
             </div>
 
             <div className="form-group">

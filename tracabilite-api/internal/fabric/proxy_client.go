@@ -147,3 +147,27 @@ func (c *ProxyClient) GetStats(ctx context.Context) map[string]any {
 	return out
 }
 
+func (c *ProxyClient) GetRecentTransfers(ctx context.Context) ([]map[string]any, error) {
+	var out []map[string]any
+	err := c.doJSON(ctx, http.MethodGet, "/v1/fabric/dashboard/recent-transfers", nil, &out)
+	return out, err
+}
+
+func (c *ProxyClient) GetActivityChart(ctx context.Context) ([]map[string]any, error) {
+	var out []map[string]any
+	err := c.doJSON(ctx, http.MethodGet, "/v1/fabric/dashboard/activity-chart", nil, &out)
+	return out, err
+}
+
+func (c *ProxyClient) GetEUDRCompliance(ctx context.Context) (map[string]any, error) {
+	var out map[string]any
+	err := c.doJSON(ctx, http.MethodGet, "/v1/fabric/dashboard/eudr-compliance", nil, &out)
+	return out, err
+}
+
+func (c *ProxyClient) GetAlertsCount(ctx context.Context) (map[string]any, error) {
+	var out map[string]any
+	err := c.doJSON(ctx, http.MethodGet, "/v1/fabric/dashboard/alerts-count", nil, &out)
+	return out, err
+}
+

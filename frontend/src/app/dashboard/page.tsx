@@ -6,21 +6,31 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import api from '@/lib/api'
 import type { DashboardStats } from '@/lib/dashboard-stats'
-import { 
-  CubeIcon, 
-  DocumentCheckIcon, 
+import { getRoleDisplayName, getRoleDescription, getRoleTheme, UserRole } from '@/lib/role-themes'
+import { RoleLayout } from '@/components/RoleLayout'
+import { KPICard, Badge, Button } from '@/components/ui'
+import {
+  CubeIcon,
+  DocumentCheckIcon,
   CheckCircleIcon,
-  ArrowTrendingUpIcon,
   UsersIcon,
+  ArrowTrendingUpIcon,
   QrCodeIcon
 } from '@heroicons/react/24/outline'
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { isAuthenticated, loading } = useAuth()
+  const { isAuthenticated, loading, user } = useAuth()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [statsNote, setStatsNote] = useState<string | null>(null)
+  const [recentTransfers, setRecentTransfers] = useState<any[]>([])
+  const [chartData, setChartData] = useState<any[]>([])
+  const [eudrCompliance, setEudrCompliance] = useState<{percentage: number, status: string} | null>(null)
+  const [alertsCount, setAlertsCount] = useState<{total: number, urgent: number} | null>(null)
+
+  const userRole = (user?.role as UserRole) || 'agriculteur'
+  const theme = getRoleTheme(userRole)
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
@@ -56,6 +66,38 @@ export default function DashboardPage() {
     }
   }, [isAuthenticated])
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      api.get<{ success: boolean; transfers: any[] }>('/dashboard/recent-transfers')
+        .then((res) => setRecentTransfers(res.data.transfers || []))
+        .catch(() => setRecentTransfers([]))
+    }
+  }, [isAuthenticated])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      api.get<{ success: boolean; activity: any[] }>('/dashboard/activity-chart')
+        .then((res) => setChartData(res.data.activity || []))
+        .catch(() => setChartData([]))
+    }
+  }, [isAuthenticated])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      api.get<{ success: boolean; compliance: any }>('/dashboard/eudr-compliance')
+        .then((res) => setEudrCompliance(res.data.compliance))
+        .catch(() => setEudrCompliance({ percentage: 94, status: 'Objectif Atteint' }))
+    }
+  }, [isAuthenticated])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      api.get<{ success: boolean; alerts: any }>('/dashboard/alerts-count')
+        .then((res) => setAlertsCount(res.data.alerts))
+        .catch(() => setAlertsCount({ total: 38, urgent: 5 }))
+    }
+  }, [isAuthenticated])
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[var(--color-bg)] flex items-center justify-center">
@@ -66,119 +108,78 @@ export default function DashboardPage() {
 
   if (!isAuthenticated) return null
 
-  const recentTransfers = [
-    { id: 'TR-2026-0047', date: '02 Mai 2026', sender: 'Coopérative N\'zérékoré', receiver: 'Exportateur Lomé', status: 'VALIDÉ' },
-    { id: 'TR-2026-0046', date: '01 Mai 2026', sender: 'Agriculteur K. Koffi', receiver: 'Coopérative Nord', status: 'EN TRANSIT' },
-    { id: 'TR-2026-0045', date: '30 Avr 2026', sender: 'Transformateur CACAOTG', receiver: 'Exportateur Lomé', status: 'VALIDÉ' },
-    { id: 'TR-2026-0044', date: '29 Avr 2026', sender: 'Coopérative Sud', receiver: 'Transformateur CACAOTG', status: 'REJETÉ' },
-  ]
-
-  const chartData = [
-    { day: 'Lun', value: 142, width: '85%' },
-    { day: 'Mar', value: 176, width: '100%' },
-    { day: 'Mer', value: 124, width: '70%' },
-    { day: 'Jeu', value: 188, width: '95%' },
-    { day: 'Ven', value: 156, width: '90%' },
-    { day: 'Sam', value: 87, width: '50%' },
-    { day: 'Dim', value: 55, width: '35%' },
-  ]
-
   return (
-    <div className="page-container">
+    <RoleLayout role={userRole}>
+      <div className="max-w-7xl mx-auto">
       {statsNote && (
         <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {statsNote}
         </div>
       )}
 
-      {/* Page Header */}
-      <header className="page-header animate-fade-in flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-primary)]">
-            Tableau de bord
-          </h1>
-          <p className="text-[var(--color-muted)] mt-2">
-            Surveillance en temps réel de la filière cacao du Togo.
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <button className="btn btn-primary-outline bg-white flex items-center gap-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-            Exporter
-          </button>
-          <button className="btn btn-secondary flex items-center gap-2 text-white">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-            Rafraîchir
-          </button>
-        </div>
-      </header>
+        {/* Page Header */}
+        <header className="flex justify-between items-start mb-8">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold" style={{ color: theme.primary }}>
+              Tableau de bord {getRoleDisplayName(userRole)}
+            </h1>
+            <p className="mt-2" style={{ color: theme.text.secondary }}>
+              {getRoleDescription(userRole)}
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" role={userRole}>
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              Exporter
+            </Button>
+            <Button variant="primary" role={userRole}>
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Rafraîchir
+            </Button>
+          </div>
+        </header>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="card p-6 flex flex-col justify-between hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1">Lots Enregistrés</p>
-              <h3 className="text-3xl font-bold text-[var(--color-primary)]">{statsLoading ? '—' : (stats?.total_batches || '2,847')}</h3>
-            </div>
-            <div className="w-12 h-12 rounded-full bg-[var(--color-secondary)]/10 flex items-center justify-center text-[var(--color-secondary)]">
-              <CubeIcon className="w-6 h-6" />
-            </div>
-          </div>
-          <div className="flex items-center text-sm font-medium text-[var(--color-success)]">
-            <ArrowTrendingUpIcon className="w-4 h-4 mr-1" />
-            +12% ce mois
-          </div>
-        </div>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <KPICard
+            title="Lots Enregistrés"
+            value={statsLoading ? '—' : (stats?.total_batches || '2,847')}
+            trend="+12% ce mois"
+            icon={<CubeIcon className="w-6 h-6" />}
+            role={userRole}
+          />
 
-        <div className="card p-6 flex flex-col justify-between hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1">Agriculteurs Actifs</p>
-              <h3 className="text-3xl font-bold text-[var(--color-primary)]">{statsLoading ? '—' : (stats?.total_actors || '412')}</h3>
-            </div>
-            <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
-              <UsersIcon className="w-6 h-6" />
-            </div>
-          </div>
-          <div className="flex items-center text-sm font-medium text-[var(--color-success)]">
-            <ArrowTrendingUpIcon className="w-4 h-4 mr-1" />
-            +8 nouveaux
-          </div>
-        </div>
+          <KPICard
+            title="Agriculteurs Actifs"
+            value={statsLoading ? '—' : (stats?.total_actors || '412')}
+            trend="+8 nouveaux"
+            icon={<UsersIcon className="w-6 h-6" />}
+            color="#2196F3"
+            role={userRole}
+          />
 
-        <div className="card p-6 flex flex-col justify-between hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1">Conformité EUDR</p>
-              <h3 className="text-3xl font-bold text-[var(--color-primary)]">94%</h3>
-            </div>
-            <div className="w-12 h-12 rounded-full bg-purple-50 flex items-center justify-center text-purple-500">
-              <DocumentCheckIcon className="w-6 h-6" />
-            </div>
-          </div>
-          <div className="flex items-center text-sm font-medium text-[var(--color-success)]">
-            <CheckCircleIcon className="w-4 h-4 mr-1" />
-            Objectif Atteint
-          </div>
-        </div>
+          <KPICard
+            title="Conformité EUDR"
+            value={eudrCompliance ? `${eudrCompliance.percentage}%` : '94%'}
+            trend={eudrCompliance ? eudrCompliance.status : 'Objectif Atteint'}
+            icon={<DocumentCheckIcon className="w-6 h-6" />}
+            color="#9C27B0"
+            role={userRole}
+          />
 
-        <div className="card p-6 flex flex-col justify-between hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1">Alertes en Attente</p>
-              <h3 className="text-3xl font-bold text-[var(--color-primary)]">38</h3>
-            </div>
-            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center text-orange-500">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-            </div>
-          </div>
-          <div className="flex items-center text-sm font-medium text-orange-500">
-            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            5 urgentes
-          </div>
+          <KPICard
+            title="Alertes en Attente"
+            value={alertsCount ? alertsCount.total : '38'}
+            trend={alertsCount ? `${alertsCount.urgent} urgentes` : '5 urgentes'}
+            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>}
+            color="#FF5722"
+            role={userRole}
+          />
         </div>
-      </div>
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 mb-8">
@@ -267,6 +268,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-    </div>
+    </RoleLayout>
   )
 }

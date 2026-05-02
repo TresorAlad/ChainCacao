@@ -19,6 +19,10 @@ type Client interface {
 	GetBatch(ctx context.Context, batchID string) (models.Batch, error)
 	GetHistory(ctx context.Context, batchID string) ([]models.BatchHistoryEvent, error)
 	GetStats(ctx context.Context) map[string]any
+	GetRecentTransfers(ctx context.Context) ([]map[string]any, error)
+	GetActivityChart(ctx context.Context) ([]map[string]any, error)
+	GetEUDRCompliance(ctx context.Context) (map[string]any, error)
+	GetAlertsCount(ctx context.Context) (map[string]any, error)
 }
 
 // InMemoryClient simule Fabric pour le dev local et tests d'integration API.
@@ -176,6 +180,65 @@ func (c *InMemoryClient) GetStats(_ context.Context) map[string]any {
 		"lots_by_statut":   byStatus,
 		"generated_at_utc": time.Now().UTC().Format(time.RFC3339),
 	}
+}
+
+func (c *InMemoryClient) GetRecentTransfers(_ context.Context) ([]map[string]any, error) {
+	return []map[string]any{
+		{
+			"id":       "TR-2026-0047",
+			"date":     "02 Mai 2026",
+			"sender":   "Coopérative N'zérékoré",
+			"receiver": "Exportateur Lomé",
+			"status":   "VALIDÉ",
+		},
+		{
+			"id":       "TR-2026-0046",
+			"date":     "01 Mai 2026",
+			"sender":   "Agriculteur K. Koffi",
+			"receiver": "Coopérative Nord",
+			"status":   "EN_TRANSIT",
+		},
+		{
+			"id":       "TR-2026-0045",
+			"date":     "30 Avr 2026",
+			"sender":   "Transformateur CACAOTG",
+			"receiver": "Exportateur Lomé",
+			"status":   "VALIDÉ",
+		},
+		{
+			"id":       "TR-2026-0044",
+			"date":     "29 Avr 2026",
+			"sender":   "Coopérative Sud",
+			"receiver": "Transformateur CACAOTG",
+			"status":   "REJETÉ",
+		},
+	}, nil
+}
+
+func (c *InMemoryClient) GetActivityChart(_ context.Context) ([]map[string]any, error) {
+	return []map[string]any{
+		{"day": "Lun", "value": 142, "width": "85%"},
+		{"day": "Mar", "value": 176, "width": "100%"},
+		{"day": "Mer", "value": 124, "width": "70%"},
+		{"day": "Jeu", "value": 188, "width": "95%"},
+		{"day": "Ven", "value": 156, "width": "90%"},
+		{"day": "Sam", "value": 87, "width": "50%"},
+		{"day": "Dim", "value": 55, "width": "35%"},
+	}, nil
+}
+
+func (c *InMemoryClient) GetEUDRCompliance(_ context.Context) (map[string]any, error) {
+	return map[string]any{
+		"percentage": 94,
+		"status":     "Objectif Atteint",
+	}, nil
+}
+
+func (c *InMemoryClient) GetAlertsCount(_ context.Context) (map[string]any, error) {
+	return map[string]any{
+		"total":  38,
+		"urgent": 5,
+	}, nil
 }
 
 func newTxHash() string {

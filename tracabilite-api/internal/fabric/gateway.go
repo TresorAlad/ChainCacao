@@ -299,3 +299,70 @@ func (g *GatewayClient) GetStats(ctx context.Context) map[string]any {
 	}
 	return m
 }
+
+func (g *GatewayClient) GetRecentTransfers(ctx context.Context) ([]map[string]any, error) {
+	// TODO: Implement actual smart contract call to get recent transfers
+	// For now, return mock data
+	return []map[string]any{
+		{
+			"id":       "TR-2026-0047",
+			"date":     "02 Mai 2026",
+			"sender":   "Coopérative N'zérékoré",
+			"receiver": "Exportateur Lomé",
+			"status":   "VALIDÉ",
+		},
+		{
+			"id":       "TR-2026-0046",
+			"date":     "01 Mai 2026",
+			"sender":   "Agriculteur K. Koffi",
+			"receiver": "Coopérative Nord",
+			"status":   "EN_TRANSIT",
+		},
+		{
+			"id":       "TR-2026-0045",
+			"date":     "30 Avr 2026",
+			"sender":   "Transformateur CACAOTG",
+			"receiver": "Exportateur Lomé",
+			"status":   "VALIDÉ",
+		},
+		{
+			"id":       "TR-2026-0044",
+			"date":     "29 Avr 2026",
+			"sender":   "Coopérative Sud",
+			"receiver": "Transformateur CACAOTG",
+			"status":   "REJETÉ",
+		},
+	}, nil
+}
+
+func (g *GatewayClient) GetActivityChart(ctx context.Context) ([]map[string]any, error) {
+	// TODO: Implement actual smart contract call to get activity chart data
+	// For now, return mock data
+	return []map[string]any{
+		{"day": "Lun", "value": 142, "width": "85%"},
+		{"day": "Mar", "value": 176, "width": "100%"},
+		{"day": "Mer", "value": 124, "width": "70%"},
+		{"day": "Jeu", "value": 188, "width": "95%"},
+		{"day": "Ven", "value": 156, "width": "90%"},
+		{"day": "Sam", "value": 87, "width": "50%"},
+		{"day": "Dim", "value": 55, "width": "35%"},
+	}, nil
+}
+
+func (g *GatewayClient) GetEUDRCompliance(ctx context.Context) (map[string]any, error) {
+	// TODO: Implement actual smart contract call to get EUDR compliance
+	// For now, return mock data
+	return map[string]any{
+		"percentage": 94,
+		"status":     "Objectif Atteint",
+	}, nil
+}
+
+func (g *GatewayClient) GetAlertsCount(ctx context.Context) (map[string]any, error) {
+	// TODO: Implement actual smart contract call to get alerts count
+	// For now, return mock data
+	return map[string]any{
+		"total":  38,
+		"urgent": 5,
+	}, nil
+}

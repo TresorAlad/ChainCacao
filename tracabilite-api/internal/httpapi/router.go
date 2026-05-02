@@ -35,6 +35,10 @@ func NewRouter(handler *Handler, jwt *auth.JWTService, rdb *redis.Client) *gin.E
 			protected.GET("/eudr/:id/report", auth.RequireAnyRole(models.RoleDistributeur, models.RoleAdmin), handler.EUDRReport)
 			protected.POST("/sync", auth.RequireAnyRole(models.RoleAgriculteur, models.RoleAdmin), handler.SyncOfflineLots)
 			protected.GET("/dashboard/stats", auth.RequireAnyRole(models.RoleAdmin), handler.DashboardStats)
+			protected.GET("/dashboard/recent-transfers", auth.RequireAnyRole(models.RoleAdmin), handler.RecentTransfers)
+			protected.GET("/dashboard/activity-chart", auth.RequireAnyRole(models.RoleAdmin), handler.ActivityChart)
+			protected.GET("/dashboard/eudr-compliance", auth.RequireAnyRole(models.RoleAdmin), handler.EUDRCompliance)
+			protected.GET("/dashboard/alerts-count", auth.RequireAnyRole(models.RoleAdmin), handler.AlertsCount)
 
 			// Compat routes v1 precedente
 			protected.POST("/batch/create", auth.RequireAnyRole(

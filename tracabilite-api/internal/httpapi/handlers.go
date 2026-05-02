@@ -49,14 +49,14 @@ type registerRequest struct {
 	Role     models.Role `json:"role" binding:"required"`
 }
 
-// Signup public (mobile agriculteur). Role est force a "agriculteur".
+// Signup public - Role optionnel, defaut "agriculteur".
 // Les champs supplementaires (GPS, surface, etc.) peuvent etre ajoutes cote SQL plus tard.
 type signupRequest struct {
 	Nom          string `json:"nom" binding:"required"`
 	Email        string `json:"email" binding:"required"`
 	Password     string `json:"password" binding:"required"`
 	OrgID        string `json:"org_id"`
-	Role         string `json:"role"` // ignore/compat
+	Role         string `json:"role"` // optionnel, defaut "agriculteur"
 	GPSLocation  string `json:"gps_location"`
 	FieldSurface string `json:"field_surface"`
 	OrgName      string `json:"org_name"`
@@ -121,7 +121,13 @@ func (h *Handler) Signup(c *gin.Context) {
 		orgID = "AgriculteurMSP"
 	}
 
-	actor, err := h.actors.Register(c.Request.Context(), req.Nom, req.Email, req.Password, orgID, models.RoleAgriculteur)
+	// Utiliser le role fourni ou "agriculteur" par defaut
+	role := models.Role(req.Role)
+	if role == "" {
+		role = models.RoleAgriculteur
+	}
+
+	actor, err := h.actors.Register(c.Request.Context(), req.Nom, req.Email, req.Password, orgID, role)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -417,6 +423,42 @@ func (h *Handler) SyncOfflineLots(c *gin.Context) {
 
 func (h *Handler) DashboardStats(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "stats": h.batch.GetStats(c.Request.Context())})
+}
+
+func (h *Handler) RecentTransfers(c *gin.Context) {
+	transfers, err := h.batch.GetRecentTransfers(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "transfers": transfers})
+}
+
+func (h *Handler) ActivityChart(c *gin.Context) {
+	activity, err := h.batch.GetActivityChart(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "activity": activity})
+}
+
+func (h *Handler) EUDRCompliance(c *gin.Context) {
+	compliance, err := h.batch.GetEUDRCompliance(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "compliance": compliance})
+}
+
+func (h *Handler) AlertsCount(c *gin.Context) {
+	alerts, err := h.batch.GetAlertsCount(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "alerts": alerts})
 }
 
 func (h *Handler) ListActors(c *gin.Context) {

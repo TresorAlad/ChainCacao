@@ -276,6 +276,22 @@ func (s *Service) GetStats(ctx context.Context) map[string]any {
 	return s.fabricClient.GetStats(ctx)
 }
 
+func (s *Service) GetRecentTransfers(ctx context.Context) ([]map[string]any, error) {
+	return s.fabricClient.GetRecentTransfers(ctx)
+}
+
+func (s *Service) GetActivityChart(ctx context.Context) ([]map[string]any, error) {
+	return s.fabricClient.GetActivityChart(ctx)
+}
+
+func (s *Service) GetEUDRCompliance(ctx context.Context) (map[string]any, error) {
+	return s.fabricClient.GetEUDRCompliance(ctx)
+}
+
+func (s *Service) GetAlertsCount(ctx context.Context) (map[string]any, error) {
+	return s.fabricClient.GetAlertsCount(ctx)
+}
+
 func (s *Service) enrichOwnerOrg(ctx context.Context, b models.Batch) models.Batch {
 	owner, err := s.actors.FindByID(ctx, b.Proprietaire)
 	if err != nil {

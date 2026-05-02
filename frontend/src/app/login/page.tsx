@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { EyeIcon, EyeOffIcon } from 'lucide-react'
 import { BrandLogo } from '@/components/BrandLogo'
+import { getRoleBasedRedirect, getRoleDisplayName } from '@/lib/role-utils'
 
 export default function LoginPage() {
   const [useActorLogin, setUseActorLogin] = useState(false)
@@ -25,12 +26,13 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      if (useActorLogin) {
-        await login(actorId.trim(), pin, 'actor')
-      } else {
-        await login(email.trim(), password, 'email')
-      }
-      router.replace('/dashboard')
+      const user = useActorLogin
+        ? await login(actorId.trim(), pin, 'actor')
+        : await login(email.trim(), password, 'email')
+
+      // Rediriger vers le dashboard approprié selon le rôle
+      const redirectPath = getRoleBasedRedirect(user.role)
+      router.replace(redirectPath)
     } catch (err: any) {
       setError(err.message || 'Identifiants invalides')
     } finally {
