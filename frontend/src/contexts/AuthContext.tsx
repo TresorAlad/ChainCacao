@@ -12,6 +12,32 @@ interface User {
 
 type LoginMode = 'email' | 'actor'
 
+interface AuthResponse {
+  success?: boolean
+  token?: string
+  actor?: { id?: string; email?: string; role?: string }
+  error?: string
+  message?: string
+}
+
+function networkErrorMessage(): string {
+  return (
+    'Impossible de contacter l’API (réseau ou blocage navigateur). ' +
+    'Si le site est en HTTPS et l’API en HTTP, définissez NEXT_PUBLIC_API_URL=/api/v1 ' +
+    'et API_REWRITE_TARGET=http://<hôte-backend>:8080/api/v1 dans l’environnement du serveur Next.'
+  )
+}
+
+async function parseAuthJson(res: Response): Promise<AuthResponse> {
+  const text = await res.text()
+  if (!text) return {}
+  try {
+    return JSON.parse(text) as AuthResponse
+  } catch {
+    return {}
+  }
+}
+
 interface AuthContextType {
   user: User | null
   loading: boolean
@@ -58,57 +84,94 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ): Promise<User> => {
     const body =
       mode === 'actor'
-        ? { actor_id: identifier, pin: secret }
-        : { email: identifier.trim(), password: secret }
-    const res = await fetch(`${getApiBaseUrl()}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.error || err.message || 'Identifiants invalides')
+        ? { actor_id: identifier.trim(), pin: secret }
+        : { email: identifier.trim().toLowerCase(), password: secret }
+
+    let res: Response
+    try {
+      res = await fetch(`${getApiBaseUrl()}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(body),
+      })
+    } catch {
+      throw new Error(networkErrorMessage())
     }
-    const data = await res.json()
-    localStorage.setItem('jwt', data.token)
-    const payload = JSON.parse(atob(data.token.split('.')[1]))
-    const u = {
-      token: data.token,
-      actor_id: payload.actor_id || payload.sub,
-      role: payload.role || 'user',
-      email: payload.email,
+
+    const data = await parseAuthJson(res)
+
+    if (!res.ok) {
+      throw new Error(data.error || data.message || 'Identifiants invalides')
+    }
+
+    const token = typeof data.token === 'string' ? data.token : ''
+    if (!token) {
+      throw new Error(data.error || data.message || 'Réponse serveur sans jeton de session')
+    }
+
+    localStorage.setItem('jwt', token)
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    const emailFromActor =
+      data.actor && typeof data.actor === 'object' && typeof data.actor.email === 'string'
+        ? data.actor.email
+        : undefined
+    const u: User = {
+      token,
+      actor_id: payload.actor_id || payload.sub || data.actor?.id,
+      role: payload.role || data.actor?.role || 'user',
+      email: payload.email || emailFromActor,
     }
     setUser(u)
     return u
   }
 
   const register = async (email: string, password: string, name: string): Promise<boolean> => {
-    const res = await fetch(`${getApiBaseUrl()}/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nom: name, email, password, org_id: '' }),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.error || err.message || 'Erreur création compte')
+    const payloadSignup = {
+      nom: name.trim(),
+      email: email.trim().toLowerCase(),
+      password,
+      org_id: '',
     }
-    const data = await res.json().catch(() => ({}))
-    if (data.token) {
-      localStorage.setItem('jwt', data.token)
-      const payload = JSON.parse(atob(data.token.split('.')[1]))
-      setUser({
-        token: data.token,
-        actor_id: payload.actor_id || payload.sub,
-        role: payload.role || 'user',
-        email: payload.email,
+
+    let res: Response
+    try {
+      res = await fetch(`${getApiBaseUrl()}/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(payloadSignup),
       })
-      return true
+    } catch {
+      throw new Error(networkErrorMessage())
     }
-    throw new Error(
-      typeof data.error === 'string'
-        ? data.error
-        : 'Inscription enregistrée mais aucune session reçue. Connectez-vous avec votre email.'
-    )
+
+    const data = await parseAuthJson(res)
+
+    if (!res.ok) {
+      throw new Error(data.error || data.message || 'Erreur lors de la création du compte')
+    }
+
+    const token = typeof data.token === 'string' ? data.token : ''
+    if (!token) {
+      throw new Error(
+        typeof data.error === 'string'
+          ? data.error
+          : 'Inscription enregistrée mais aucune session reçue. Connectez-vous avec votre email.'
+      )
+    }
+
+    localStorage.setItem('jwt', token)
+    const jwtPayload = JSON.parse(atob(token.split('.')[1]))
+    const emailFromActor =
+      data.actor && typeof data.actor === 'object' && typeof data.actor.email === 'string'
+        ? data.actor.email
+        : undefined
+    setUser({
+      token,
+      actor_id: jwtPayload.actor_id || jwtPayload.sub || data.actor?.id,
+      role: jwtPayload.role || data.actor?.role || 'user',
+      email: jwtPayload.email || emailFromActor || email.trim().toLowerCase(),
+    })
+    return true
   }
 
   const logout = () => {
