@@ -10,12 +10,17 @@ type ExpoExtra = { apiUrl?: string };
 /** URL de base : `extra.apiUrl` injecté par app.config.js (source unique, pas d’environnement). */
 export function getApiBaseUrl(): string {
   const fromExtra = (Constants.expoConfig?.extra as ExpoExtra | undefined)?.apiUrl;
+  // #region agent log
+  fetch('http://127.0.0.1:7502/ingest/021a24f4-c602-42f7-9527-28f6d89d0b6f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0a727a'},body:JSON.stringify({sessionId:'0a727a',hypothesisId:'A-C',location:'services/api.ts:getApiBaseUrl',message:'getApiBaseUrl called',data:{fromExtra,expoConfigExists:!!Constants.expoConfig,extraKeys:Constants.expoConfig?.extra?Object.keys(Constants.expoConfig.extra):null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   if (typeof fromExtra === 'string' && fromExtra.trim()) return fromExtra.trim();
-  /* Secours tests / hors Expo — doit rester aligné avec app.config.js */
   return 'http://13.60.214.56:8080';
 }
 
 export const API_BASE = getApiBaseUrl();
+// #region agent log
+fetch('http://127.0.0.1:7502/ingest/021a24f4-c602-42f7-9527-28f6d89d0b6f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0a727a'},body:JSON.stringify({sessionId:'0a727a',hypothesisId:'C',location:'services/api.ts:module-init',message:'API_BASE resolved at module load',data:{API_BASE},timestamp:Date.now()})}).catch(()=>{});
+// #endregion
 
 let sessionInvalidateHandler: (() => Promise<void>) | null = null;
 

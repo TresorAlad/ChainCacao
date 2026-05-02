@@ -1,10 +1,27 @@
 /* eslint-env node */
 /**
- * URL de l’API : définie uniquement ici (pas de .env / EXPO_PUBLIC_*).
- * Cleartext Android uniquement si l’URL commence par http://
+ * URL de l'API : définie uniquement ici (pas de .env / EXPO_PUBLIC_*).
+ * Cleartext Android forcé via withAndroidManifest pour les URL http://.
  */
+const { withAndroidManifest } = require('@expo/config-plugins');
+
 const apiUrl = 'http://13.60.214.56:8080';
 const usesCleartextTraffic = apiUrl.startsWith('http://');
+
+/**
+ * Plugin config : garantit android:usesCleartextTraffic="true" dans le manifest
+ * lorsque l'API est en HTTP — expo prebuild seul ne l'injecte pas toujours.
+ */
+const withCleartextPlugin = (config) => {
+  if (!usesCleartextTraffic) return config;
+  return withAndroidManifest(config, (c) => {
+    const app = c.modResults.manifest.application?.[0];
+    if (app) {
+      app.$['android:usesCleartextTraffic'] = 'true';
+    }
+    return c;
+  });
+};
 
 module.exports = {
   expo: {
@@ -51,6 +68,7 @@ module.exports = {
       favicon: './assets/images/favicon.png',
     },
     plugins: [
+      withCleartextPlugin,
       'expo-router',
       [
         'expo-location',
@@ -67,7 +85,7 @@ module.exports = {
       ],
       '@react-native-community/datetimepicker',
     ],
-    /** Projet EAS (@tresor_228/ChainCacao) — avec app.config.js dynamique, l’ID doit rester défini ici. */
+    /** Projet EAS (@tresor_228/ChainCacao) — avec app.config.js dynamique, l'ID doit rester défini ici. */
     extra: {
       eas: {
         projectId: 'f6a18683-7b87-4986-8742-0bf31e0078a3',
