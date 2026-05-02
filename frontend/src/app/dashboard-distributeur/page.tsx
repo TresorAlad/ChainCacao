@@ -9,12 +9,15 @@ import api, { type Batch } from '@/lib/api'
 import {
   BuildingStorefrontIcon,
   ShoppingBagIcon,
-  MapPinIcon,
   TruckIcon,
-  PlusIcon,
   MagnifyingGlassIcon,
+  InboxArrowDownIcon,
+  ArrowRightIcon,
+  PlusIcon,
+  MapPinIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import toast from 'react-hot-toast'
 
 export default function DistributeurDashboardPage() {
   const { isAuthenticated, loading, user } = useAuth()
@@ -24,24 +27,39 @@ export default function DistributeurDashboardPage() {
   const [searchId, setSearchId] = useState('')
   const [foundLot, setFoundLot] = useState<Batch | null | 'not-found'>(null)
   const [searching, setSearching] = useState(false)
+  const [myLots, setMyLots] = useState<Batch[]>([])
+  const [lotsLoading, setLotsLoading] = useState(false)
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace('/login')
   }, [isAuthenticated, loading, router])
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    setLotsLoading(true)
+    api.get<{ success: boolean; lots: Batch[] }>('/actors/me/lots')
+      .then((res) => setMyLots(res.data.lots || []))
+      .catch(() => setMyLots([]))
+      .finally(() => setLotsLoading(false))
+  }, [isAuthenticated])
 
   const fetchLot = async (id: string) => {
     if (!id.trim()) return
     setSearching(true)
     setFoundLot(null)
     try {
-      const res = await api.get<{ batch: Batch }>(`/lot/${id.trim()}`)
-      setFoundLot((res.data.batch ?? res.data) as Batch)
+      const res = await api.get<Batch>(`/lot/${id.trim()}`)
+      setFoundLot(res.data as Batch)
     } catch {
       setFoundLot('not-found')
+      toast.error('Lot introuvable')
     } finally {
       setSearching(false)
     }
   }
+
+  const statusColor = (s?: string) => s === 'transfere' ? 'bg-blue-100 text-blue-700' : s === 'exporte' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'
+  const statusLabel = (s?: string) => s === 'transfere' ? 'Transféré' : s === 'exporte' ? 'Exporté' : s === 'cree' ? 'Reçu / Créé' : s || '—'
 
   if (loading) {
     return (
@@ -109,9 +127,42 @@ export default function DistributeurDashboardPage() {
           </div>
         </div>
 
+        {/* Lots reçus */}
+        <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)] mb-10">
+          <div className="flex items-center gap-3 mb-6">
+            <InboxArrowDownIcon className="w-6 h-6 text-[#33691E]" />
+            <h3 className="text-xl font-black text-[var(--color-primary)]">
+              Lots en ma possession {myLots.length > 0 && <span className="text-sm font-bold text-[#33691E]">({myLots.length})</span>}
+            </h3>
+          </div>
+          {lotsLoading ? (
+            <div className="py-6 flex justify-center"><div className="w-8 h-8 border-4 border-[#33691E] border-t-transparent rounded-full animate-spin" /></div>
+          ) : myLots.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">Aucun lot reçu. Les lots transférés vers vous apparaîtront ici.</p>
+          ) : (
+            <div className="space-y-3">
+              {myLots.map((lot) => (
+                <div key={lot.id} className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-[#F9FBF7] border border-gray-100">
+                  <div>
+                    <p className="text-sm font-black text-[#1B5E20] font-mono">{lot.id}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{lot.culture} — {lot.quantite} kg</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${statusColor(lot.statut)}`}>{statusLabel(lot.statut)}</span>
+                    <Link href={`/export?ids=${lot.id}`} className="px-3 py-1.5 text-xs font-black bg-[#33691E] text-white rounded-xl hover:brightness-110">Exporter</Link>
+                    <Link href={`/transfer?lot=${lot.id}`} className="flex items-center gap-1 px-3 py-1.5 text-xs font-black bg-white border border-gray-200 text-[#33691E] rounded-xl hover:bg-[#F1F8E9]">
+                      <ArrowRightIcon className="w-3 h-3" /> Transférer
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Recherche lot */}
         <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)] mb-10">
-          <h3 className="text-xl font-black text-[var(--color-primary)] mb-6">Rechercher un lot à distribuer</h3>
+          <h3 className="text-xl font-black text-[var(--color-primary)] mb-4 flex items-center gap-2"><MagnifyingGlassIcon className="w-5 h-5 text-[#33691E]" />Rechercher un lot à distribuer</h3>
           <div className="flex gap-3 mb-4">
             <div className="relative flex-1">
               <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-3 text-gray-400" />
