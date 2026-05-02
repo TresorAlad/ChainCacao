@@ -183,36 +183,28 @@ func (c *InMemoryClient) GetStats(_ context.Context) map[string]any {
 }
 
 func (c *InMemoryClient) GetRecentTransfers(_ context.Context) ([]map[string]any, error) {
-	return []map[string]any{
-		{
-			"id":       "TR-2026-0047",
-			"date":     "02 Mai 2026",
-			"sender":   "Coopérative N'zérékoré",
-			"receiver": "Exportateur Lomé",
-			"status":   "VALIDÉ",
-		},
-		{
-			"id":       "TR-2026-0046",
-			"date":     "01 Mai 2026",
-			"sender":   "Agriculteur K. Koffi",
-			"receiver": "Coopérative Nord",
-			"status":   "EN_TRANSIT",
-		},
-		{
-			"id":       "TR-2026-0045",
-			"date":     "30 Avr 2026",
-			"sender":   "Transformateur CACAOTG",
-			"receiver": "Exportateur Lomé",
-			"status":   "VALIDÉ",
-		},
-		{
-			"id":       "TR-2026-0044",
-			"date":     "29 Avr 2026",
-			"sender":   "Coopérative Sud",
-			"receiver": "Transformateur CACAOTG",
-			"status":   "REJETÉ",
-		},
-	}, nil
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// Extraire les vrais evenements de transfert depuis l'historique en memoire.
+	var transfers []map[string]any
+	for batchID, events := range c.history {
+		for _, ev := range events {
+			if ev.Type != "transfert" {
+				continue
+			}
+			transfers = append(transfers, map[string]any{
+				"id":         batchID,
+				"date":       ev.CreatedAtISO,
+				"from_actor": ev.FromActorID,
+				"to_actor":   ev.ToActorID,
+				"tx_hash":    ev.TxHash,
+				"status":     "VALIDÉ",
+				"commentaire": ev.Commentaire,
+			})
+		}
+	}
+	return transfers, nil
 }
 
 func (c *InMemoryClient) GetActivityChart(_ context.Context) ([]map[string]any, error) {

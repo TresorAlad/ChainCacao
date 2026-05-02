@@ -121,10 +121,31 @@ func (h *Handler) Signup(c *gin.Context) {
 		orgID = "AgriculteurMSP"
 	}
 
-	// Utiliser le role fourni ou "agriculteur" par defaut
-	role := models.Role(req.Role)
+	// Normaliser le role : "exportateur" (frontend mobile) → "distributeur" dans la base.
+	// "verificateur" est accepte tel quel.
+	normalizedRole := req.Role
+	if normalizedRole == "exportateur" {
+		normalizedRole = "distributeur"
+	}
+	role := models.Role(normalizedRole)
 	if role == "" {
 		role = models.RoleAgriculteur
+	}
+
+	// Mettre a jour l'orgID si absent ou generique selon le role.
+	if orgID == "" || orgID == "AgriculteurMSP" {
+		switch role {
+		case models.RoleCooperative:
+			orgID = "CooperativeMSP"
+		case models.RoleTransformateur:
+			orgID = "TransformateurMSP"
+		case models.RoleDistributeur:
+			orgID = "DistributeurMSP"
+		case models.RoleVerificateur:
+			orgID = "VerificateurMSP"
+		case models.RoleAdmin:
+			orgID = "PlatformMSP"
+		}
 	}
 
 	actor, err := h.actors.Register(c.Request.Context(), req.Nom, req.Email, req.Password, orgID, role)

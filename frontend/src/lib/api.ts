@@ -1,5 +1,6 @@
 import axios, { AxiosError } from 'axios'
 import { getApiBaseUrl, SESSION_EXPIRED_EVENT } from './api-base'
+import { clearAuthSessionCookie } from './auth-session-cookie'
 
 const api = axios.create({
   baseURL: getApiBaseUrl(),
@@ -38,9 +39,10 @@ api.interceptors.response.use(
     const status = err.response?.status
     if (typeof window !== 'undefined' && status === 401) {
       localStorage.removeItem('jwt')
+      clearAuthSessionCookie()
       window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
       const path = window.location.pathname
-      const publicPaths = /^\/($|login|register|verify)/
+      const publicPaths = /^\/($|login|register|verify|compte-application-mobile)/
       if (!publicPaths.test(path)) {
         window.location.href = '/login'
       }

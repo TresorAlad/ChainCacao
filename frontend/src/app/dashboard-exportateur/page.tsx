@@ -4,220 +4,148 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { RoleLayout } from '@/components/RoleLayout'
-import { KPICard, Badge, Button } from '@/components/ui'
 import { getRoleTheme } from '@/lib/role-themes'
+import api, { type ActorDTO } from '@/lib/api'
 import {
   GlobeAmericasIcon,
   TruckIcon,
   CurrencyDollarIcon,
-  ClockIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline'
+import Link from 'next/link'
 
 export default function ExportateurDashboardPage() {
   const { isAuthenticated, loading, user } = useAuth()
   const router = useRouter()
   const theme = getRoleTheme('exportateur')
 
-  const [stats, setStats] = useState({
-    totalShipments: 15,
-    inTransit: 8,
-    completed: 7,
-    revenue: 2450000
-  })
-
-  const [recentActivities] = useState([
-    { id: 'EXP-2026-001', destination: 'Europe', status: 'in-transit', date: '2026-05-01' },
-    { id: 'EXP-2026-002', destination: 'Asie', status: 'completed', date: '2026-04-28' },
-    { id: 'EXP-2026-003', destination: 'Amérique', status: 'preparation', date: '2026-04-30' }
-  ])
+  const [actors, setActors] = useState<ActorDTO[]>([])
+  const [fetching, setFetching] = useState(true)
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.replace('/login')
-    }
+    if (!loading && !isAuthenticated) router.replace('/login')
   }, [isAuthenticated, loading, router])
 
-  if (loading) {
+  useEffect(() => {
+    if (!isAuthenticated) return
+    api.get<ActorDTO[] | { actors?: ActorDTO[]; data?: ActorDTO[] }>('/actors')
+      .then((res) => {
+        const raw = res.data
+        const list = Array.isArray(raw) ? raw : (raw as { actors?: ActorDTO[] }).actors ?? (raw as { data?: ActorDTO[] }).data ?? []
+        setActors(list)
+      })
+      .catch(() => setActors([]))
+      .finally(() => setFetching(false))
+  }, [isAuthenticated])
+
+  if (loading || fetching) {
     return (
       <div style={{ backgroundColor: theme.surface, minHeight: '100vh' }} className="flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-current border-t-transparent" style={{ color: theme.primary }}></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-t-transparent" style={{ borderColor: theme.primary, borderTopColor: 'transparent' }} />
       </div>
     )
   }
 
-  if (!isAuthenticated || user?.role !== 'exportateur') return null
-
-  const getActivityIcon = (status: string) => {
-    switch (status) {
-      case 'in-transit':
-        return <TruckIcon className="w-5 h-5" style={{ color: theme.accent }} />
-      case 'completed':
-        return <CheckCircleIcon className="w-5 h-5" style={{ color: theme.secondary }} />
-      case 'preparation':
-        return <ClockIcon className="w-5 h-5" style={{ color: '#FF9800' }} />
-      default:
-        return <GlobeAmericasIcon className="w-5 h-5" style={{ color: theme.text.muted }} />
-    }
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'in-transit':
-        return <Badge variant="warning" role="exportateur">EN TRANSIT</Badge>
-      case 'completed':
-        return <Badge variant="success" role="exportateur">LIVRÉ</Badge>
-      case 'preparation':
-        return <Badge variant="info" role="exportateur">EN PRÉPARATION</Badge>
-      default:
-        return <Badge variant="info" role="exportateur">{status.toUpperCase()}</Badge>
-    }
-  }
+  // Le rôle 'exportateur' (mobile) est mappé en 'distributeur' côté API; les deux accèdent à ce tableau de bord.
+  const role = user?.role
+  if (!isAuthenticated || (role !== 'exportateur' && role !== 'distributeur' && role !== 'admin')) return null
 
   return (
     <RoleLayout role="exportateur">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <header className="flex justify-between items-center mb-8">
+      <div className="w-full py-6 sm:py-8">
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: theme.primary }}>
-              Bonjour, Exportateur
-            </h1>
-            <p className="text-sm mt-1" style={{ color: theme.text.secondary }}>
-              Période: Octobre 2023 – Mars 2024
+            <h1 className="text-4xl font-bold tracking-tight text-[var(--color-primary)]">Gestion des Exportations</h1>
+            <p className="text-lg mt-2 font-medium opacity-60 text-[var(--color-muted)]">
+              Suivi logistique et conformité internationale des lots.
             </p>
           </div>
-          <Button variant="primary" role="exportateur">
-            + Nouvelle Exportation
-          </Button>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/eudr-report"
+              className="px-6 py-2.5 bg-white border border-[var(--color-border)] rounded-xl text-sm font-bold text-[var(--color-muted)] hover:bg-gray-50 transition-colors"
+            >
+              Rapports EUDR
+            </Link>
+            <Link
+              href="/export"
+              className="flex items-center gap-2 px-6 py-2.5 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all"
+            >
+              <PlusIcon className="w-5 h-5" />
+              Nouvelle Exportation
+            </Link>
+          </div>
         </header>
 
-        {/* Alert Banner */}
-        <div
-          className="rounded-xl p-6 mb-8"
-          style={{
-            background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%)`,
-            color: 'white'
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Nouvelle Exportation</h3>
-              <p className="text-white/80 text-sm mb-4">
-                Préparez votre prochaine expédition avec nos outils de traçabilité intégrés.
-              </p>
-              <div className="flex items-center space-x-6 text-sm">
-                <div className="flex items-center">
-                  <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
-                  <span>EN LIGNE</span>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <span>Expéditions: {stats.totalShipments}</span>
-                  <span>En transit: {stats.inTransit}</span>
-                  <span>Complétées: {stats.completed}</span>
-                </div>
-              </div>
+        {/* KPI Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+          <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
+            <div className="w-10 h-10 bg-[#E8F5E9] rounded-xl flex items-center justify-center mb-4">
+              <GlobeAmericasIcon className="w-6 h-6 text-[#2E7D32]" />
             </div>
-            <Button
-              variant="primary"
-              role="exportateur"
-              className="bg-white text-gray-900 hover:bg-gray-50"
-            >
-              Démarrer maintenant →
-            </Button>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Expéditions Totales</p>
+            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">—</p>
+          </div>
+
+          <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
+            <div className="w-10 h-10 bg-[#FFF3E0] rounded-xl flex items-center justify-center mb-4">
+              <TruckIcon className="w-6 h-6 text-[#E65100]" />
+            </div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">En Transit</p>
+            <p className="text-3xl font-black text-[#E65100] mt-1">—</p>
+          </div>
+
+          <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
+            <div className="w-10 h-10 bg-[#E3F2FD] rounded-xl flex items-center justify-center mb-4">
+              <CheckCircleIcon className="w-6 h-6 text-[#1565C0]" />
+            </div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Partenaires réseau</p>
+            <p className="text-3xl font-black text-[#2E7D32] mt-1">{actors.length}</p>
+          </div>
+
+          <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
+            <div className="w-10 h-10 bg-[#F3E5F5] rounded-xl flex items-center justify-center mb-4">
+              <CurrencyDollarIcon className="w-6 h-6 text-[#7B1FA2]" />
+            </div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Chiffre d&apos;affaires</p>
+            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">—</p>
           </div>
         </div>
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <KPICard
-            title="Expéditions totales"
-            value={stats.totalShipments.toString()}
-            icon={<GlobeAmericasIcon className="w-6 h-6" />}
-            role="exportateur"
-          />
-
-          <KPICard
-            title="En transit"
-            value={stats.inTransit.toString()}
-            icon={<TruckIcon className="w-6 h-6" />}
-            color={theme.accent}
-            role="exportateur"
-          />
-
-          <KPICard
-            title="Complétées"
-            value={stats.completed.toString()}
-            icon={<CheckCircleIcon className="w-6 h-6" />}
-            color={theme.secondary}
-            role="exportateur"
-          />
-
-          <KPICard
-            title="Chiffre d'affaires"
-            value={`${(stats.revenue / 1000000).toFixed(1)}M €`}
-            icon={<CurrencyDollarIcon className="w-6 h-6" />}
-            color="#F59E0B"
-            role="exportateur"
-          />
-        </div>
-
-        {/* World Map Placeholder */}
-        <div
-          className="rounded-xl p-6 mb-8 h-96 flex items-center justify-center"
-          style={{
-            backgroundColor: theme.card.background,
-            boxShadow: theme.card.shadow,
-            background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
-          }}
-        >
-          <div className="text-center">
-            <GlobeAmericasIcon className="w-16 h-16 mx-auto mb-4 text-white/50" />
-            <h3 className="text-xl font-semibold text-white mb-2">Carte des Destinations</h3>
-            <p className="text-white/70">Visualisez vos exportations mondiales en temps réel</p>
+        {/* Flux logistiques visuels (GPS) */}
+        <div className="bg-[#1A2E0D] rounded-[2rem] p-8 mb-10 shadow-xl relative overflow-hidden h-[340px]">
+          <div className="relative z-10">
+            <h3 className="text-2xl font-black text-white mb-2">Flux Logistiques Mondiaux</h3>
+            <p className="text-white/60 text-sm">Suivi de vos expéditions à travers le monde.</p>
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center opacity-20">
+            <GlobeAmericasIcon className="w-[600px] h-[600px] text-white" />
+          </div>
+          <div className="absolute bottom-8 right-8 bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse" />
+              <span className="text-xs font-bold text-white uppercase tracking-widest">Système de tracking actif</span>
+            </div>
           </div>
         </div>
 
-        {/* Recent Activities */}
-        <div
-          className="rounded-xl overflow-hidden"
-          style={{ backgroundColor: theme.card.background, boxShadow: theme.card.shadow }}
-        >
-          <div className="p-6 border-b" style={{ borderColor: theme.card.border }}>
-            <h2 className="text-xl font-bold" style={{ color: theme.primary }}>
-              Activités Récentes
-            </h2>
-          </div>
-
-          <div className="divide-y" style={{ borderColor: theme.card.border }}>
-            {recentActivities.map((activity, index) => (
-              <div key={index} className="p-6 flex items-center justify-between hover:opacity-75 transition-opacity">
-                <div className="flex items-center space-x-4">
-                  <div className="flex-shrink-0">
-                    {getActivityIcon(activity.status)}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium" style={{ color: theme.primary }}>
-                      {activity.id}
-                    </p>
-                    <p className="text-sm" style={{ color: theme.text.secondary }}>
-                      Destination: {activity.destination}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <span className="text-sm" style={{ color: theme.text.muted }}>
-                    {activity.date}
-                  </span>
-                  {getStatusBadge(activity.status)}
-                  <button className="p-1 rounded hover:bg-gray-100" style={{ color: theme.text.muted }}>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ))}
+        {/* Liens rapides */}
+        <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)]">
+          <h3 className="text-2xl font-black text-[var(--color-primary)] mb-6">Actions rapides</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Link href="/export" className="flex flex-col items-center gap-3 p-6 bg-[#F1F8E9] rounded-2xl hover:brightness-95 transition-all text-center">
+              <TruckIcon className="w-8 h-8 text-[#2E7D32]" />
+              <span className="text-sm font-bold text-[var(--color-primary)]">Marquer un lot exporté</span>
+            </Link>
+            <Link href="/lots" className="flex flex-col items-center gap-3 p-6 bg-gray-50 rounded-2xl hover:brightness-95 transition-all text-center">
+              <GlobeAmericasIcon className="w-8 h-8 text-[#1565C0]" />
+              <span className="text-sm font-bold text-[var(--color-primary)]">Gérer les lots</span>
+            </Link>
+            <Link href="/eudr-report" className="flex flex-col items-center gap-3 p-6 bg-gray-50 rounded-2xl hover:brightness-95 transition-all text-center">
+              <CheckCircleIcon className="w-8 h-8 text-[#7B1FA2]" />
+              <span className="text-sm font-bold text-[var(--color-primary)]">Rapport EUDR</span>
+            </Link>
           </div>
         </div>
       </div>

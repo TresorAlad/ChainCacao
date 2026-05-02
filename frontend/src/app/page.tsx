@@ -213,7 +213,9 @@ export default function HomePage() {
               </h1>
               
               <p className="text-lg md:text-xl text-[var(--color-muted)] mb-8 leading-relaxed max-w-xl">
-                Suivez chaque étape de votre chaîne d'approvisionnement avec une transparence totale. De la plantation à l'exportation, garantissez la qualité et l'authenticité de vos produits grâce à la technologie blockchain.
+                {
+                  "Suivez chaque étape de votre chaîne d'approvisionnement avec une transparence totale. De la plantation à l'exportation, garantissez la qualité et l'authenticité de vos produits grâce à la technologie blockchain."
+                }
               </p>
               
               <div className="flex flex-col sm:flex-row items-center gap-4 mb-10">

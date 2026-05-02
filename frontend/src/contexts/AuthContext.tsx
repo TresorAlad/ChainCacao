@@ -2,12 +2,30 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { getApiBaseUrl, SESSION_EXPIRED_EVENT } from '@/lib/api-base'
+import { mapRoleToApiRole } from '@/lib/role-utils'
+import {
+  type SignupChannel,
+  setSignupChannel,
+  getSignupChannel,
+  clearSignupChannel,
+} from '@/lib/signup-channel-storage'
+import { setAuthSessionCookie, clearAuthSessionCookie } from '@/lib/auth-session-cookie'
+
+export type RegisterExtras = {
+  gps_location?: string
+  field_surface?: string
+  org_name?: string
+  pin_code?: string
+  preferred_client?: SignupChannel
+}
 
 interface User {
   token: string
   actor_id?: string
   role?: string
   email?: string
+  /** Préférence d’interface mémorisée sur ce navigateur (inscription). */
+  clientChannel?: SignupChannel | null
 }
 
 type LoginMode = 'email' | 'actor'
@@ -38,11 +56,33 @@ async function parseAuthJson(res: Response): Promise<AuthResponse> {
   }
 }
 
+function userFromToken(token: string): User | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    const actorId = (payload.actor_id || payload.sub) as string | undefined
+    return {
+      token,
+      actor_id: actorId,
+      role: payload.role || 'user',
+      email: payload.email,
+      clientChannel: getSignupChannel(actorId),
+    }
+  } catch {
+    return null
+  }
+}
+
 interface AuthContextType {
   user: User | null
   loading: boolean
   login: (identifier: string, secret: string, mode?: LoginMode) => Promise<User>
-  register: (email: string, password: string, name: string, role?: string) => Promise<boolean>
+  register: (
+    email: string,
+    password: string,
+    name: string,
+    role?: string,
+    extras?: RegisterExtras
+  ) => Promise<string>
   logout: () => void
   isAuthenticated: boolean
 }
@@ -56,23 +96,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const token = localStorage.getItem('jwt')
     if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]))
-        setUser({
-          token,
-          actor_id: payload.actor_id || payload.sub,
-          role: payload.role || 'user',
-          email: payload.email,
-        })
-      } catch {
-        localStorage.removeItem('jwt')
-      }
+      const u = userFromToken(token)
+      if (u) {
+        setUser(u)
+        setAuthSessionCookie()
+      } else localStorage.removeItem('jwt')
     }
     setLoading(false)
   }, [])
 
   useEffect(() => {
-    const onSessionExpired = () => setUser(null)
+    const onSessionExpired = () => {
+      clearAuthSessionCookie()
+      setUser(null)
+    }
     window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired)
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired)
   }, [])
@@ -110,29 +147,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     localStorage.setItem('jwt', token)
-    const payload = JSON.parse(atob(token.split('.')[1]))
+    setAuthSessionCookie()
     const emailFromActor =
       data.actor && typeof data.actor === 'object' && typeof data.actor.email === 'string'
         ? data.actor.email
         : undefined
+    const base = userFromToken(token)
+    if (!base) {
+      throw new Error('Jeton de session invalide')
+    }
     const u: User = {
-      token,
-      actor_id: payload.actor_id || payload.sub || data.actor?.id,
-      role: payload.role || data.actor?.role || 'user',
-      email: payload.email || emailFromActor,
+      ...base,
+      email: base.email || emailFromActor,
+      clientChannel: getSignupChannel(base.actor_id),
     }
     setUser(u)
     return u
   }
 
-  const register = async (email: string, password: string, name: string, role?: string): Promise<boolean> => {
-    const payloadSignup = {
+  const register = async (
+    email: string,
+    password: string,
+    name: string,
+    role?: string,
+    extras?: RegisterExtras
+  ): Promise<string> => {
+    const apiRole = mapRoleToApiRole(role || 'agriculteur')
+    const payloadSignup: Record<string, string> = {
       nom: name.trim(),
       email: email.trim().toLowerCase(),
       password,
       org_id: '',
-      role: role || 'agriculteur',
+      role: apiRole,
     }
+    const g = extras?.gps_location?.trim()
+    const fs = extras?.field_surface?.trim()
+    const on = extras?.org_name?.trim()
+    const pin = extras?.pin_code?.trim()
+    if (g) payloadSignup.gps_location = g
+    if (fs) payloadSignup.field_surface = fs
+    if (on) payloadSignup.org_name = on
+    if (pin) payloadSignup.pin_code = pin
 
     let res: Response
     try {
@@ -161,22 +216,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     localStorage.setItem('jwt', token)
+    setAuthSessionCookie()
     const jwtPayload = JSON.parse(atob(token.split('.')[1]))
+    const actorId = (jwtPayload.actor_id || jwtPayload.sub || data.actor?.id) as string | undefined
     const emailFromActor =
       data.actor && typeof data.actor === 'object' && typeof data.actor.email === 'string'
         ? data.actor.email
         : undefined
+
+    if (actorId) {
+      if (extras?.preferred_client === 'mobile') {
+        setSignupChannel(actorId, 'mobile')
+      } else if (extras?.preferred_client === 'web') {
+        clearSignupChannel(actorId)
+      }
+    }
+
+    const pref = extras?.preferred_client
+    const clientChannel: SignupChannel | null =
+      pref === 'mobile' || pref === 'web' ? pref : getSignupChannel(actorId)
+
+    const resolvedRole = (jwtPayload.role || data.actor?.role || 'user') as string
     setUser({
       token,
-      actor_id: jwtPayload.actor_id || jwtPayload.sub || data.actor?.id,
-      role: jwtPayload.role || data.actor?.role || 'user',
+      actor_id: actorId,
+      role: resolvedRole,
       email: jwtPayload.email || emailFromActor || email.trim().toLowerCase(),
+      clientChannel,
     })
-    return true
+    return resolvedRole
   }
 
   const logout = () => {
     localStorage.removeItem('jwt')
+    clearAuthSessionCookie()
     setUser(null)
   }
 

@@ -58,7 +58,7 @@ export default function QRCodePage() {
   if (!isAuthenticated) return null
 
   return (
-    <div className="page-container">
+    <div className="page-container py-6 sm:py-8">
       <h1 className="text-h1 mb-6">Générer QR code</h1>
       <div className="flex flex-wrap gap-4 items-end mb-6">
         <div className="flex-1 min-w-[200px]">

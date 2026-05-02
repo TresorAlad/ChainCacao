@@ -4,265 +4,171 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { RoleLayout } from '@/components/RoleLayout'
-import { KPICard, Badge, Button } from '@/components/ui'
 import { getRoleTheme } from '@/lib/role-themes'
+import api, { type ActorDTO } from '@/lib/api'
 import {
   DocumentCheckIcon,
   CheckCircleIcon,
   XCircleIcon,
-  ClockIcon
+  MagnifyingGlassIcon,
+  ShieldCheckIcon,
+  DocumentMagnifyingGlassIcon,
+  EyeIcon,
 } from '@heroicons/react/24/outline'
+import Link from 'next/link'
 
 export default function VerificateurDashboardPage() {
   const { isAuthenticated, loading, user } = useAuth()
   const router = useRouter()
   const theme = getRoleTheme('verificateur')
 
-  const [stats, setStats] = useState({
-    lotsVerifies: 136,
-    conformes: 98,
-    nonConformes: 24,
-    scoreConformite: 72
-  })
-
-  const [recentVerifications] = useState([
-    { id: 'LOT-001', producteur: 'Jean Dupont', date: '2026-05-01', status: 'conforme' },
-    { id: 'LOT-002', producteur: 'Marie Claire', date: '2026-04-30', status: 'non-conforme' },
-    { id: 'LOT-003', producteur: 'Pierre Martin', date: '2026-04-29', status: 'conforme' },
-    { id: 'LOT-004', producteur: 'Sophie Leroy', date: '2026-04-28', status: 'en-cours' }
-  ])
+  const [actors, setActors] = useState<ActorDTO[]>([])
+  const [fetching, setFetching] = useState(true)
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.replace('/login')
-    }
+    if (!loading && !isAuthenticated) router.replace('/login')
   }, [isAuthenticated, loading, router])
 
-  if (loading) {
+  useEffect(() => {
+    if (!isAuthenticated) return
+    api.get<ActorDTO[] | { actors?: ActorDTO[]; data?: ActorDTO[] }>('/actors')
+      .then((res) => {
+        const raw = res.data
+        const list = Array.isArray(raw) ? raw : (raw as { actors?: ActorDTO[] }).actors ?? (raw as { data?: ActorDTO[] }).data ?? []
+        setActors(list)
+      })
+      .catch(() => setActors([]))
+      .finally(() => setFetching(false))
+  }, [isAuthenticated])
+
+  if (loading || fetching) {
     return (
       <div style={{ backgroundColor: theme.surface, minHeight: '100vh' }} className="flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-current border-t-transparent" style={{ color: theme.primary }}></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-t-transparent" style={{ borderColor: theme.primary, borderTopColor: 'transparent' }} />
       </div>
     )
   }
 
   if (!isAuthenticated || user?.role !== 'verificateur') return null
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'conforme':
-        return <CheckCircleIcon className="w-5 h-5" style={{ color: theme.secondary }} />
-      case 'non-conforme':
-        return <XCircleIcon className="w-5 h-5" style={{ color: '#F44336' }} />
-      case 'en-cours':
-        return <ClockIcon className="w-5 h-5" style={{ color: '#FF9800' }} />
-      default:
-        return <ClockIcon className="w-5 h-5" style={{ color: theme.text.muted }} />
-    }
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'conforme':
-        return <Badge variant="success" role="verificateur">CONFORME</Badge>
-      case 'non-conforme':
-        return <Badge variant="error" role="verificateur">NON CONFORME</Badge>
-      case 'en-cours':
-        return <Badge variant="warning" role="verificateur">EN COURS</Badge>
-      default:
-        return <Badge variant="info" role="verificateur">{status.toUpperCase()}</Badge>
-    }
-  }
-
   return (
     <RoleLayout role="verificateur">
-      <div className="max-w-7xl mx-auto">
-        {/* Topbar */}
-        <header className="flex justify-between items-center mb-8">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-2xl font-bold" style={{ color: theme.primary }}>
-              Tableau de Bord
-            </h1>
-            <span className="text-sm" style={{ color: theme.text.secondary }}>
-              Vérificateur
-            </span>
+      <div className="w-full py-6 sm:py-8">
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
+          <div>
+            <h1 className="text-4xl font-bold tracking-tight text-[var(--color-primary)]">Contrôle & Conformité</h1>
+            <p className="text-lg mt-2 font-medium opacity-60 text-[var(--color-muted)]">
+              Système de vérification et de validation des lots de cacao.
+            </p>
           </div>
-          <div className="flex items-center space-x-4">
-            <button className="p-2 rounded-lg" style={{ backgroundColor: theme.surface, color: theme.text.secondary }}>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.868 12.683A17.925 17.925 0 0112 21c7.962 0 12.21-7.962 7.498-14.004l-.5.866a16.93 16.93 0 001.5 13.138A17.925 17.925 0 0112 21c-7.962 0-12.21 7.962-7.498 14.004l.5-.866a16.93 16.93 0 01-1.5-13.138z" />
-              </svg>
-            </button>
-            <button className="p-2 rounded-lg" style={{ backgroundColor: theme.surface, color: theme.text.secondary }}>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-            <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-              <span className="text-xs font-medium text-gray-700">V</span>
-            </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/verify"
+              className="flex items-center gap-2 px-6 py-2.5 bg-white border border-[var(--color-border)] rounded-xl text-sm font-bold text-[var(--color-primary)] hover:bg-gray-50 transition-all"
+            >
+              <MagnifyingGlassIcon className="w-5 h-5" />
+              Nouvelle Vérification
+            </Link>
+            <Link
+              href="/eudr-report"
+              className="flex items-center gap-2 px-6 py-2.5 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all"
+            >
+              <ShieldCheckIcon className="w-5 h-5" />
+              Rapport EUDR
+            </Link>
           </div>
         </header>
 
-        {/* Search Bar */}
-        <div className="mb-8">
-          <div className="max-w-md">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Rechercher un lot, producteur..."
-                className="w-full pl-10 pr-4 py-2 rounded-lg border focus:outline-none focus:ring-2"
-                style={{
-                  backgroundColor: theme.surface,
-                  borderColor: theme.sidebar.border,
-                  color: theme.text.primary
-                }}
-              />
-              <svg className="absolute left-3 top-2.5 w-5 h-5" style={{ color: theme.text.muted }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+        {/* KPI Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+          <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
+            <div className="w-10 h-10 bg-[#E8F5E9] rounded-xl flex items-center justify-center mb-4">
+              <DocumentCheckIcon className="w-6 h-6 text-[#2E7D32]" />
             </div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Lots Vérifiés</p>
+            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">—</p>
+          </div>
+
+          <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
+            <div className="w-10 h-10 bg-[#E3F2FD] rounded-xl flex items-center justify-center mb-4">
+              <CheckCircleIcon className="w-6 h-6 text-[#1565C0]" />
+            </div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Acteurs réseau</p>
+            <p className="text-3xl font-black text-[#2E7D32] mt-1">{actors.length}</p>
+          </div>
+
+          <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
+            <div className="w-10 h-10 bg-[#FFEBEE] rounded-xl flex items-center justify-center mb-4">
+              <XCircleIcon className="w-6 h-6 text-[#B71C1C]" />
+            </div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Non Conformes</p>
+            <p className="text-3xl font-black text-[#B71C1C] mt-1">—</p>
+          </div>
+
+          <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
+            <div className="w-10 h-10 bg-[#F1F8E9] rounded-xl flex items-center justify-center mb-4">
+              <ShieldCheckIcon className="w-6 h-6 text-[#33691E]" />
+            </div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Score Conformité</p>
+            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">—</p>
           </div>
         </div>
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <KPICard
-            title="Lots vérifiés"
-            value={stats.lotsVerifies.toString()}
-            icon={<DocumentCheckIcon className="w-6 h-6" />}
-            role="verificateur"
-          />
-
-          <KPICard
-            title="Conformes"
-            value={stats.conformes.toString()}
-            icon={<CheckCircleIcon className="w-6 h-6" />}
-            color="#4CAF50"
-            role="verificateur"
-          />
-
-          <KPICard
-            title="Non conformes"
-            value={stats.nonConformes.toString()}
-            icon={<XCircleIcon className="w-6 h-6" />}
-            color="#F44336"
-            role="verificateur"
-          />
-
-          <div className="rounded-xl p-6" style={{ backgroundColor: theme.card.background, boxShadow: theme.card.shadow }}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium" style={{ color: theme.text.muted }}>Score conformité</p>
-                <p className="text-3xl font-bold mt-1" style={{ color: theme.primary }}>{stats.scoreConformite}%</p>
-              </div>
-              <div
-                className="w-16 h-16 rounded-full flex items-center justify-center relative"
-                style={{ backgroundColor: theme.secondary + '20' }}
-              >
-                <svg className="w-8 h-8" viewBox="0 0 36 36">
-                  <path
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    fill="none"
-                    stroke={theme.secondary + '40'}
-                    strokeWidth="3"
-                  />
-                  <path
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    fill="none"
-                    stroke={theme.secondary}
-                    strokeWidth="3"
-                    strokeDasharray={`${stats.scoreConformite}, 100`}
-                  />
-                </svg>
-              </div>
+        {/* EUDR Banner */}
+        <div className="bg-[#F1F8E9] rounded-[1.5rem] p-6 mb-10 border border-[#C5E1A5]/30 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm">
+              <ShieldCheckIcon className="w-6 h-6 text-[#33691E]" />
+            </div>
+            <div>
+              <p className="text-sm font-black text-[var(--color-primary)]">Mise à jour EUDR</p>
+              <p className="text-xs font-medium text-gray-500">Critères de déforestation actifs — vérifiez les lots entrants.</p>
             </div>
           </div>
+          <Link
+            href="/eudr-report"
+            className="flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-xl text-xs font-bold hover:brightness-110 transition-all"
+          >
+            Voir le rapport
+          </Link>
         </div>
 
-        {/* Conseil Conformité */}
-        <div
-          className="rounded-xl p-6 mb-8 border-l-4"
-          style={{
-            backgroundColor: '#FFF8E1',
-            borderColor: '#F59E0B',
-            color: '#92400E'
-          }}
-        >
-          <div className="flex items-start">
-            <div className="flex-shrink-0">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium">Conseil de conformité</h3>
-              <p className="mt-1 text-sm">
-                Les lots de café Arabica présentent actuellement un taux de conformité de 88%.
-                Concentrez vos vérifications sur les critères de qualité et de traçabilité.
-              </p>
-              <div className="mt-3">
-                <Button variant="primary" size="sm" role="verificateur">
-                  Analyser les tendances →
-                </Button>
-              </div>
-            </div>
+        {/* Acteurs list (pour vérifier leur conformité) */}
+        <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)]">
+          <div className="flex justify-between items-center mb-8">
+            <h3 className="text-2xl font-black text-[var(--color-primary)]">Acteurs à vérifier</h3>
+            <Link href="/conformite" className="text-sm font-bold text-[#33691E] hover:underline">Registre de conformité</Link>
           </div>
-        </div>
-
-        {/* Liste Vérifications Récentes */}
-        <div className="rounded-xl" style={{ backgroundColor: theme.card.background, boxShadow: theme.card.shadow }}>
-          <div className="p-6 border-b" style={{ borderColor: theme.card.border }}>
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold" style={{ color: theme.primary }}>
-                Vérifications récentes
-              </h2>
-              <Button variant="outline" size="sm" role="verificateur">
-                Voir tout
-              </Button>
+          {actors.length === 0 ? (
+            <div className="py-12 flex flex-col items-center gap-3 text-center">
+              <DocumentMagnifyingGlassIcon className="w-12 h-12 text-gray-200" />
+              <p className="text-sm text-gray-400">Aucun acteur disponible</p>
             </div>
-          </div>
-
-          <div className="divide-y" style={{ borderColor: theme.card.border }}>
-            {recentVerifications.map((verification, index) => (
-              <div key={index} className="p-6 flex items-center justify-between hover:opacity-75 transition-opacity">
-                <div className="flex items-center space-x-4">
-                  <div className="flex-shrink-0">
-                    {getStatusIcon(verification.status)}
+          ) : (
+            <div className="space-y-4">
+              {actors.slice(0, 5).map((actor) => (
+                <div key={actor.id} className="flex items-center justify-between group p-4 hover:bg-gray-50 rounded-2xl transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-sm bg-[#E8F5E9]">
+                      <DocumentMagnifyingGlassIcon className="w-6 h-6 text-[#2E7D32]" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-[var(--color-primary)]">{actor.nom}</p>
+                      <p className="text-xs font-medium text-gray-400 capitalize">{actor.role} — {actor.id}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium" style={{ color: theme.primary }}>
-                      {verification.id}
-                    </p>
-                    <p className="text-sm" style={{ color: theme.text.secondary }}>
-                      {verification.producteur}
-                    </p>
+                  <div className="flex items-center gap-3">
+                    <span className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-[#E8F5E9] text-[#2E7D32]">
+                      Enregistré
+                    </span>
+                    <Link href="/verify" className="p-2 hover:bg-gray-200 rounded-lg transition-colors">
+                      <EyeIcon className="w-5 h-5 text-gray-400" />
+                    </Link>
                   </div>
                 </div>
-                <div className="flex items-center space-x-4">
-                  <span className="text-sm" style={{ color: theme.text.muted }}>
-                    {verification.date}
-                  </span>
-                  {getStatusBadge(verification.status)}
-                  <button className="p-1 rounded" style={{ color: theme.text.muted }}>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Floating Action Button */}
-        <div className="fixed bottom-6 right-6">
-          <Button variant="primary" size="lg" role="verificateur" className="rounded-full w-14 h-14 p-0 shadow-lg">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-          </Button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </RoleLayout>

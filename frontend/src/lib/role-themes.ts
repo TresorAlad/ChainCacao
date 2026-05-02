@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'verificateur' | 'exportateur' | 'cooperative' | 'agriculteur'
+export type UserRole = 'admin' | 'verificateur' | 'exportateur' | 'cooperative' | 'agriculteur' | 'transformateur' | 'distributeur'
 
 export interface RoleTheme {
   primary: string
@@ -211,6 +211,76 @@ const themes: Record<UserRole, RoleTheme> = {
       secondary: '#7CB342',
       muted: '#6B7280'
     }
+  },
+  transformateur: {
+    primary: '#5D4037',
+    secondary: '#8D6E63',
+    accent: '#FF9800',
+    background: '#FAFDF7',
+    surface: '#FAFDF5',
+    sidebar: {
+      background: '#FFFFFF',
+      text: '#374151',
+      activeItem: '#F1F8E9',
+      activeText: '#33691E',
+      border: '#F0F0E8'
+    },
+    card: {
+      background: '#FFFFFF',
+      shadow: '0 2px 8px rgba(0,0,0,0.08)',
+      border: '#E5E7EB'
+    },
+    button: {
+      primary: '#5D4037',
+      secondary: '#8D6E63',
+      outline: '#CBD5E1'
+    },
+    badge: {
+      success: '#E8F5E9',
+      warning: '#FFF8E1',
+      error: '#FFEBEE',
+      info: '#F1F8E9'
+    },
+    text: {
+      primary: '#5D4037',
+      secondary: '#7CB342',
+      muted: '#6B7280'
+    }
+  },
+  distributeur: {
+    primary: '#1B3A0F',
+    secondary: '#6B9E3A',
+    accent: '#06B6D4',
+    background: '#F8FAF5',
+    surface: '#F8FAFC',
+    sidebar: {
+      background: '#FFFFFF',
+      text: '#374151',
+      activeItem: '#F0FDF4',
+      activeText: '#2D5016',
+      border: '#F3F4F6'
+    },
+    card: {
+      background: '#FFFFFF',
+      shadow: '0 2px 8px rgba(0,0,0,0.08)',
+      border: '#E5E7EB'
+    },
+    button: {
+      primary: '#1B3A0F',
+      secondary: '#2D5016',
+      outline: '#CBD5E1'
+    },
+    badge: {
+      success: '#E8F5E9',
+      warning: '#FFF8E1',
+      error: '#FFEBEE',
+      info: '#E3F2FD'
+    },
+    text: {
+      primary: '#1B3A0F',
+      secondary: '#2D5016',
+      muted: '#6B7280'
+    }
   }
 }
 
@@ -232,6 +302,10 @@ export function getRoleBasedRedirect(role: UserRole | string | undefined): strin
       return '/dashboard-cooperative'
     case 'agriculteur':
       return '/dashboard-agriculteur'
+    case 'transformateur':
+      return '/dashboard-transformateur'
+    case 'distributeur':
+      return '/dashboard-distributeur'
     default:
       return '/dashboard'
   }
@@ -251,6 +325,10 @@ export function getRoleDisplayName(role: UserRole | string | undefined): string 
       return 'Coopérative'
     case 'agriculteur':
       return 'Agriculteur'
+    case 'transformateur':
+      return 'Transformateur'
+    case 'distributeur':
+      return 'Distributeur'
     default:
       return 'Utilisateur'
   }
@@ -270,6 +348,10 @@ export function getRoleDescription(role: UserRole | string | undefined): string 
       return 'Coordination des agriculteurs et gestion des collectes'
     case 'agriculteur':
       return 'Gestion des lots de cacao et suivi de production'
+    case 'transformateur':
+      return 'Traitement et transformation du cacao en produits finis'
+    case 'distributeur':
+      return 'Distribution et vente locale des produits cacaoyers'
     default:
       return 'Accès utilisateur standard'
   }
@@ -312,6 +394,16 @@ export function getRoleNavigation(role: UserRole): Array<{ name: string, href: s
       { name: 'Revenus', href: '/revenus', icon: 'banknotes' },
       { name: 'Productions', href: '/productions', icon: 'beaker' },
       { name: 'Profil', href: '/profil', icon: 'user-circle' }
+    ],
+    transformateur: [
+      { name: 'Lots', href: '/lots', icon: 'cube' },
+      { name: 'Transferts', href: '/transfer', icon: 'arrows-right-left' },
+      { name: 'Profil', href: '/profile', icon: 'user-circle' }
+    ],
+    distributeur: [
+      { name: 'Lots', href: '/lots', icon: 'cube' },
+      { name: 'Export', href: '/export', icon: 'globe-americas' },
+      { name: 'Profil', href: '/profile', icon: 'user-circle' }
     ]
   }
 

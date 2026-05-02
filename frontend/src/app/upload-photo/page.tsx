@@ -67,7 +67,7 @@ export default function UploadPhotoPage() {
   if (!isAuthenticated) return null
 
   return (
-    <div className="page-container">
+    <div className="page-container py-6 sm:py-8">
       <h1 className="text-h1 mb-6">Upload photo de lot</h1>
       <form onSubmit={handleSubmit} className="form-grid max-w-lg">
         <label>

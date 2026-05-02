@@ -7,10 +7,12 @@ import { WeightIcon, TrendingUpIcon } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 
+const UPDATE_WEIGHT_ALLOWED = ['transformateur', 'distributeur', 'exportateur', 'admin']
+
 function UpdateWeightContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { isAuthenticated, loading } = useAuth()
+  const { isAuthenticated, loading, user } = useAuth()
   const [formData, setFormData] = useState({
     lotId: '',
     newWeight: '',
@@ -58,14 +60,25 @@ function UpdateWeightContent() {
 
   if (!isAuthenticated) return null
 
+  if (user?.role && !UPDATE_WEIGHT_ALLOWED.includes(user.role)) {
+    return (
+      <div className="w-full py-6 sm:py-8">
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center">
+          <p className="text-red-700 font-bold text-lg">Accès non autorisé</p>
+          <p className="text-red-600 mt-2 text-sm">Votre rôle ({user.role}) n&apos;est pas autorisé à mettre à jour les poids.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="page-container">
+    <div className="page-container py-6 sm:py-8">
       <header className="page-header">
         <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-primary)]">
           Mise à jour du poids
         </h1>
         <p className="text-[var(--color-muted)] mt-2">
-          Ajustez le poids d'un lot suite à une perte ou un ajout
+          {"Ajustez le poids d'un lot suite à une perte ou un ajout"}
         </p>
       </header>
 
@@ -136,7 +149,9 @@ function UpdateWeightContent() {
           </div>
           <div className="card-body">
             <p className="text-body-sm text-[var(--color-muted)] leading-relaxed mb-4">
-              La mise à jour du poids est enregistrée de façon immuable sur la blockchain. Assurez-vous d'entrer la valeur correcte en kilogrammes avant de valider.
+              {
+                "La mise à jour du poids est enregistrée de façon immuable sur la blockchain. Assurez-vous d'entrer la valeur correcte en kilogrammes avant de valider."
+              }
             </p>
             <div className="p-3 rounded-lg bg-[var(--color-accent)]/10">
               <div className="flex items-center gap-2 text-[var(--color-accent)] mb-1">
@@ -144,7 +159,9 @@ function UpdateWeightContent() {
                 <span className="font-semibold text-[var(--color-earth)]">Conseil</span>
               </div>
               <p className="text-body-sm text-[var(--color-earth)]">
-                Précisez la raison de l'ajustement dans le champ justification pour une meilleure traçabilité.
+                {
+                  "Précisez la raison de l'ajustement dans le champ justification pour une meilleure traçabilité."
+                }
               </p>
             </div>
           </div>

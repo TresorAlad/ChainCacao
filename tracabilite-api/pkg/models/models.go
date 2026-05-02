@@ -8,6 +8,8 @@ const (
 	RoleCooperative    Role = "cooperative"
 	RoleTransformateur Role = "transformateur"
 	RoleDistributeur   Role = "distributeur"
+	RoleExportateur    Role = "exportateur"   // alias mobile → mappé distributeur côté API
+	RoleVerificateur   Role = "verificateur"
 )
 
 type Batch struct {

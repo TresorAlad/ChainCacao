@@ -1,19 +1,37 @@
-export type UserRole = 'admin' | 'agriculteur' | 'cooperative' | 'transformateur' | 'distributeur'
+export type UserRole =
+  | 'admin'
+  | 'agriculteur'
+  | 'cooperative'
+  | 'transformateur'
+  | 'distributeur'
+  | 'exportateur'
+  | 'verificateur'
+
+/** Rôle attendu par l’API Go (`exportateur` du mobile → `distributeur`). */
+export function mapRoleToApiRole(role: string): string {
+  const r = role.trim().toLowerCase()
+  if (r === 'exportateur') return 'distributeur'
+  return r || 'agriculteur'
+}
 
 export function getRoleBasedRedirect(role: UserRole | string | undefined): string {
   if (!role) return '/login'
 
   switch (role) {
     case 'admin':
-      return '/dashboard'
+      return '/dashboard-admin'
     case 'agriculteur':
-      return '/dashboard'
+      return '/dashboard-agriculteur'
     case 'cooperative':
-      return '/dashboard'
+      return '/dashboard-cooperative'
     case 'transformateur':
-      return '/dashboard'
+      return '/dashboard-transformateur'
     case 'distributeur':
-      return '/dashboard'
+      return '/dashboard-distributeur'
+    case 'exportateur':
+      return '/dashboard-exportateur'
+    case 'verificateur':
+      return '/dashboard-verificateur'
     default:
       return '/dashboard'
   }
@@ -33,6 +51,10 @@ export function getRoleDisplayName(role: UserRole | string | undefined): string 
       return 'Transformateur'
     case 'distributeur':
       return 'Distributeur'
+    case 'exportateur':
+      return 'Exportateur'
+    case 'verificateur':
+      return 'Vérificateur'
     default:
       return 'Utilisateur'
   }
@@ -52,6 +74,10 @@ export function getRoleDescription(role: UserRole | string | undefined): string 
       return 'Transformation et traitement des fèves de cacao'
     case 'distributeur':
       return 'Distribution et export des produits finis'
+    case 'exportateur':
+      return 'Export et commercialisation à l’international'
+    case 'verificateur':
+      return 'Inspection et certification de la conformité des lots'
     default:
       return 'Accès utilisateur standard'
   }

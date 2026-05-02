@@ -6,6 +6,12 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import api from '@/lib/api'
 import type { DashboardStats } from '@/lib/dashboard-stats'
+import type {
+  ActivityChartRow,
+  AlertsCountPayload,
+  EudrCompliancePayload,
+  RecentTransferRow,
+} from '@/lib/dashboard-types'
 import { getRoleDisplayName, getRoleDescription, getRoleTheme, UserRole } from '@/lib/role-themes'
 import { RoleLayout } from '@/components/RoleLayout'
 import { KPICard, Badge, Button } from '@/components/ui'
@@ -15,7 +21,13 @@ import {
   CheckCircleIcon,
   UsersIcon,
   ArrowTrendingUpIcon,
-  QrCodeIcon
+  QrCodeIcon,
+  ArrowDownTrayIcon,
+  ArrowPathIcon,
+  CalendarIcon,
+  ArrowRightIcon,
+  ExclamationTriangleIcon,
+  ShieldCheckIcon
 } from '@heroicons/react/24/outline'
 
 export default function DashboardPage() {
@@ -24,10 +36,10 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [statsNote, setStatsNote] = useState<string | null>(null)
-  const [recentTransfers, setRecentTransfers] = useState<any[]>([])
-  const [chartData, setChartData] = useState<any[]>([])
-  const [eudrCompliance, setEudrCompliance] = useState<{percentage: number, status: string} | null>(null)
-  const [alertsCount, setAlertsCount] = useState<{total: number, urgent: number} | null>(null)
+  const [recentTransfers, setRecentTransfers] = useState<RecentTransferRow[]>([])
+  const [chartData, setChartData] = useState<ActivityChartRow[]>([])
+  const [eudrCompliance, setEudrCompliance] = useState<{ percentage: number; status: string } | null>(null)
+  const [alertsCount, setAlertsCount] = useState<{ total: number; urgent: number } | null>(null)
 
   const userRole = (user?.role as UserRole) || 'agriculteur'
   const theme = getRoleTheme(userRole)
@@ -68,7 +80,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      api.get<{ success: boolean; transfers: any[] }>('/dashboard/recent-transfers')
+      api
+        .get<{ success: boolean; transfers: RecentTransferRow[] }>('/dashboard/recent-transfers')
         .then((res) => setRecentTransfers(res.data.transfers || []))
         .catch(() => setRecentTransfers([]))
     }
@@ -76,7 +89,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      api.get<{ success: boolean; activity: any[] }>('/dashboard/activity-chart')
+      api
+        .get<{ success: boolean; activity: ActivityChartRow[] }>('/dashboard/activity-chart')
         .then((res) => setChartData(res.data.activity || []))
         .catch(() => setChartData([]))
     }
@@ -84,16 +98,32 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      api.get<{ success: boolean; compliance: any }>('/dashboard/eudr-compliance')
-        .then((res) => setEudrCompliance(res.data.compliance))
+      api
+        .get<{ success: boolean; compliance: EudrCompliancePayload }>('/dashboard/eudr-compliance')
+        .then((res) => {
+          const c = res.data.compliance
+          if (c && typeof c.percentage === 'number' && typeof c.status === 'string') {
+            setEudrCompliance({ percentage: c.percentage, status: c.status })
+          } else {
+            setEudrCompliance(null)
+          }
+        })
         .catch(() => setEudrCompliance({ percentage: 94, status: 'Objectif Atteint' }))
     }
   }, [isAuthenticated])
 
   useEffect(() => {
     if (isAuthenticated) {
-      api.get<{ success: boolean; alerts: any }>('/dashboard/alerts-count')
-        .then((res) => setAlertsCount(res.data.alerts))
+      api
+        .get<{ success: boolean; alerts: AlertsCountPayload }>('/dashboard/alerts-count')
+        .then((res) => {
+          const a = res.data.alerts
+          if (a && typeof a.total === 'number' && typeof a.urgent === 'number') {
+            setAlertsCount({ total: a.total, urgent: a.urgent })
+          } else {
+            setAlertsCount(null)
+          }
+        })
         .catch(() => setAlertsCount({ total: 38, urgent: 5 }))
     }
   }, [isAuthenticated])
@@ -110,161 +140,199 @@ export default function DashboardPage() {
 
   return (
     <RoleLayout role={userRole}>
-      <div className="max-w-7xl mx-auto">
-      {statsNote && (
-        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {statsNote}
-        </div>
-      )}
+      <div className="w-full py-6 sm:py-8">
+        {statsNote && (
+          <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-6 py-4 text-sm text-amber-900 flex items-center gap-3">
+            <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
+            {statsNote}
+          </div>
+        )}
 
-        {/* Page Header */}
-        <header className="flex justify-between items-start mb-8">
+        {/* Header Section */}
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold" style={{ color: theme.primary }}>
-              Tableau de bord {getRoleDisplayName(userRole)}
+            <h1 className="text-4xl font-black tracking-tight" style={{ color: theme.primary }}>
+              Tableau de bord <span className="opacity-40">{getRoleDisplayName(userRole)}</span>
             </h1>
-            <p className="mt-2" style={{ color: theme.text.secondary }}>
+            <p className="text-lg mt-2 font-medium opacity-60" style={{ color: theme.text.secondary }}>
               {getRoleDescription(userRole)}
             </p>
           </div>
-          <div className="flex gap-3">
-            <Button variant="outline" role={userRole}>
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-              Exporter
-            </Button>
-            <Button variant="primary" role={userRole}>
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Rafraîchir
-            </Button>
+          <div className="flex items-center gap-3">
+             <button className="flex items-center gap-2 px-6 py-2.5 bg-white border border-gray-200 text-[var(--color-primary)] rounded-xl text-sm font-bold shadow-sm hover:bg-gray-50 transition-all">
+                <ArrowDownTrayIcon className="w-5 h-5" />
+                Rapport PDF
+             </button>
+             <button 
+               onClick={() => window.location.reload()}
+               className="flex items-center gap-2 px-6 py-2.5 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all"
+             >
+                <ArrowPathIcon className="w-5 h-5" />
+                Rafraîchir
+             </button>
           </div>
         </header>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <KPICard
-            title="Lots Enregistrés"
-            value={statsLoading ? '—' : (stats?.total_batches || '2,847')}
-            trend="+12% ce mois"
-            icon={<CubeIcon className="w-6 h-6" />}
-            role={userRole}
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+          <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)] relative overflow-hidden group hover:shadow-md transition-all">
+             <div className="absolute top-0 right-0 p-8 bg-[#33691E]/5 rounded-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Lots Enregistrés</p>
+             <p className="text-3xl font-black text-[var(--color-primary)]">{statsLoading ? '...' : (stats?.total_batches || '2,847')}</p>
+             <p className="text-xs font-bold text-green-500 mt-1 flex items-center gap-1">
+                <ArrowTrendingUpIcon className="w-3 h-3" />
+                +12% ce mois
+             </p>
+          </div>
 
-          <KPICard
-            title="Agriculteurs Actifs"
-            value={statsLoading ? '—' : (stats?.total_actors || '412')}
-            trend="+8 nouveaux"
-            icon={<UsersIcon className="w-6 h-6" />}
-            color="#2196F3"
-            role={userRole}
-          />
+          <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)] relative overflow-hidden group hover:shadow-md transition-all">
+             <div className="absolute top-0 right-0 p-8 bg-[#1565C0]/5 rounded-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Acteurs Actifs</p>
+             <p className="text-3xl font-black text-[#1565C0]">{statsLoading ? '...' : (stats?.total_actors || '412')}</p>
+             <p className="text-xs font-bold text-blue-500 mt-1 flex items-center gap-1">
+                <UsersIcon className="w-3 h-3" />
+                +8 nouveaux
+             </p>
+          </div>
 
-          <KPICard
-            title="Conformité EUDR"
-            value={eudrCompliance ? `${eudrCompliance.percentage}%` : '94%'}
-            trend={eudrCompliance ? eudrCompliance.status : 'Objectif Atteint'}
-            icon={<DocumentCheckIcon className="w-6 h-6" />}
-            color="#9C27B0"
-            role={userRole}
-          />
+          <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)] relative overflow-hidden group hover:shadow-md transition-all">
+             <div className="absolute top-0 right-0 p-8 bg-[#4527A0]/5 rounded-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Conformité EUDR</p>
+             <p className="text-3xl font-black text-[#4527A0]">{eudrCompliance ? `${eudrCompliance.percentage}%` : '94%'}</p>
+             <p className="text-xs font-bold text-purple-500 mt-1 flex items-center gap-1">
+                <CheckCircleIcon className="w-3 h-3" />
+                Objectif Atteint
+             </p>
+          </div>
 
-          <KPICard
-            title="Alertes en Attente"
-            value={alertsCount ? alertsCount.total : '38'}
-            trend={alertsCount ? `${alertsCount.urgent} urgentes` : '5 urgentes'}
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>}
-            color="#FF5722"
-            role={userRole}
-          />
+          <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)] relative overflow-hidden group hover:shadow-md transition-all">
+             <div className="absolute top-0 right-0 p-8 bg-[#C62828]/5 rounded-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Alertes Actives</p>
+             <p className="text-3xl font-black text-[#C62828]">{alertsCount ? alertsCount.total : '38'}</p>
+             <p className="text-xs font-bold text-red-500 mt-1 flex items-center gap-1">
+                <ExclamationTriangleIcon className="w-3 h-3" />
+                {alertsCount ? `${alertsCount.urgent} urgentes` : '5 urgentes'}
+             </p>
+          </div>
         </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 mb-8">
-        {/* Chart Section */}
-        <div className="card p-6 mb-8">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-title-md font-bold text-[var(--color-primary)]">
-              Activité de la chaîne — 7 derniers jours
-            </h2>
-            <button className="btn btn-sm btn-primary-outline bg-white flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-              Cette semaine
-            </button>
-          </div>
-          
-          <div className="space-y-4">
-            {chartData.map((data, index) => (
-              <div key={index} className="flex items-center">
-                <div className="w-12 text-sm font-medium text-[var(--color-muted)]">{data.day}</div>
-                <div className="flex-1 ml-4 mr-4">
-                  <div className="h-4 bg-[var(--color-bg)] rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-[var(--color-secondary)] rounded-full" 
-                      style={{ width: data.width }}
-                    ></div>
-                  </div>
+        {/* Main Content Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Activity Chart */}
+          <div className="lg:col-span-8 space-y-8">
+             <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)]">
+                <div className="flex justify-between items-center mb-10">
+                   <div>
+                      <h3 className="text-xl font-black text-[var(--color-primary)]">Flux de Production</h3>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">7 derniers jours</p>
+                   </div>
+                   <div className="px-4 py-2 bg-gray-50 rounded-xl border border-gray-100 flex items-center gap-2">
+                      <CalendarIcon className="w-4 h-4 text-gray-400" />
+                      <span className="text-xs font-black text-[var(--color-primary)]">SÉMAINE ACTUELLE</span>
+                   </div>
                 </div>
-                <div className="w-8 text-right text-sm font-bold text-[var(--color-primary)]">{data.value}</div>
-              </div>
-            ))}
-          </div>
-        </div>
 
-        {/* Recent Transfers Table */}
-        <div className="card overflow-hidden">
-          <div className="card-header flex justify-between items-center bg-white">
-            <h2 className="text-title-md font-bold text-[var(--color-primary)]">
-              Transferts récents
-            </h2>
-            <Link href="/transfer" className="text-sm font-semibold text-[var(--color-secondary)] hover:text-[var(--color-primary)]">
-              Voir tout →
-            </Link>
+                <div className="space-y-6">
+                   {chartData.length > 0 ? chartData.map((data, index) => (
+                     <div key={index} className="flex items-center gap-4">
+                        <div className="w-12 text-[10px] font-black text-gray-400 uppercase">{data.day}</div>
+                        <div className="flex-1 h-3 bg-gray-50 rounded-full overflow-hidden">
+                           <div 
+                             className="h-full bg-gradient-to-r from-[#1B3A0F] to-[#33691E] rounded-full transition-all duration-1000"
+                             style={{ width: data.width }}
+                           ></div>
+                        </div>
+                        <div className="w-10 text-xs font-black text-[var(--color-primary)] text-right">{data.value}</div>
+                     </div>
+                   )) : (
+                     <div className="flex items-center justify-center h-48 border-2 border-dashed border-gray-100 rounded-3xl">
+                        <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">Aucune donnée cette semaine</p>
+                     </div>
+                   )}
+                </div>
+             </div>
+
+             {/* Recent Transfers */}
+             <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)]">
+                <div className="flex justify-between items-center mb-8">
+                   <h3 className="text-xl font-black text-[var(--color-primary)]">Transferts Récents</h3>
+                   <Link href="/transfer" className="text-[10px] font-black text-[#33691E] uppercase tracking-widest hover:underline flex items-center gap-1">
+                      Voir l'historique complet
+                      <ArrowRightIcon className="w-3 h-3" />
+                   </Link>
+                </div>
+                
+                <div className="overflow-x-auto">
+                   <table className="w-full">
+                      <thead>
+                         <tr className="text-left border-b border-gray-100">
+                            <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">ID / Date</th>
+                            <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Expéditeur</th>
+                            <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Destinataire</th>
+                            <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Statut</th>
+                         </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                         {recentTransfers.map((tx, idx) => (
+                           <tr key={idx} className="group hover:bg-gray-50 transition-all">
+                              <td className="py-4">
+                                 <p className="text-sm font-black text-[var(--color-primary)]">{tx.id}</p>
+                                 <p className="text-[10px] font-bold text-gray-400">{tx.date}</p>
+                              </td>
+                              <td className="py-4 text-sm font-bold text-gray-600">{tx.sender}</td>
+                              <td className="py-4 text-sm font-bold text-gray-600">{tx.receiver}</td>
+                              <td className="py-4 text-right">
+                                 <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+                                   tx.status === 'VALIDÉ' ? 'bg-[#E8F5E9] text-[#2E7D32]' : 
+                                   tx.status === 'EN TRANSIT' ? 'bg-[#FFF3E0] text-[#E65100]' : 'bg-[#FFEBEE] text-[#B71C1C]'
+                                 }`}>
+                                    {tx.status}
+                                 </span>
+                              </td>
+                           </tr>
+                         ))}
+                      </tbody>
+                   </table>
+                </div>
+             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="table w-full">
-              <thead className="bg-[var(--color-bg)] text-left">
-                <tr>
-                  <th className="px-6 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider border-b">ID Transfert</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider border-b">Date & Heure</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider border-b">Expéditeur</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider border-b">Destinataire</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider border-b">État</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-[var(--color-border)]">
-                {recentTransfers.map((tx, idx) => (
-                  <tr key={idx} className="hover:bg-[var(--color-bg)]/50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-semibold text-[var(--color-primary)]">{tx.id}</td>
-                    <td className="px-6 py-4 text-sm text-[var(--color-muted)]">{tx.date}</td>
-                    <td className="px-6 py-4 text-sm font-medium text-[var(--color-earth)]">{tx.sender}</td>
-                    <td className="px-6 py-4 text-sm font-medium text-[var(--color-earth)]">{tx.receiver}</td>
-                    <td className="px-6 py-4">
-                      {tx.status === 'VALIDÉ' && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">
-                          <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5"></span>
-                          VALIDÉ
-                        </span>
-                      )}
-                      {tx.status === 'EN TRANSIT' && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
-                          <span className="w-1.5 h-1.5 bg-orange-500 rounded-full mr-1.5"></span>
-                          EN TRANSIT
-                        </span>
-                      )}
-                      {tx.status === 'REJETÉ' && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
-                          <span className="w-1.5 h-1.5 bg-red-500 rounded-full mr-1.5"></span>
-                          REJETÉ
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+          {/* Quick Actions & Tips */}
+          <div className="lg:col-span-4 space-y-8">
+             <div className="bg-[#1A2E0D] rounded-[2rem] p-10 text-white shadow-xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-20 bg-[#33691E]/20 rounded-full blur-3xl -mr-10 -mt-10"></div>
+                <QrCodeIcon className="w-12 h-12 mb-6 text-[#81C784]" />
+                <h3 className="text-2xl font-black mb-4">Générer QR Code</h3>
+                <p className="text-white/60 text-sm mb-8 leading-relaxed">
+                   Créez instantanément une étiquette de traçabilité pour vos nouveaux lots de cacao.
+                </p>
+                <Link href="/lots" className="block text-center py-4 bg-[#33691E] hover:bg-[#43A047] text-white rounded-2xl text-sm font-black transition-all">
+                   Lancer la génération
+                </Link>
+             </div>
+
+             <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)]">
+                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2 mb-6 flex items-center gap-2">
+                   <ShieldCheckIcon className="w-4 h-4" />
+                   Rappel Conformité
+                </h3>
+                <div className="space-y-6">
+                   <div className="flex gap-4">
+                      <div className="w-1 h-12 bg-[#33691E] rounded-full"></div>
+                      <div>
+                         <p className="text-sm font-black text-[var(--color-primary)]">Déclaration EUDR</p>
+                         <p className="text-[10px] font-medium text-gray-400 mt-1">Échéance dans 12 jours pour les lots d'export.</p>
+                      </div>
+                   </div>
+                   <div className="flex gap-4">
+                      <div className="w-1 h-12 bg-amber-400 rounded-full"></div>
+                      <div>
+                         <p className="text-sm font-black text-[var(--color-primary)]">Mise à jour Géo</p>
+                         <p className="text-[10px] font-medium text-gray-400 mt-1">4 parcelles nécessitent une re-validation GPS.</p>
+                      </div>
+                   </div>
+                </div>
+             </div>
           </div>
         </div>
       </div>

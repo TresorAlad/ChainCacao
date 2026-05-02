@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
+import { getErrorMessage } from '@/lib/error-utils'
 
 export default function NouveauLotPage() {
   const router = useRouter()
@@ -58,8 +59,8 @@ export default function NouveauLotPage() {
       const res = await api.post<{ success: boolean; batch: { id: string } }>('/lot', payload)
       toast.success(`Lot créé avec succès${res.data.batch?.id ? ` (ID: ${res.data.batch.id})` : ''}`)
       router.push('/lots')
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur lors de la création du lot')
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Erreur lors de la création du lot'))
     } finally {
       setIsSubmitting(false)
     }
@@ -76,7 +77,7 @@ export default function NouveauLotPage() {
   if (!isAuthenticated) return null
 
   return (
-    <div className="page-container">
+    <div className="page-container py-6 sm:py-8">
       <header className="page-header">
         <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-primary)]">
           Nouveau lot

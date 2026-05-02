@@ -1,12 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { EyeIcon, EyeOffIcon } from 'lucide-react'
 import { BrandLogo } from '@/components/BrandLogo'
 import { getRoleBasedRedirect, getRoleDisplayName } from '@/lib/role-utils'
+import type { UserRole } from '@/lib/role-themes'
+import { getErrorMessage } from '@/lib/error-utils'
 
 export default function LoginPage() {
   const [useActorLogin, setUseActorLogin] = useState(false)
@@ -17,8 +19,13 @@ export default function LoginPage() {
   const [showSecret, setShowSecret] = useState(false)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const { login } = useAuth()
+  const { login, isAuthenticated, loading: authLoading, user } = useAuth()
   const router = useRouter()
+
+  useEffect(() => {
+    if (authLoading || !isAuthenticated || !user?.role) return
+    router.replace(getRoleBasedRedirect(user.role as UserRole))
+  }, [authLoading, isAuthenticated, user?.role, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -33,8 +40,8 @@ export default function LoginPage() {
       // Rediriger vers le dashboard approprié selon le rôle
       const redirectPath = getRoleBasedRedirect(user.role)
       router.replace(redirectPath)
-    } catch (err: any) {
-      setError(err.message || 'Identifiants invalides')
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Identifiants invalides'))
     } finally {
       setIsLoading(false)
     }
@@ -53,7 +60,7 @@ export default function LoginPage() {
         <div className="relative z-20 flex flex-col justify-end p-12 text-white h-full">
           <BrandLogo className="w-16 h-16 mb-6" priority />
           <h1 className="text-display-md font-bold mb-4">
-            L'excellence du cacao togolais, certifiée par la blockchain.
+            {"L'excellence du cacao togolais, certifiée par la blockchain."}
           </h1>
           <p className="text-body-lg text-white/80 max-w-md">
             Plateforme de traçabilité sécurisée pour tous les acteurs de la filière cacao au Togo.
@@ -237,7 +244,7 @@ export default function LoginPage() {
 
           <div className="mt-8 text-center">
             <p className="text-body-sm text-[var(--color-muted)]">
-              Vous n'avez pas de compte ?{' '}
+              {"Vous n'avez pas de compte ?"}{' '}
               <Link href="/register" className="text-[var(--color-secondary)] font-semibold hover:underline">
                 Créer un compte
               </Link>

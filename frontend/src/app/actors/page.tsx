@@ -1,5 +1,6 @@
 'use client'
 
+import { PlusIcon, UsersIcon } from '@heroicons/react/24/outline'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
@@ -74,75 +75,88 @@ export default function ActorsPage() {
   }
 
   return (
-    <div className="page-container">
-      {/* Page Header */}
-      <header className="page-header animate-fade-in flex justify-between items-start mb-8">
+    <div className="w-full py-6 sm:py-8">
+      {/* Header Section */}
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-primary)]">
-            Acteurs
+          <h1 className="text-4xl font-bold tracking-tight text-[var(--color-primary)]">
+            Annuaire des Acteurs
           </h1>
-          <p className="text-[var(--color-muted)] mt-2">
-            Gérez les intervenants enregistrés sur la filière cacao.
+          <p className="text-lg mt-2 font-medium opacity-60 text-[var(--color-muted)]">
+            Gestion et supervision des intervenants de la filière cacao.
           </p>
         </div>
-        <div className="flex gap-3">
-          <button className="btn btn-primary-outline bg-white flex items-center gap-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-            Filtrer
-          </button>
-          <button className="btn btn-secondary flex items-center gap-2 text-white shadow-sm hover:shadow-md">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-            Ajouter acteur
+        <div className="flex items-center gap-3">
+          <button className="flex items-center gap-2 px-6 py-2.5 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all">
+            <PlusIcon className="w-5 h-5" />
+            Enrôler un Acteur
           </button>
         </div>
       </header>
 
-      {/* Actors Table */}
-      <div className="card overflow-hidden">
+      {/* Stats Quick View */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+         <div className="bg-white p-6 rounded-[1.5rem] border border-[var(--color-border)] shadow-sm">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Acteurs</p>
+            <p className="text-3xl font-black text-[var(--color-primary)]">{actors.length}</p>
+         </div>
+         <div className="bg-white p-6 rounded-[1.5rem] border border-[var(--color-border)] shadow-sm">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Agriculteurs</p>
+            <p className="text-3xl font-black text-[#33691E]">{actors.filter(a => a.role === 'agriculteur').length}</p>
+         </div>
+         <div className="bg-white p-6 rounded-[1.5rem] border border-[var(--color-border)] shadow-sm">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Coopératives</p>
+            <p className="text-3xl font-black text-[#1565C0]">{actors.filter(a => a.role === 'cooperative').length}</p>
+         </div>
+      </div>
+
+      {/* Main Table Card */}
+      <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)] overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="table w-full">
-            <thead className="bg-[var(--color-bg)] text-left">
-              <tr>
-                <th className="px-6 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider border-b">Acteur</th>
-                <th className="px-6 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider border-b">Contact</th>
-                <th className="px-6 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider border-b">Rôle</th>
-                <th className="px-6 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider border-b">Statut</th>
-                <th className="px-6 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider border-b text-right">Action</th>
+          <table className="w-full">
+            <thead>
+              <tr className="text-left border-b border-gray-100">
+                <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Acteur</th>
+                <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Contact</th>
+                <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Rôle</th>
+                <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Statut</th>
+                <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-[var(--color-border)]">
+            <tbody className="divide-y divide-gray-50">
               {actors.map((actor) => (
-                <tr key={actor.id} className="hover:bg-[var(--color-bg)]/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center">
-                      <div className="h-10 w-10 flex-shrink-0">
-                        <div className="h-10 w-10 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-bold flex items-center justify-center border border-[var(--color-primary)]/20">
-                          {getInitials(actor.nom || 'A')}
-                        </div>
+                <tr key={actor.id} className="group hover:bg-gray-50 transition-all">
+                  <td className="py-5">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#F1F8E9] to-[#E8F5E9] flex items-center justify-center border border-[#C5E1A5]/30">
+                        <span className="text-sm font-black text-[#33691E]">{getInitials(actor.nom || 'A')}</span>
                       </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-semibold text-[var(--color-primary)]">{actor.nom}</div>
-                        <div className="text-xs text-[var(--color-muted)]">{actor.id}</div>
+                      <div>
+                        <p className="text-sm font-black text-[var(--color-primary)]">{actor.nom}</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{actor.id}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-[var(--color-earth)] font-medium">
-                    {actor.email || '—'}
+                  <td className="py-5 text-sm font-bold text-[var(--color-primary)]">
+                    {actor.email || 'Non renseigné'}
                   </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getRoleBadgeClass(actor.role)}`}>
-                      {actor.role?.toUpperCase() || '—'}
+                  <td className="py-5">
+                    <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+                      actor.role === 'agriculteur' ? 'bg-[#E8F5E9] text-[#2E7D32]' : 
+                      actor.role === 'cooperative' ? 'bg-[#E3F2FD] text-[#1565C0]' : 'bg-[#F3E5F5] text-[#7B1FA2]'
+                    }`}>
+                      {actor.role}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">
-                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5"></span>
-                      ACTIF
-                    </span>
+                  <td className="py-5 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                       <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Actif</span>
+                    </div>
                   </td>
-                  <td className="px-6 py-4 text-right text-sm font-medium">
-                    <button className="text-[var(--color-secondary)] hover:text-[var(--color-primary)] font-semibold transition-colors">
-                      Éditer
+                  <td className="py-5 text-right">
+                    <button className="p-2 hover:bg-white rounded-lg border border-transparent hover:border-gray-200 transition-all">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                     </button>
                   </td>
                 </tr>
@@ -151,27 +165,12 @@ export default function ActorsPage() {
           </table>
           
           {actors.length === 0 && (
-            <div className="p-8 text-center text-[var(--color-muted)]">
-              Aucun acteur trouvé.
+            <div className="py-20 text-center">
+              <UsersIcon className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+              <p className="text-gray-400 font-bold">Aucun acteur enregistré pour le moment.</p>
             </div>
           )}
         </div>
-        
-        {/* Pagination mock */}
-        {actors.length > 0 && (
-          <div className="px-6 py-4 border-t border-[var(--color-border)] flex items-center justify-between bg-white">
-            <span className="text-sm text-[var(--color-muted)]">
-              Affichage de 1 à {actors.length} sur {actors.length} acteurs
-            </span>
-            <div className="flex gap-1">
-              <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-muted)] hover:bg-[var(--color-bg)]">&lt;</button>
-              <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--color-secondary)] text-white font-medium">1</button>
-              <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-earth)] hover:bg-[var(--color-bg)]">2</button>
-              <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-earth)] hover:bg-[var(--color-bg)]">3</button>
-              <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-muted)] hover:bg-[var(--color-bg)]">&gt;</button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

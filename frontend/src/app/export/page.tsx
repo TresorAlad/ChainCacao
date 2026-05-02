@@ -3,9 +3,15 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
-import { FileTextIcon, DownloadIcon, ShieldCheckIcon, PackageIcon } from 'lucide-react'
+import { 
+  DocumentTextIcon as FileTextIcon, 
+  ArrowDownTrayIcon as DownloadIcon, 
+  ShieldCheckIcon, 
+  CubeIcon as PackageIcon 
+} from '@heroicons/react/24/outline'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
+import { getErrorMessage } from '@/lib/error-utils'
 
 interface LotEntry {
   id: string
@@ -14,9 +20,11 @@ interface LotEntry {
   statut: string
 }
 
+const EXPORT_ALLOWED = ['distributeur', 'exportateur', 'admin']
+
 export default function ExportPage() {
   const router = useRouter()
-  const { isAuthenticated, loading } = useAuth()
+  const { isAuthenticated, loading, user } = useAuth()
   const [batchIds, setBatchIds] = useState('')
   const [lots, setLots] = useState<LotEntry[]>([])
   const [selectedLots, setSelectedLots] = useState<string[]>([])
@@ -67,15 +75,16 @@ export default function ExportPage() {
     }
     setIsExporting(true)
     try {
-      const markedLots: any[] = []
+      const markedLots: { id: string }[] = []
       const errors: string[] = []
 
       for (const id of selectedLots) {
         try {
-          const res = await api.post<any>(`/lot/${id}/export`, {})
-          markedLots.push(res.data.batch || { id })
-        } catch (err: any) {
-          errors.push(`${id}: ${err.message}`)
+          const res = await api.post<{ batch?: { id?: string } }>(`/lot/${encodeURIComponent(id)}/export`, {})
+          const bid = res.data.batch?.id ?? id
+          markedLots.push({ id: bid })
+        } catch (err: unknown) {
+          errors.push(`${id}: ${getErrorMessage(err, 'erreur')}`)
         }
       }
 
@@ -103,8 +112,8 @@ export default function ExportPage() {
         toast.success(`${markedLots.length} lot(s) marqué(s) exporté(s) et téléchargés`)
       }
       setSelectedLots([])
-    } catch (err: any) {
-      toast.error('Erreur lors de l\'export: ' + err.message)
+    } catch (err: unknown) {
+      toast.error(`Erreur lors de l'export : ${getErrorMessage(err, 'erreur inconnue')}`)
     } finally {
       setIsExporting(false)
     }
@@ -120,194 +129,159 @@ export default function ExportPage() {
 
   if (!isAuthenticated) return null
 
+  if (user?.role && !EXPORT_ALLOWED.includes(user.role)) {
+    return (
+      <div className="w-full py-6 sm:py-8">
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center">
+          <p className="text-red-700 font-bold text-lg">Accès non autorisé</p>
+          <p className="text-red-600 mt-2 text-sm">Votre rôle ({user.role}) n&apos;est pas autorisé à exporter des lots.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="page-container">
-      <header className="page-header">
-        <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-primary)]">
-          Export de données
-        </h1>
-        <p className="text-[var(--color-muted)] mt-2">
-          Marquez des lots comme exportés et téléchargez un rapport JSON
-        </p>
+    <div className="w-full py-6 sm:py-8">
+      {/* Header Section */}
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
+        <div>
+          <h1 className="text-4xl font-bold tracking-tight text-[var(--color-primary)]">
+            Export de Données
+          </h1>
+          <p className="text-lg mt-2 font-medium opacity-60 text-[var(--color-muted)]">
+            Génération de manifestes JSON pour la logistique internationale.
+          </p>
+        </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recherche et sélection */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Chargement des lots */}
-          <div className="card group">
-            <div className="card-header border-b border-[var(--color-border)]/50">
-              <h2 className="card-title flex items-center gap-2">
-                <PackageIcon className="w-5 h-5 text-[var(--color-primary)]" />
-                Charger des lots
-              </h2>
-            </div>
-            <div className="card-body">
-              <div className="form-group">
-                <label className="form-label">IDs des lots (séparés par virgule, point-virgule ou saut de ligne)</label>
-                <textarea
-                  className="form-input font-mono text-sm"
-                  rows={4}
-                  placeholder="Un identifiant par ligne ou séparés par virgule"
-                  value={batchIds}
-                  onChange={(e) => setBatchIds(e.target.value)}
-                />
-              </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Main Content */}
+        <div className="lg:col-span-8 space-y-8">
+          {/* Batch Input */}
+          <div className="bg-white rounded-[2rem] p-10 shadow-sm border border-[var(--color-border)]">
+            <h2 className="text-2xl font-black text-[var(--color-primary)] mb-6 flex items-center gap-3">
+              <PackageIcon className="w-6 h-6" />
+              Sélection des Lots
+            </h2>
+            <div className="space-y-4">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">IDs des lots (un par ligne)</label>
+              <textarea
+                className="w-full px-6 py-4 bg-gray-50 border border-[var(--color-border)] rounded-2xl text-sm font-mono text-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)] outline-none transition-all placeholder:text-gray-300"
+                rows={4}
+                placeholder="Ex: 4CB-3409-A45..."
+                value={batchIds}
+                onChange={(e) => setBatchIds(e.target.value)}
+              />
               <button
                 onClick={loadLots}
                 disabled={isLoading || !batchIds.trim()}
-                className="btn btn-secondary flex items-center gap-2"
+                className="px-8 py-3 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all flex items-center gap-2 disabled:opacity-50"
               >
-                {isLoading ? (
-                  <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> Chargement...</>
-                ) : (
-                  'Charger les lots'
-                )}
+                {isLoading ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> : 'Charger les lots'}
               </button>
             </div>
           </div>
 
-          {/* Table des lots chargés */}
+          {/* Lots Table */}
           {lots.length > 0 && (
-            <div className="card group">
-              <div className="card-header border-b border-[var(--color-border)]/50">
-                <h2 className="card-title flex items-center justify-between">
-                  <span>Lots chargés ({lots.length})</span>
-                  <span className="text-body-sm text-[var(--color-muted)]">{selectedLots.length} sélectionné(s)</span>
-                </h2>
-              </div>
-              <div className="card-body p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full caption-bottom text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg)]/50">
-                        <th className="px-6 py-4 text-left">
+            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)]">
+               <div className="flex justify-between items-center mb-8">
+                  <h3 className="text-xl font-black text-[var(--color-primary)]">Aperçu de l'Export ({lots.length})</h3>
+                  <div className="flex items-center gap-2">
+                     <span className="text-[10px] font-black text-gray-400 uppercase">{selectedLots.length} sélectionné(s)</span>
+                  </div>
+               </div>
+               <div className="overflow-x-auto">
+                 <table className="w-full">
+                   <thead>
+                     <tr className="text-left border-b border-gray-100">
+                       <th className="pb-4">
                           <input
                             type="checkbox"
                             checked={selectedLots.length === lots.length && lots.length > 0}
                             onChange={() => {
-                              if (selectedLots.length === lots.length) {
-                                setSelectedLots([])
-                              } else {
-                                setSelectedLots(lots.map((l) => l.id))
-                              }
+                              if (selectedLots.length === lots.length) setSelectedLots([])
+                              else setSelectedLots(lots.map((l) => l.id))
                             }}
-                            className="w-4 h-4 rounded border-[var(--color-border)] accent-[var(--color-primary)]"
+                            className="w-5 h-5 rounded-lg border-gray-300 accent-[#33691E]"
                           />
-                        </th>
-                        <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">ID du lot</th>
-                        <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Culture</th>
-                        <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Quantité (kg)</th>
-                        <th className="px-6 py-4 text-left text-body-sm font-semibold text-[var(--color-muted)]">Statut</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lots.map((lot) => (
-                        <tr key={lot.id} className="border-b border-[var(--color-border)]/50 hover:bg-[var(--color-bg)]/50 transition-all">
-                          <td className="px-6 py-4">
+                       </th>
+                       <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">ID</th>
+                       <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Poids</th>
+                       <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Statut</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-gray-50">
+                     {lots.map((lot) => (
+                       <tr key={lot.id} className="group">
+                         <td className="py-4">
                             <input
                               type="checkbox"
                               checked={selectedLots.includes(lot.id)}
                               onChange={() => toggleLot(lot.id)}
-                              className="w-4 h-4 rounded border-[var(--color-border)] accent-[var(--color-primary)]"
+                              className="w-5 h-5 rounded-lg border-gray-300 accent-[#33691E]"
                             />
-                          </td>
-                          <td className="px-6 py-4 font-medium text-[var(--color-primary)]">{lot.id}</td>
-                          <td className="px-6 py-4 text-[var(--color-earth)]">{lot.culture}</td>
-                          <td className="px-6 py-4 text-[var(--color-earth)]">{lot.quantite} kg</td>
-                          <td className="px-6 py-4">
-                            <span className="inline-flex px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {lot.statut}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                         </td>
+                         <td className="py-4">
+                            <p className="text-sm font-black text-[var(--color-primary)]">{lot.id}</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">{lot.culture}</p>
+                         </td>
+                         <td className="py-4 text-center">
+                            <span className="text-sm font-black text-[var(--color-primary)]">{lot.quantite} kg</span>
+                         </td>
+                         <td className="py-4 text-right">
+                           <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase tracking-widest">
+                             {lot.statut}
+                           </span>
+                         </td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
             </div>
           )}
         </div>
 
-        {/* Options d'export */}
-        <div className="space-y-6">
-          <div className="card group">
-            <div className="card-header border-b border-[var(--color-border)]/50">
-              <h2 className="card-title flex items-center gap-2">
-                <FileTextIcon className="w-5 h-5 text-[var(--color-primary)]" />
-                Format d'export
-              </h2>
-            </div>
-            <div className="card-body">
-              <div className="space-y-3">
-                <label className="flex items-center gap-3 p-3 rounded-lg border-2 border-[var(--color-primary)] cursor-pointer">
-                  <input
-                    type="radio"
-                    name="format"
-                    value="json"
-                    defaultChecked
-                    className="w-4 h-4 text-[var(--color-primary)]"
-                    readOnly
-                  />
-                  <div>
-                    <p className="font-medium text-[var(--color-earth)]">JSON</p>
-                    <p className="text-body-sm text-[var(--color-muted)]">Format standard pour intégration API</p>
-                  </div>
-                </label>
-                <label className="flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer opacity-50">
-                  <input
-                    type="radio"
-                    name="format"
-                    value="csv"
-                    disabled
-                    className="w-4 h-4 text-[var(--color-primary)]"
-                  />
-                  <div>
-                    <p className="font-medium text-[var(--color-earth)]">CSV</p>
-                    <p className="text-body-sm text-[var(--color-muted)]">Bientôt disponible</p>
-                  </div>
-                </label>
+        {/* Action Column */}
+        <div className="lg:col-span-4 space-y-8">
+           <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)]">
+              <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2 mb-6 flex items-center gap-2">
+                 <FileTextIcon className="w-4 h-4" />
+                 Format de Sortie
+              </h3>
+              <div className="space-y-4">
+                 <div className="p-4 bg-[#F1F8E9] border-2 border-[#33691E] rounded-2xl">
+                    <p className="text-sm font-black text-[#33691E]">JSON Manifest</p>
+                    <p className="text-[10px] font-bold text-[#33691E]/70 uppercase">Standard Intéropérable</p>
+                 </div>
+                 <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl opacity-50 grayscale">
+                    <p className="text-sm font-black text-gray-400">Excel / CSV</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Indisponible</p>
+                 </div>
               </div>
-            </div>
-          </div>
 
-          <div className="card group">
-            <div className="card-header border-b border-[var(--color-border)]/50">
-              <h2 className="card-title flex items-center gap-2">
-                <ShieldCheckIcon className="w-5 h-5 text-[var(--color-primary)]" />
-                Conformité EUDR
-              </h2>
-            </div>
-            <div className="card-body">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="badge badge-success">✓</span>
-                  <span className="text-body-sm text-[var(--color-earth)]">Traçabilité complète</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="badge badge-success">✓</span>
-                  <span className="text-body-sm text-[var(--color-earth)]">Géo-localisation</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="badge badge-success">✓</span>
-                  <span className="text-body-sm text-[var(--color-earth)]">Preuves de durabilité</span>
-                </div>
-              </div>
-            </div>
-          </div>
+              <button
+                onClick={handleExport}
+                disabled={isExporting || selectedLots.length === 0}
+                className="w-full mt-8 py-4 bg-[#1B3A0F] text-white rounded-[1.5rem] text-sm font-black shadow-lg hover:brightness-110 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+              >
+                {isExporting ? <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div> : (
+                  <>
+                    <DownloadIcon className="w-5 h-5" />
+                    Télécharger Manifeste ({selectedLots.length})
+                  </>
+                )}
+              </button>
+           </div>
 
-          <button
-            onClick={handleExport}
-            disabled={isExporting || selectedLots.length === 0}
-            className="btn btn-primary w-full flex items-center justify-center gap-2"
-          >
-            {isExporting ? (
-              <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> Export en cours...</>
-            ) : (
-              <><DownloadIcon className="w-4 h-4" /> Exporter ({selectedLots.length} lot{selectedLots.length > 1 ? 's' : ''})</>
-            )}
-          </button>
+           <div className="bg-[#1A2E0D] rounded-[2rem] p-8 text-white">
+              <ShieldCheckIcon className="w-8 h-8 mb-4 text-[#81C784]" />
+              <h4 className="text-sm font-black mb-2 uppercase tracking-widest">Certification EUDR</h4>
+              <p className="text-xs text-white/60 leading-relaxed">
+                Ce manifeste inclut les preuves de non-déforestation requises par la réglementation européenne 2024.
+              </p>
+           </div>
         </div>
       </div>
     </div>

@@ -20,6 +20,7 @@ import {
 import Link from 'next/link'
 import api, { Batch, BatchHistoryEvent } from '@/lib/api'
 import toast from 'react-hot-toast'
+import { getErrorMessage } from '@/lib/error-utils'
 
 function LotDetailContent() {
   const router = useRouter()
@@ -47,8 +48,8 @@ function LotDetailContent() {
         ])
         setLot(lotRes.data)
         setHistory(histRes.data.events || [])
-      } catch (err: any) {
-        toast.error(err.message || 'Erreur lors du chargement du lot')
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Erreur lors du chargement du lot'))
       } finally {
         setDataLoading(false)
       }
@@ -69,7 +70,7 @@ function LotDetailContent() {
 
   if (!lotId) {
     return (
-      <div className="page-container">
+      <div className="page-container py-6 sm:py-8">
         <div className="card p-8 text-center">
           <p className="text-[var(--color-muted)]">Aucun ID de lot spécifié.</p>
           <Link href="/lots" className="btn btn-primary mt-4">Retour aux lots</Link>
@@ -80,7 +81,7 @@ function LotDetailContent() {
 
   if (!lot) {
     return (
-      <div className="page-container">
+      <div className="page-container py-6 sm:py-8">
         <div className="card p-8 text-center">
           <p className="text-[var(--color-muted)]">Lot introuvable.</p>
           <Link href="/lots" className="btn btn-primary mt-4">Retour aux lots</Link>
@@ -92,7 +93,7 @@ function LotDetailContent() {
   const isCompliant = lot.eudr_conforme
 
   return (
-    <div className="page-container">
+    <div className="page-container py-6 sm:py-8">
       {/* En-tête du lot */}
       <header className="page-header">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">

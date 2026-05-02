@@ -1,33 +1,67 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { CubeIcon } from '@heroicons/react/24/outline'
-import type { DashboardStats } from '@/lib/dashboard-stats'
+import { CubeIcon, PlusIcon, QrCodeIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import api, { type Batch } from '@/lib/api'
 
-const mockLots = [
-  { id: '4CB-3409-A45', agriculteur: 'Koffi Mensah', poids: '430.00', date: '12/05/2024', statut: 'VÉRIFIÉ', eudr: true },
-  { id: '4CB-3409-A46', agriculteur: 'Adjoa Lawson', poids: '520.50', date: '11/05/2024', statut: 'EN COURS', eudr: false },
-  { id: '4CB-3409-A47', agriculteur: 'Kossi Azan', poids: '810.25', date: '10/05/2024', statut: 'VÉRIFIÉ', eudr: true },
-  { id: '4CB-3409-A48', agriculteur: 'Yaozi Osei', poids: '210.00', date: '09/05/2024', statut: 'REJETÉ', eudr: false },
-  { id: '4CB-3409-A49', agriculteur: 'Amet Sado', poids: '410.00', date: '08/05/2024', statut: 'VÉRIFIÉ', eudr: true },
-]
+function statusLabel(statut?: string): { label: string; cls: string } {
+  switch ((statut || '').toUpperCase()) {
+    case 'VERIFIED':
+    case 'VÉRIFIÉ':
+      return { label: 'VÉRIFIÉ', cls: 'bg-[#E8F5E9] text-[#2E7D32]' }
+    case 'REJECTED':
+    case 'REJETÉ':
+      return { label: 'REJETÉ', cls: 'bg-[#FFEBEE] text-[#B71C1C]' }
+    default:
+      return { label: 'EN COURS', cls: 'bg-[#FFF3E0] text-[#E65100]' }
+  }
+}
+
+function formatDate(d?: string) {
+  if (!d) return '—'
+  try { return new Date(d).toLocaleDateString('fr-FR') } catch { return d }
+}
 
 export default function LotsPage() {
   const router = useRouter()
-  const { isAuthenticated, loading } = useAuth()
-  const [selectedLot, setSelectedLot] = useState(mockLots[0])
+  const { isAuthenticated, loading, user } = useAuth()
+  const [lots, setLots] = useState<Batch[]>([])
+  const [fetching, setFetching] = useState(false)
+  const [error, setError] = useState('')
+  const [selectedLot, setSelectedLot] = useState<Batch | null>(null)
+  const [searchId, setSearchId] = useState('')
+  const [searchResult, setSearchResult] = useState<Batch | null | 'not-found'>(null)
+  const [searching, setSearching] = useState(false)
+
+  const fetchLot = useCallback(async (id: string) => {
+    if (!id.trim()) return
+    setSearching(true)
+    setSearchResult(null)
+    try {
+      const res = await api.get<{ batch: Batch }>(`/lot/${id.trim()}`)
+      const batch = res.data.batch ?? res.data
+      setSearchResult(batch as Batch)
+      setSelectedLot(batch as Batch)
+    } catch {
+      setSearchResult('not-found')
+    } finally {
+      setSearching(false)
+    }
+  }, [])
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace('/login')
   }, [isAuthenticated, loading, router])
 
-  if (loading) {
+  // L'API n'expose pas GET /lot (liste globale) — les lots sont chargés via la recherche par ID
+
+  if (loading || fetching) {
     return (
       <div className="min-h-screen bg-[var(--color-bg)] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-[var(--color-primary)] border-t-transparent"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-[var(--color-primary)] border-t-transparent" />
       </div>
     )
   }
@@ -35,188 +69,177 @@ export default function LotsPage() {
   if (!isAuthenticated) return null
 
   return (
-    <div className="page-container">
-      {/* Page Header */}
-      <header className="page-header animate-fade-in flex justify-between items-start mb-6">
+    <div className="w-full py-6 sm:py-8">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
         <div>
-          <p className="text-sm font-medium text-[var(--color-muted)] mb-1">Pages / Lots de cacao</p>
-          <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-primary)]">
-            Gestion des lots
-          </h1>
+          <h1 className="text-4xl font-bold tracking-tight text-[var(--color-primary)]">Gestion des Lots</h1>
+          <p className="text-lg mt-2 font-medium opacity-60 text-[var(--color-muted)]">
+            Inventaire complet et traçabilité des récoltes de cacao.
+          </p>
         </div>
-        <div className="flex gap-3">
-          <div className="relative hidden md:block">
-            <input
-              type="text"
-              placeholder="Rechercher un lot..."
-              className="form-input pl-10 w-64 rounded-full border-[var(--color-border)]"
-            />
-            <svg className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
-          <button className="w-10 h-10 rounded-full border border-[var(--color-border)] flex items-center justify-center bg-white text-[var(--color-primary)]">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.push('/nouveau-lot')}
+            className="flex items-center gap-2 px-6 py-2.5 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all"
+          >
+            <PlusIcon className="w-5 h-5" />
+            Nouveau Lot
           </button>
         </div>
       </header>
 
-      <div className="flex flex-col xl:flex-row gap-6">
-        {/* Main List Section */}
-        <div className="flex-1 card p-6">
-          <div className="flex justify-between items-start mb-6 border-b border-[var(--color-border)] pb-6">
-            <div>
-              <h2 className="text-title-lg font-bold text-[var(--color-primary)]">Inventaire des récoltes</h2>
-              <p className="text-sm text-[var(--color-muted)] mt-1">128 lots enregistrés ce mois-ci.</p>
-            </div>
-            <div className="flex items-center gap-6">
-              <div className="text-right">
-                <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1">Tonnage Total</p>
-                <div className="flex items-baseline gap-2 justify-end">
-                  <h3 className="text-3xl font-bold text-[var(--color-primary)]">1,248.5</h3>
-                  <span className="text-sm font-medium text-[var(--color-primary)]">Tonnes</span>
-                </div>
-                <div className="flex items-center justify-end text-xs font-medium text-[var(--color-success)] mt-1">
-                  <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-                  +8% depuis le mois dernier
-                </div>
-              </div>
-              <div className="w-12 h-12 rounded-full bg-[var(--color-secondary)]/10 flex items-center justify-center text-[var(--color-secondary)] hidden md:flex">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>
-              </div>
-            </div>
+      {/* Recherche par ID */}
+      <div className="mb-8 bg-white rounded-2xl p-6 shadow-sm border border-[var(--color-border)]">
+        <p className="text-sm font-bold text-[var(--color-primary)] mb-3">Rechercher un lot par ID</p>
+        <div className="flex gap-3">
+          <div className="relative flex-1">
+            <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-2.5 text-gray-400" />
+            <input
+              type="text"
+              value={searchId}
+              onChange={(e) => setSearchId(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && fetchLot(searchId)}
+              placeholder="Ex: 4CB-3409-A45"
+              className="pl-10 pr-4 py-2 w-full border border-[var(--color-border)] rounded-xl text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
+            />
+          </div>
+          <button
+            onClick={() => fetchLot(searchId)}
+            disabled={searching || !searchId.trim()}
+            className="px-5 py-2 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold disabled:opacity-50 hover:brightness-110 transition-all"
+          >
+            {searching ? '…' : 'Chercher'}
+          </button>
+        </div>
+        {searchResult === 'not-found' && (
+          <p className="mt-2 text-sm text-red-600">Aucun lot trouvé pour cet identifiant.</p>
+        )}
+        {searchResult && searchResult !== 'not-found' && (
+          <p className="mt-2 text-sm text-green-700 font-medium">
+            Lot trouvé : <span className="font-black">{searchResult.id}</span> — {searchResult.quantite} kg
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-col xl:flex-row gap-8">
+        {/* Table */}
+        <div className="flex-1 bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)] overflow-hidden">
+          <div className="flex justify-between items-center mb-8">
+            <h3 className="text-2xl font-black text-[var(--color-primary)]">Registre des Récoltes</h3>
+            <span className="px-3 py-1 bg-[#F1F8E9] text-[#33691E] rounded-full text-[10px] font-black uppercase tracking-widest">
+              Total : {lots.length} lots
+            </span>
           </div>
 
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex gap-2">
-              <button className="btn btn-sm btn-primary-outline bg-white text-[var(--color-primary)] border-[var(--color-border)]">Tous les statuts</button>
-              <button className="btn btn-sm btn-primary-outline bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] border-transparent font-semibold">Vérifiés</button>
+          {lots.length === 0 ? (
+            <div className="py-16 flex flex-col items-center gap-4 text-center">
+              <CubeIcon className="w-16 h-16 text-gray-200" />
+              <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Aucun lot disponible</p>
+              <p className="text-xs text-gray-400">Utilisez la recherche ci-dessus pour trouver un lot par ID,<br />ou créez un nouveau lot.</p>
+              <Link href="/nouveau-lot" className="mt-2 px-5 py-2.5 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold hover:brightness-110 transition-all">
+                Créer un lot
+              </Link>
             </div>
-            <Link href="/nouveau-lot" className="btn btn-secondary flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-              Nouveau Lot
-            </Link>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="table w-full border-collapse">
-              <thead className="bg-white text-left border-b-2 border-[var(--color-border)]">
-                <tr>
-                  <th className="px-4 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Lot ID</th>
-                  <th className="px-4 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Agriculteur</th>
-                  <th className="px-4 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Poids (kg)</th>
-                  <th className="px-4 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Date Récolte</th>
-                  <th className="px-4 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Statut</th>
-                  <th className="px-4 py-4 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-[var(--color-border)]">
-                {mockLots.map((lot, idx) => (
-                  <tr 
-                    key={idx} 
-                    className={`hover:bg-[var(--color-bg)]/50 transition-colors cursor-pointer ${selectedLot.id === lot.id ? 'bg-[var(--color-secondary)]/5' : ''}`}
-                    onClick={() => setSelectedLot(lot)}
-                  >
-                    <td className="px-4 py-4">
-                      <div className="text-sm font-bold text-[var(--color-primary)]">{lot.id.split('-')[0]}</div>
-                      <div className="text-xs font-medium text-[var(--color-muted)]">{lot.id.substring(4)}</div>
-                    </td>
-                    <td className="px-4 py-4 text-sm font-semibold text-[var(--color-earth)]">
-                      {lot.agriculteur}
-                    </td>
-                    <td className="px-4 py-4 text-sm font-bold text-[var(--color-primary)]">
-                      {lot.poids}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-[var(--color-muted)]">
-                      {lot.date}
-                    </td>
-                    <td className="px-4 py-4">
-                      {lot.statut === 'VÉRIFIÉ' && (
-                        <span className="inline-flex items-center justify-center w-24 px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800 border border-green-200">
-                          {lot.statut}
-                        </span>
-                      )}
-                      {lot.statut === 'EN COURS' && (
-                        <span className="inline-flex items-center justify-center w-24 px-2 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-800 border border-orange-200">
-                          {lot.statut}
-                        </span>
-                      )}
-                      {lot.statut === 'REJETÉ' && (
-                        <span className="inline-flex items-center justify-center w-24 px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200">
-                          {lot.statut}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-4 text-right">
-                      <button className="text-sm font-bold text-[var(--color-secondary)] hover:text-[var(--color-primary)] transition-colors">
-                        Détails
-                      </button>
-                    </td>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left border-b border-gray-100">
+                    <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Lot ID</th>
+                    <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Propriétaire</th>
+                    <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Poids</th>
+                    <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Statut</th>
+                    <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          
-          <div className="flex items-center justify-between mt-6 pt-4 border-t border-[var(--color-border)]">
-            <span className="text-sm font-medium text-[var(--color-muted)]">Page 1 sur 29</span>
-            <div className="flex gap-2">
-              <button className="w-8 h-8 rounded-lg flex items-center justify-center border border-[var(--color-border)] text-[var(--color-muted)]">&lt;</button>
-              <button className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--color-secondary)] text-white font-bold">1</button>
-              <button className="w-8 h-8 rounded-lg flex items-center justify-center border border-[var(--color-border)] text-[var(--color-primary)] font-bold">2</button>
-              <button className="w-8 h-8 rounded-lg flex items-center justify-center border border-[var(--color-border)] text-[var(--color-primary)] font-bold">3</button>
-              <button className="w-8 h-8 rounded-lg flex items-center justify-center border border-[var(--color-border)] text-[var(--color-primary)] font-bold">&gt;</button>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {lots.map((lot) => {
+                    const st = statusLabel(lot.statut)
+                    return (
+                      <tr
+                        key={lot.id}
+                        className={`group hover:bg-gray-50 transition-all cursor-pointer ${selectedLot?.id === lot.id ? 'bg-[#F1F8E9]/50' : ''}`}
+                        onClick={() => setSelectedLot(lot)}
+                      >
+                        <td className="py-5">
+                          <p className="text-sm font-black text-[var(--color-primary)]">{lot.id.split('-')[0]}</p>
+                          <p className="text-[10px] font-medium text-gray-400 uppercase tracking-tighter">{lot.id.substring(4)}</p>
+                        </td>
+                        <td className="py-5 text-sm font-bold text-[var(--color-primary)]">{lot.proprietaire_id}</td>
+                        <td className="py-5 text-center">
+                          <span className="text-sm font-black text-[var(--color-primary)]">{lot.quantite.toFixed(2)}</span>
+                          <span className="text-[10px] font-bold text-gray-400 ml-1 uppercase">kg</span>
+                        </td>
+                        <td className="py-5 text-center">
+                          <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${st.cls}`}>
+                            {st.label}
+                          </span>
+                        </td>
+                        <td className="py-5 text-right">
+                          <Link href={`/lot-detail?id=${lot.id}`} className="p-2 hover:bg-white rounded-lg border border-transparent hover:border-gray-200 transition-all inline-block">
+                            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Right Drawer - Details */}
-        <div className="w-full xl:w-[400px] flex-shrink-0 card p-6 bg-white relative">
-          <button className="absolute top-4 right-4 text-[var(--color-muted)] hover:text-[var(--color-primary)]">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-          
-          <h2 className="text-xl font-bold text-[var(--color-primary)] mb-6">Détails du Lot</h2>
-          
-          <div className="p-4 rounded-xl border border-[var(--color-secondary)]/30 bg-[var(--color-secondary)]/5 flex items-center justify-between mb-8">
-            <div>
-              <p className="text-xs font-semibold text-[var(--color-muted)] uppercase mb-1">Identifiant Unique</p>
-              <p className="text-lg font-bold text-[var(--color-primary)]">{selectedLot.id}</p>
-            </div>
-            <div className="w-12 h-12 rounded-lg bg-white border border-[var(--color-border)] flex items-center justify-center shadow-sm">
-              <svg className="w-8 h-8 text-[var(--color-primary)]" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13-2h3v2h-3v-2zm-3 0h2v2h-2v-2zm3 3h3v2h-3v-2zm-3 0h2v2h-2v-2zm3 3h3v2h-3v-2zm-3 0h2v2h-2v-2z" />
-              </svg>
+        {/* Detail Panel */}
+        {selectedLot && (
+          <div className="w-full xl:w-[400px] flex-shrink-0 flex flex-col gap-6">
+            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)]">
+              <h3 className="text-xl font-black text-[var(--color-primary)] mb-6">Détails de Traçabilité</h3>
+
+              <div className="aspect-square bg-gray-50 rounded-[2rem] mb-8 flex items-center justify-center border-2 border-dashed border-gray-200 relative overflow-hidden group">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#33691E]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <QrCodeIcon className="w-32 h-32 text-gray-300 group-hover:text-[#33691E] transition-colors" />
+                <div className="absolute bottom-4 left-0 right-0 text-center">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ID : {selectedLot.id}</p>
+                </div>
+              </div>
+
+              <div className="space-y-4 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Culture</span>
+                  <span className="font-bold text-[var(--color-primary)]">{selectedLot.culture}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Quantité</span>
+                  <span className="font-bold text-[var(--color-primary)]">{selectedLot.quantite} kg</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Lieu</span>
+                  <span className="font-bold text-[var(--color-primary)]">{selectedLot.lieu || '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Date récolte</span>
+                  <span className="font-bold text-[var(--color-primary)]">{formatDate(selectedLot.date_recolte)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">EUDR</span>
+                  <span className={`font-black ${selectedLot.eudr_conforme ? 'text-green-700' : 'text-red-600'}`}>
+                    {selectedLot.eudr_conforme ? 'Conforme' : 'Non conforme'}
+                  </span>
+                </div>
+              </div>
+
+              <Link
+                href={`/lot-detail?id=${selectedLot.id}`}
+                className="w-full mt-8 py-4 bg-[#1B3A0F] text-white rounded-[1.5rem] text-sm font-bold shadow-lg hover:brightness-110 transition-all flex items-center justify-center gap-2"
+              >
+                <CubeIcon className="w-5 h-5" />
+                Voir historique complet
+              </Link>
             </div>
           </div>
-
-          <h3 className="text-sm font-bold text-[var(--color-muted)] uppercase tracking-wider mb-6">Parcours de traçabilité</h3>
-          
-          <div className="relative pl-6 border-l-2 border-[var(--color-border)] space-y-8 mb-10">
-            <div className="relative">
-              <div className="absolute -left-[35px] top-1 w-4 h-4 rounded-full border-4 border-white bg-[var(--color-secondary)] shadow"></div>
-              <h4 className="text-sm font-bold text-[var(--color-primary)]">Traitement usine</h4>
-              <p className="text-xs text-[var(--color-muted)] mt-1">14/05/2024</p>
-            </div>
-            <div className="relative">
-              <div className="absolute -left-[35px] top-1 w-4 h-4 rounded-full border-4 border-white bg-[var(--color-secondary)] shadow"></div>
-              <h4 className="text-sm font-bold text-[var(--color-primary)]">Transport vers Port Lome</h4>
-              <p className="text-xs font-medium text-[var(--color-earth)] mt-1">Logistique Rapide SARL</p>
-              <p className="text-xs text-[var(--color-muted)] mt-1">13/05/2024</p>
-            </div>
-            <div className="relative">
-              <div className="absolute -left-[35px] top-1 w-4 h-4 rounded-full border-4 border-white bg-[var(--color-secondary)] shadow"></div>
-              <h4 className="text-sm font-bold text-[var(--color-primary)]">Récolte enregistrée</h4>
-              <p className="text-xs font-medium text-[var(--color-earth)] mt-1">{selectedLot.agriculteur}</p>
-              <p className="text-xs text-[var(--color-muted)] mt-1">{selectedLot.date}</p>
-            </div>
-          </div>
-
-          <button className="w-full btn btn-primary flex items-center justify-center gap-2 py-3 shadow-md">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-            Télécharger le Manifeste PDF
-          </button>
-        </div>
+        )}
       </div>
     </div>
   )

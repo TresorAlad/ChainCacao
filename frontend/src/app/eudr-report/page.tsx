@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
+import { getErrorMessage } from '@/lib/error-utils'
 
 function EudrReportInner() {
   const searchParams = useSearchParams()
@@ -25,8 +26,8 @@ function EudrReportInner() {
       const res = await api.get<{ success: boolean; report: unknown }>(`/eudr/${encodeURIComponent(id)}/report`)
       setReport(res.data.report ?? res.data)
       toast.success('Rapport chargé')
-    } catch (err: any) {
-      toast.error(err.message)
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Impossible de charger le rapport'))
       setReport(null)
     }
   }
@@ -47,13 +48,13 @@ function EudrReportInner() {
       a.click()
       URL.revokeObjectURL(url)
       toast.success('PDF téléchargé')
-    } catch (err: any) {
-      toast.error(err.message || 'Échec du téléchargement PDF')
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Échec du téléchargement PDF'))
     }
   }
 
   return (
-    <div className="page-container max-w-4xl">
+    <div className="page-container py-6 sm:py-8">
       <h1 className="text-3xl font-bold text-[var(--color-primary)] mb-6">Rapport EUDR</h1>
       <p className="text-[var(--color-muted)] mb-6 text-sm">
         Réservé aux rôles autorisés par l’API (ex. distributeur, administrateur).

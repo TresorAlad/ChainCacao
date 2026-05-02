@@ -3,30 +3,34 @@
 import { ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
 import { AuthProvider } from '@/contexts/AuthContext'
-import Sidebar from '@/components/Sidebar'
-import Header from '@/components/Header'
+import { WebChannelGuard } from '@/components/WebChannelGuard'
+import AppShell from '@/components/AppShell'
+import { SidebarLayoutProvider } from '@/contexts/SidebarLayoutContext'
 
 export default function Providers({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const isAuthPage = pathname === '/login' || pathname === '/register'
   /** Pages sans sidebar : landing, auth, vérification publique */
-  const isPublicPage = isAuthPage || pathname === '/' || pathname === '/verify'
+  const isPublicPage =
+    isAuthPage ||
+    pathname === '/' ||
+    pathname === '/verify' ||
+    pathname.startsWith('/verify/') ||
+    pathname === '/compte-application-mobile'
 
   return (
     <AuthProvider>
-      {isPublicPage ? (
-        <div className="min-h-screen">
-          {children}
-        </div>
-      ) : (
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <Header />
-          <main className="main-content">
+      <WebChannelGuard>
+        {isPublicPage ? (
+          <div className="min-h-screen">
             {children}
-          </main>
-        </div>
-      )}
+          </div>
+        ) : (
+          <SidebarLayoutProvider>
+            <AppShell>{children}</AppShell>
+          </SidebarLayoutProvider>
+        )}
+      </WebChannelGuard>
     </AuthProvider>
   )
 }
