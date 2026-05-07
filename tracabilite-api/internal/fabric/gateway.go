@@ -378,3 +378,73 @@ func (g *GatewayClient) GetAlertsCount(ctx context.Context) (map[string]any, err
 		"urgent": 5,
 	}, nil
 }
+
+func (g *GatewayClient) UpdateBatch(ctx context.Context, batchID, actorID string, variete, parcelle, notes string, poids float64, justification string) (string, models.Batch, error) {
+	// Dummy
+	txID, _, err := g.submit(ctx, "UpdateBatch", batchID, actorID, variete, parcelle, notes, strconv.FormatFloat(poids, 'f', -1, 64), justification)
+	if err != nil {
+		return "", models.Batch{}, err
+	}
+	b, err := g.GetBatch(ctx, batchID)
+	return txID, b, err
+}
+
+func (g *GatewayClient) SetBatchPrice(ctx context.Context, batchID, actorID string, price float64) (string, error) {
+	txID, _, err := g.submit(ctx, "SetBatchPrice", batchID, actorID, strconv.FormatFloat(price, 'f', -1, 64))
+	return txID, err
+}
+
+func (g *GatewayClient) ConfirmBatchReceipt(ctx context.Context, batchID, actorID string) (string, error) {
+	txID, _, err := g.submit(ctx, "ConfirmBatchReceipt", batchID, actorID)
+	return txID, err
+}
+
+func (g *GatewayClient) GetPaymentStatus(ctx context.Context, batchID string) (map[string]any, error) {
+	data, err := g.contract.EvaluateTransaction("GetPaymentStatus", batchID)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		return map[string]any{"status": "inconnu"}, nil
+	}
+	return m, nil
+}
+
+func (g *GatewayClient) CreateGroupedList(ctx context.Context, listID string, batchIDs []string, actorID string) (string, error) {
+	batchIDsJSON, _ := json.Marshal(batchIDs)
+	txID, _, err := g.submit(ctx, "CreateGroupedList", listID, string(batchIDsJSON), actorID)
+	return txID, err
+}
+
+func (g *GatewayClient) PayGroupedList(ctx context.Context, listID, actorID string) (string, error) {
+	txID, _, err := g.submit(ctx, "PayGroupedList", listID, actorID)
+	return txID, err
+}
+
+func (g *GatewayClient) SetCooperativeMargin(ctx context.Context, orgID string, margin float64, actorID string) (string, error) {
+	txID, _, err := g.submit(ctx, "SetCooperativeMargin", orgID, strconv.FormatFloat(margin, 'f', -1, 64), actorID)
+	return txID, err
+}
+
+func (g *GatewayClient) GetWalletBalance(ctx context.Context, actorID string) (float64, error) {
+	data, err := g.contract.EvaluateTransaction("GetWalletBalance", actorID)
+	if err != nil {
+		return 0, err
+	}
+	var m struct{ Balance float64 `json:"balance"` }
+	if err := json.Unmarshal(data, &m); err != nil {
+		return 0, err
+	}
+	return m.Balance, nil
+}
+
+func (g *GatewayClient) DepositWallet(ctx context.Context, actorID string, amount float64) (string, error) {
+	txID, _, err := g.submit(ctx, "DepositWallet", actorID, strconv.FormatFloat(amount, 'f', -1, 64))
+	return txID, err
+}
+
+func (g *GatewayClient) WithdrawWallet(ctx context.Context, actorID string, amount float64) (string, error) {
+	txID, _, err := g.submit(ctx, "WithdrawWallet", actorID, strconv.FormatFloat(amount, 'f', -1, 64))
+	return txID, err
+}

@@ -7,9 +7,8 @@ const (
 	RoleAgriculteur    Role = "agriculteur"
 	RoleCooperative    Role = "cooperative"
 	RoleTransformateur Role = "transformateur"
-	RoleDistributeur   Role = "distributeur"
-	RoleExportateur    Role = "exportateur"   // alias mobile → mappé distributeur côté API
-	RoleVerificateur   Role = "verificateur"
+	RoleExportateur    Role = "exportateur"
+	RoleMinistere      Role = "ministere"
 )
 
 type Batch struct {
@@ -27,9 +26,7 @@ type Batch struct {
 	Proprietaire  string  `json:"proprietaire_id"`
 	OrgID         string  `json:"org_id"`
 	Statut        string  `json:"statut"`
-	EUDRConforme  bool    `json:"eudr_conforme"`
 	Timestamp     string  `json:"timestamp"`
-	CertificatURL string  `json:"certificat_url,omitempty"`
 	PhotoURL      string  `json:"photo_url,omitempty"`
 	Notes         string  `json:"notes,omitempty"`
 }
@@ -52,7 +49,9 @@ type Actor struct {
 	Email        string `json:"email,omitempty"`
 	OrgID        string `json:"org_id"`
 	Role         Role   `json:"role"`
+	Suspended    bool   `json:"suspended,omitempty"`
 	PIN          string `json:"-"`
+	PINHash      string `json:"-"`
 	PasswordHash string `json:"-"`
 }
 

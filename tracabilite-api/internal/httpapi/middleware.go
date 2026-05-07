@@ -31,8 +31,8 @@ func CORSMiddleware() gin.HandlerFunc {
 			}
 			c.Header("Vary", "Origin")
 		}
-		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-Id, X-Proxy-Token")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)
 			return
@@ -63,7 +63,7 @@ func PublicVerifyRateLimitMiddleware(limitPerMinute int) gin.HandlerFunc {
 		mu.Unlock()
 
 		if b.count > limitPerMinute {
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "rate limit depassee"})
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"success": false, "error": "rate limit depassee"})
 			return
 		}
 		c.Next()
@@ -89,7 +89,7 @@ func PublicVerifyRateLimitRedis(rdb *redis.Client, limitPerMinute int) gin.Handl
 			_ = rdb.Expire(ctx, key, 70*time.Second).Err()
 		}
 		if n > int64(limitPerMinute) {
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "rate limit depassee"})
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"success": false, "error": "rate limit depassee"})
 			return
 		}
 		c.Next()

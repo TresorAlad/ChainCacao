@@ -26,20 +26,16 @@ func (s *Service) FindByID(ctx context.Context, id string) (models.Actor, error)
 }
 
 func (s *Service) Authenticate(ctx context.Context, actorID, pin string) (models.Actor, error) {
-	actor, err := s.store.FindByID(ctx, actorID)
-	if err != nil {
-		return models.Actor{}, err
-	}
-	if actor.PIN != pin {
-		return models.Actor{}, errors.New("identifiants invalides")
-	}
-	return actor, nil
+	return s.store.VerifyPIN(ctx, actorID, pin)
 }
 
 func (s *Service) AuthenticateByEmail(ctx context.Context, email, password string) (models.Actor, error) {
 	actor, err := s.store.FindByEmail(ctx, email)
 	if err != nil {
 		return models.Actor{}, err
+	}
+	if actor.Suspended {
+		return models.Actor{}, errors.New("compte suspendu")
 	}
 	if actor.PasswordHash == "" {
 		return models.Actor{}, errors.New("authentification email non activee pour cet acteur")
@@ -52,6 +48,14 @@ func (s *Service) AuthenticateByEmail(ctx context.Context, email, password strin
 
 func (s *Service) Register(ctx context.Context, nom, email, password, orgID string, role models.Role) (models.Actor, error) {
 	return s.store.Register(ctx, nom, email, password, orgID, role)
+}
+
+func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (models.Actor, error) {
+	return s.store.Update(ctx, id, in)
+}
+
+func (s *Service) SetPIN(ctx context.Context, id string, pin string) (models.Actor, error) {
+	return s.store.SetPIN(ctx, id, pin)
 }
 
 // InitMemoryWebPasswords active le login email sur le store memoire (meme secret que PIN).

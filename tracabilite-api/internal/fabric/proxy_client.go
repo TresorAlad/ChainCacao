@@ -179,3 +179,66 @@ func (c *ProxyClient) GetAlertsCount(ctx context.Context) (map[string]any, error
 	return out, err
 }
 
+func (c *ProxyClient) UpdateBatch(ctx context.Context, batchID, actorID string, variete, parcelle, notes string, poids float64, justification string) (string, models.Batch, error) {
+	var out proxyTxBatchResponse
+	err := c.doJSON(ctx, http.MethodPost, "/v1/fabric/batch/update", map[string]any{
+		"batch_id": batchID, "actor_id": actorID, "variete": variete, "parcelle": parcelle, "notes": notes, "poids": poids, "justification": justification,
+	}, &out)
+	return out.TxHash, out.Batch, err
+}
+
+func (c *ProxyClient) SetBatchPrice(ctx context.Context, batchID, actorID string, price float64) (string, error) {
+	var out proxyTxBatchResponse
+	err := c.doJSON(ctx, http.MethodPost, "/v1/fabric/batch/price", map[string]any{"batch_id": batchID, "actor_id": actorID, "price": price}, &out)
+	return out.TxHash, err
+}
+
+func (c *ProxyClient) ConfirmBatchReceipt(ctx context.Context, batchID, actorID string) (string, error) {
+	var out proxyTxBatchResponse
+	err := c.doJSON(ctx, http.MethodPost, "/v1/fabric/batch/confirm", map[string]any{"batch_id": batchID, "actor_id": actorID}, &out)
+	return out.TxHash, err
+}
+
+func (c *ProxyClient) GetPaymentStatus(ctx context.Context, batchID string) (map[string]any, error) {
+	var out map[string]any
+	err := c.doJSON(ctx, http.MethodGet, "/v1/fabric/batch/"+batchID+"/payment", nil, &out)
+	return out, err
+}
+
+func (c *ProxyClient) CreateGroupedList(ctx context.Context, listID string, batchIDs []string, actorID string) (string, error) {
+	var out proxyTxBatchResponse
+	err := c.doJSON(ctx, http.MethodPost, "/v1/fabric/groupedlist/create", map[string]any{"list_id": listID, "batch_ids": batchIDs, "actor_id": actorID}, &out)
+	return out.TxHash, err
+}
+
+func (c *ProxyClient) PayGroupedList(ctx context.Context, listID, actorID string) (string, error) {
+	var out proxyTxBatchResponse
+	err := c.doJSON(ctx, http.MethodPost, "/v1/fabric/groupedlist/pay", map[string]any{"list_id": listID, "actor_id": actorID}, &out)
+	return out.TxHash, err
+}
+
+func (c *ProxyClient) SetCooperativeMargin(ctx context.Context, orgID string, margin float64, actorID string) (string, error) {
+	var out proxyTxBatchResponse
+	err := c.doJSON(ctx, http.MethodPost, "/v1/fabric/cooperative/margin", map[string]any{"org_id": orgID, "margin": margin, "actor_id": actorID}, &out)
+	return out.TxHash, err
+}
+
+func (c *ProxyClient) GetWalletBalance(ctx context.Context, actorID string) (float64, error) {
+	var out struct {
+		Balance float64 `json:"balance"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/v1/fabric/wallet/"+actorID, nil, &out)
+	return out.Balance, err
+}
+
+func (c *ProxyClient) DepositWallet(ctx context.Context, actorID string, amount float64) (string, error) {
+	var out proxyTxBatchResponse
+	err := c.doJSON(ctx, http.MethodPost, "/v1/fabric/wallet/deposit", map[string]any{"actor_id": actorID, "amount": amount}, &out)
+	return out.TxHash, err
+}
+
+func (c *ProxyClient) WithdrawWallet(ctx context.Context, actorID string, amount float64) (string, error) {
+	var out proxyTxBatchResponse
+	err := c.doJSON(ctx, http.MethodPost, "/v1/fabric/wallet/withdraw", map[string]any{"actor_id": actorID, "amount": amount}, &out)
+	return out.TxHash, err
+}

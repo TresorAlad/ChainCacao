@@ -18,18 +18,18 @@ func JWTMiddleware(jwtService *JWTService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authorization manquant"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "authorization manquant"})
 			return
 		}
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "format authorization invalide"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "format authorization invalide"})
 			return
 		}
 
 		claims, err := jwtService.Parse(parts[1])
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token invalide"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "token invalide"})
 			return
 		}
 		c.Set(ContextActorID, claims.ActorID)
@@ -43,12 +43,12 @@ func RequireAnyRole(roles ...models.Role) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rawRole, exists := c.Get(ContextRole)
 		if !exists {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "role absent du contexte"})
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "error": "role absent du contexte"})
 			return
 		}
 		currentRole, ok := rawRole.(models.Role)
 		if !ok {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "role invalide"})
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "error": "role invalide"})
 			return
 		}
 		for _, r := range roles {
@@ -57,6 +57,6 @@ func RequireAnyRole(roles ...models.Role) gin.HandlerFunc {
 				return
 			}
 		}
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "droits insuffisants"})
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "error": "droits insuffisants"})
 	}
 }

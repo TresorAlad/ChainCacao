@@ -10,15 +10,26 @@ import (
 	"tracabilite-api/internal/actors"
 	"tracabilite-api/internal/auth"
 	"tracabilite-api/internal/batch"
+	"tracabilite-api/internal/config"
 	"tracabilite-api/internal/db"
 	"tracabilite-api/internal/fabric"
 	"tracabilite-api/internal/httpapi"
+	"tracabilite-api/internal/incidents"
 	"tracabilite-api/internal/media"
+	"tracabilite-api/internal/syncdedup"
 )
 
 func main() {
 	_ = godotenv.Load()
 	ctx := context.Background()
+
+	// Securite: en production, interdire un JWT_SECRET absent ou par defaut.
+	if os.Getenv("APP_ENV") == "production" {
+		secret := os.Getenv("JWT_SECRET")
+		if secret == "" || secret == "change-me-in-production" {
+			log.Fatal("JWT_SECRET requis en production")
+		}
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -28,6 +39,9 @@ func main() {
 	var (
 		actorStore actors.Store
 		mediaRepo  *media.Repo
+		cfgRepo    config.Repo
+		incRepo    incidents.Repo
+		dedupRepo  syncdedup.Repo
 	)
 
 	if os.Getenv("DATABASE_URL") != "" {
@@ -44,12 +58,18 @@ func main() {
 		}
 		actorStore = actors.NewPGStore(pool)
 		mediaRepo = media.NewRepo(pool)
+		cfgRepo = config.NewPGRepo(pool)
+		incRepo = incidents.NewPGRepo(pool)
+		dedupRepo = syncdedup.NewPGRepo(pool)
 	} else {
 		actorStore = actors.NewMemoryStore()
 		if err := actors.InitMemoryWebPasswords(actorStore); err != nil {
 			log.Fatalf("memoire init web: %v", err)
 		}
 		log.Print("DATABASE_URL absente: acteurs en memoire (demo)")
+		cfgRepo = config.NewMemoryRepo()
+		incRepo = incidents.NewMemoryRepo()
+		dedupRepo = syncdedup.NewMemoryRepo()
 	}
 
 	actorService := actors.NewService(actorStore)
@@ -77,7 +97,7 @@ func main() {
 		}
 	}
 
-	handler := httpapi.NewHandler(actorService, jwtService, batchService, mediaRepo)
+	handler := httpapi.NewHandler(actorService, jwtService, batchService, mediaRepo, cfgRepo, incRepo, dedupRepo)
 	router := httpapi.NewRouter(handler, jwtService, rdb)
 
 	log.Printf("API ChainCacao ecoute sur :%s", port)

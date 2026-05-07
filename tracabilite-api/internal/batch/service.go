@@ -18,6 +18,7 @@ type ActorLookup interface {
 }
 
 type CreateBatchInput struct {
+	ClientLotID   string  `json:"client_lot_id,omitempty"`
 	Culture       string  `json:"culture"`
 	Variete       string  `json:"variete"`
 	Quantite      float64 `json:"quantite"`
@@ -28,7 +29,6 @@ type CreateBatchInput struct {
 	Village       string  `json:"village"`
 	Parcelle      string  `json:"parcelle"`
 	DateRecolte   string  `json:"date_recolte"`
-	CertificatURL string  `json:"certificat_url"`
 	PhotoURL      string  `json:"photo_url"`
 	Notes         string  `json:"notes"`
 }
@@ -64,6 +64,17 @@ func (s *Service) Create(ctx context.Context, input CreateBatchInput, actorID, o
 	if input.Quantite <= 0 {
 		return "", models.Batch{}, errors.New("quantite doit etre superieure a 0")
 	}
+	// CDC: GPS obligatoire (via EXIF photo).
+	if input.Latitude == 0 || input.Longitude == 0 {
+		return "", models.Batch{}, errors.New("latitude et longitude sont obligatoires")
+	}
+	// CDC: date de recolte ne doit pas etre future (format attendu: YYYY-MM-DD).
+	if t, err := time.Parse("2006-01-02", strings.TrimSpace(input.DateRecolte)); err == nil {
+		today := time.Now().UTC().Truncate(24 * time.Hour)
+		if t.After(today) {
+			return "", models.Batch{}, errors.New("date_recolte ne peut pas etre dans le futur")
+		}
+	}
 
 	batch := models.Batch{
 		ID:            buildBatchID(),
@@ -79,7 +90,6 @@ func (s *Service) Create(ctx context.Context, input CreateBatchInput, actorID, o
 		DateRecolte:   strings.TrimSpace(input.DateRecolte),
 		Proprietaire:  actorID,
 		OrgID:         orgID, // proprietaire courant (org) cote API
-		CertificatURL: strings.TrimSpace(input.CertificatURL),
 		PhotoURL:      strings.TrimSpace(input.PhotoURL),
 		Notes:         strings.TrimSpace(input.Notes),
 	}
@@ -131,6 +141,80 @@ func (s *Service) GetBatch(ctx context.Context, id string) (models.Batch, error)
 
 func (s *Service) GetHistory(ctx context.Context, id string) ([]models.BatchHistoryEvent, error) {
 	return s.fabricClient.GetHistory(ctx, id)
+}
+
+func (s *Service) UpdateBatch(ctx context.Context, input map[string]any, batchID, actorID string) (string, models.Batch, error) {
+	if strings.TrimSpace(batchID) == "" {
+		return "", models.Batch{}, errors.New("batch_id obligatoire")
+	}
+	justification, _ := input["justification"].(string)
+	if justification == "" {
+		return "", models.Batch{}, errors.New("justification obligatoire")
+	}
+	var variete, parcelle, notes string
+	var poids float64
+	if v, ok := input["variete"].(string); ok { variete = v }
+	if p, ok := input["parcelle"].(string); ok { parcelle = p }
+	if n, ok := input["notes"].(string); ok { notes = n }
+	if w, ok := input["poids"].(float64); ok { poids = w }
+
+	txHash, updated, err := s.fabricClient.UpdateBatch(ctx, batchID, actorID, variete, parcelle, notes, poids, justification)
+	if err != nil {
+		return "", models.Batch{}, err
+	}
+	updated = s.enrichOwnerOrg(ctx, updated)
+	return txHash, updated, nil
+}
+
+func (s *Service) SetBatchPrice(ctx context.Context, batchID, actorID string, price float64) (string, error) {
+	if price <= 0 {
+		return "", errors.New("le prix doit etre superieur a 0")
+	}
+	return s.fabricClient.SetBatchPrice(ctx, batchID, actorID, price)
+}
+
+func (s *Service) ConfirmBatchReceipt(ctx context.Context, batchID, actorID string) (string, error) {
+	return s.fabricClient.ConfirmBatchReceipt(ctx, batchID, actorID)
+}
+
+func (s *Service) GetPaymentStatus(ctx context.Context, batchID string) (map[string]any, error) {
+	return s.fabricClient.GetPaymentStatus(ctx, batchID)
+}
+
+func (s *Service) CreateGroupedList(ctx context.Context, listID string, batchIDs []string, actorID string) (string, error) {
+	if len(batchIDs) == 0 {
+		return "", errors.New("la liste doit contenir au moins un lot")
+	}
+	return s.fabricClient.CreateGroupedList(ctx, listID, batchIDs, actorID)
+}
+
+func (s *Service) PayGroupedList(ctx context.Context, listID, actorID string) (string, error) {
+	return s.fabricClient.PayGroupedList(ctx, listID, actorID)
+}
+
+func (s *Service) SetCooperativeMargin(ctx context.Context, orgID string, margin float64, actorID string) (string, error) {
+	if margin < 0 || margin > 100 {
+		return "", errors.New("marge invalide")
+	}
+	return s.fabricClient.SetCooperativeMargin(ctx, orgID, margin, actorID)
+}
+
+func (s *Service) GetWalletBalance(ctx context.Context, actorID string) (float64, error) {
+	return s.fabricClient.GetWalletBalance(ctx, actorID)
+}
+
+func (s *Service) DepositWallet(ctx context.Context, actorID string, amount float64) (string, error) {
+	if amount <= 0 {
+		return "", errors.New("montant de depot invalide")
+	}
+	return s.fabricClient.DepositWallet(ctx, actorID, amount)
+}
+
+func (s *Service) WithdrawWallet(ctx context.Context, actorID string, amount float64) (string, error) {
+	if amount <= 0 {
+		return "", errors.New("montant de retrait invalide")
+	}
+	return s.fabricClient.WithdrawWallet(ctx, actorID, amount)
 }
 
 func (s *Service) UpdateWeight(ctx context.Context, input UpdateWeightInput, actorID string) (string, models.Batch, error) {

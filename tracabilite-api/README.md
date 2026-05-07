@@ -79,6 +79,15 @@ Si `FABRIC_PEER_ENDPOINT` est défini et `USE_INMEMORY_FABRIC` ≠ `true`, l’A
 - `GetHistory(batchID)` — evaluate → JSON `[]models.BatchHistoryEvent`  
 - `GetStats()` — evaluate → JSON (optionnel ; sinon message d’erreur dans les stats)
 
+### Modèle d’identité Fabric (important)
+
+Dans l’implémentation actuelle, **l’API signe les transactions Fabric** (Gateway/Proxy) avec **une identité unique** (certificat/clé configurés par variables d’environnement).
+
+- **Conséquence**: l’`actor_id` passé à Fabric est une **donnée applicative** (provenant du JWT) et non une signature “par acteur” au niveau Fabric.
+- **Recommandation**:
+  - MVP/demo: ce modèle “API super-user” est acceptable si le chaincode applique strictement les règles métier.
+  - Production (cible): envisager une identité par acteur (wallet), ou au minimum renforcer les contrôles chaincode + audit/logs.
+
 ## Neon & Cloudinary
 
 - **Neon** : crée un projet, copie l’URL `DATABASE_URL`, mets `sslmode=require`. Tu peux retirer le service `postgres` du compose et ne passer que l’URL dans `api.environment`.
@@ -89,9 +98,10 @@ Si `FABRIC_PEER_ENDPOINT` est défini et `USE_INMEMORY_FABRIC` ≠ `true`, l’A
 
 - `POST /api/v1/auth/login` — public  
 - `POST /api/v1/auth/register` — JWT admin  
-- `POST /api/v1/lot` — JWT agriculteur / admin  
+- `POST /api/v1/lot` — JWT agriculteur / admin (**CDC**: multipart avec photo `file` + GPS EXIF)  
 - `GET /api/v1/lot/:id` — public  
 - `GET /api/v1/lot/:id/history` — public  
+- `GET /api/v1/lot/:id/qr` — JWT (alias CDC)  
 - `POST /api/v1/transfer` — JWT coop / transfo / export / admin  
 - `PUT /api/v1/lot/:id/weight` — JWT  
 - `POST /api/v1/lot/:id/export` — JWT export / admin  
@@ -101,9 +111,18 @@ Si `FABRIC_PEER_ENDPOINT` est défini et `USE_INMEMORY_FABRIC` ≠ `true`, l’A
 - `GET /api/v1/qrcode/:id` — JSON ; **`?format=png`** → image PNG  
 - `GET /api/v1/verify/:id` — public (rate limit Redis ou mémoire)  
 - `POST /api/v1/sync` — JWT agriculteur / admin  
-- `GET /api/v1/dashboard/stats` — JWT admin  
+- `GET /api/v1/dashboard/stats` — JWT **admin/ministere**  
 - `GET /api/v1/actors` — JWT  
 - `GET /health` — public  
+
+### Routes Admin (CDC)
+
+- `GET /api/v1/admin/actors` — liste acteurs  
+- `POST /api/v1/admin/actors` — création acteur (inclut `pin`)  
+- `PATCH /api/v1/admin/actors/:id` — maj (nom/email/org/role/suspended)  
+- `POST /api/v1/admin/actors/:id/reset-pin` — reset PIN (retourne le PIN pour backoffice)  
+- `GET /api/v1/admin/config` / `PUT /api/v1/admin/config` — configuration système (JSON)  
+- `GET /api/v1/admin/incidents` / `POST /api/v1/admin/incidents/:id/resolve` — incidents (paiements/portefeuille)  
 
 Compat : `/api/v1/batch/*` inchangé.
 
@@ -124,6 +143,30 @@ QR PNG :
 
 ```bash
 curl -s -o qr.png "http://localhost:8080/api/v1/qrcode/TC-20260429-00001?format=png"
+```
+
+Création d’un lot (CDC, multipart + EXIF GPS):
+
+```bash
+curl -s -X POST "http://localhost:8080/api/v1/lot" \
+  -H "Authorization: Bearer $JWT" \
+  -F "file=@photo.jpg" \
+  -F "culture=cacao" \
+  -F "variete=forastero" \
+  -F "quantite=25" \
+  -F "lieu=ferme" \
+  -F "region=Plateaux" \
+  -F "village=Kpalime" \
+  -F "parcelle=P-01" \
+  -F "date_recolte=2026-05-01"
+```
+
+Paiement (PIN obligatoire):
+
+```bash
+curl -s -X POST "http://localhost:8080/api/v1/lot/LOT-.../confirmer" \
+  -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \
+  -d '{"pin":"2222"}'
 ```
 
 ## Développement sans Docker

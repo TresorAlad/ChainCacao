@@ -4,8 +4,8 @@ organizations:
     mspID: AgriculteurMSP
   - name: OrgTransformateur
     mspID: TransformateurMSP
-  - name: OrgDistributeur
-    mspID: DistributeurMSP
+  - name: OrgExportateur
+    mspID: ExportateurMSP
 
 
 
