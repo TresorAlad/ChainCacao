@@ -324,6 +324,11 @@ func (c *InMemoryClient) ConfirmBatchReceipt(_ context.Context, batchID, actorID
 		price = 1500 // Prix par defaut si non defini
 	}
 	amount := price * batch.Quantite
+	// Debiter l'acheteur avant de crediter l'agriculteur (mode demo).
+	if c.wallets[actorID] < amount {
+		return "", errors.New("solde insuffisant")
+	}
+	c.wallets[actorID] -= amount
 	
 	// Simuler le paiement a l'agriculteur (on ne debite pas l'acheteur ici, just credit)
 	c.wallets[batch.Proprietaire] += amount

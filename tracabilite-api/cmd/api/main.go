@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
@@ -15,6 +16,7 @@ import (
 	"tracabilite-api/internal/fabric"
 	"tracabilite-api/internal/httpapi"
 	"tracabilite-api/internal/incidents"
+	"tracabilite-api/internal/groupedlist"
 	"tracabilite-api/internal/media"
 	"tracabilite-api/internal/syncdedup"
 )
@@ -42,6 +44,7 @@ func main() {
 		cfgRepo    config.Repo
 		incRepo    incidents.Repo
 		dedupRepo  syncdedup.Repo
+		listRepo   groupedlist.Repo
 	)
 
 	if os.Getenv("DATABASE_URL") != "" {
@@ -61,6 +64,7 @@ func main() {
 		cfgRepo = config.NewPGRepo(pool)
 		incRepo = incidents.NewPGRepo(pool)
 		dedupRepo = syncdedup.NewPGRepo(pool)
+		listRepo = groupedlist.NewPGRepo(pool)
 	} else {
 		actorStore = actors.NewMemoryStore()
 		if err := actors.InitMemoryWebPasswords(actorStore); err != nil {
@@ -70,6 +74,7 @@ func main() {
 		cfgRepo = config.NewMemoryRepo()
 		incRepo = incidents.NewMemoryRepo()
 		dedupRepo = syncdedup.NewMemoryRepo()
+		listRepo = groupedlist.NewMemoryRepo()
 	}
 
 	actorService := actors.NewService(actorStore)
@@ -81,6 +86,26 @@ func main() {
 	}
 
 	batchService := batch.NewService(fc, actorService)
+
+	// DEMO: credit initial wallets (sans opérateurs) pour transformateur/exportateur.
+	if os.Getenv("DEMO_INITIAL_CREDIT") != "false" {
+		initial := 2000000.0
+		if v := os.Getenv("DEMO_INITIAL_CREDIT_AMOUNT"); v != "" {
+			if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+				initial = f
+			}
+		}
+		actorsList, _ := actorService.List(ctx)
+		for _, a := range actorsList {
+			if a.Role != "transformateur" && a.Role != "exportateur" {
+				continue
+			}
+			bal, err := batchService.GetWalletBalance(ctx, a.ID)
+			if err == nil && bal < initial {
+				_, _ = batchService.DepositWallet(ctx, a.ID, initial-bal)
+			}
+		}
+	}
 
 	var rdb *redis.Client
 	if u := os.Getenv("REDIS_URL"); u != "" {
@@ -97,7 +122,7 @@ func main() {
 		}
 	}
 
-	handler := httpapi.NewHandler(actorService, jwtService, batchService, mediaRepo, cfgRepo, incRepo, dedupRepo)
+	handler := httpapi.NewHandler(actorService, jwtService, batchService, mediaRepo, cfgRepo, incRepo, dedupRepo, listRepo)
 	router := httpapi.NewRouter(handler, jwtService, rdb)
 
 	log.Printf("API ChainCacao ecoute sur :%s", port)

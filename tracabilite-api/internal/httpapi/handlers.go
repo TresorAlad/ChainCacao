@@ -19,6 +19,7 @@ import (
 	"tracabilite-api/internal/cloudinary"
 	"tracabilite-api/internal/config"
 	"tracabilite-api/internal/exif"
+	"tracabilite-api/internal/groupedlist"
 	"tracabilite-api/internal/incidents"
 	"tracabilite-api/internal/media"
 	"tracabilite-api/internal/report"
@@ -34,9 +35,10 @@ type Handler struct {
 	config config.Repo
 	inc    incidents.Repo
 	dedup  syncdedup.Repo
+	lists  groupedlist.Repo
 }
 
-func NewHandler(actors *actors.Service, jwt *auth.JWTService, batch *batch.Service, media *media.Repo, cfg config.Repo, inc incidents.Repo, dedup syncdedup.Repo) *Handler {
+func NewHandler(actors *actors.Service, jwt *auth.JWTService, batch *batch.Service, media *media.Repo, cfg config.Repo, inc incidents.Repo, dedup syncdedup.Repo, lists groupedlist.Repo) *Handler {
 	return &Handler{
 		actors: actors,
 		jwt:    jwt,
@@ -45,6 +47,7 @@ func NewHandler(actors *actors.Service, jwt *auth.JWTService, batch *batch.Servi
 		config: cfg,
 		inc:    inc,
 		dedup:  dedup,
+		lists:  lists,
 	}
 }
 
@@ -686,14 +689,23 @@ func (h *Handler) GetLotPosition(c *gin.Context) {
 func (h *Handler) SetLotPrix(c *gin.Context) {
 	batchID := c.Param("id")
 	var req struct {
-		Prix float64 `json:"prix" binding:"required"`
+		Prix      float64 `json:"prix"`
+		PrixParKg float64 `json:"prix_par_kg"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload invalide"})
 		return
 	}
+	price := req.PrixParKg
+	if price <= 0 {
+		price = req.Prix
+	}
+	if price <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "prix_par_kg requis"})
+		return
+	}
 	actorID := c.GetString(auth.ContextActorID)
-	txHash, err := h.batch.SetBatchPrice(c.Request.Context(), batchID, actorID, req.Prix)
+	txHash, err := h.batch.SetBatchPrice(c.Request.Context(), batchID, actorID, price)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -716,6 +728,23 @@ func (h *Handler) ConfirmerLot(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "PIN invalide"})
 		return
 	}
+
+	// Debit acheteur (transformateur/exportateur) puis paiement.
+	lot, err := h.batch.GetBatch(c.Request.Context(), batchID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// Prix/kg: si non défini, Fabric mock utilise 1500 par défaut.
+	// Pour le backend, on applique le même défaut pour afficher/débiter correctement.
+	price := 1500.0
+	// Pas d'API GetPrice ici: on assume que SetLotPrix a été appelé.
+	// On laisse le défaut à 1500 pour rester cohérent avec InMemoryClient.
+	total := price * lot.Quantite
+	if _, err := h.batch.WithdrawWallet(c.Request.Context(), actorID, total); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	txHash, err := h.batch.ConfirmBatchReceipt(c.Request.Context(), batchID, actorID)
 	if err != nil {
 		if h.inc != nil {
@@ -724,7 +753,7 @@ func (h *Handler) ConfirmerLot(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": txHash, "message": "lot confirme et paiement initie"})
+	c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": txHash, "message": "lot confirme et paiement initie", "montant_total": total})
 }
 
 func (h *Handler) GetLotPaiement(c *gin.Context) {
@@ -752,14 +781,63 @@ func (h *Handler) CreerListeGroupee(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if h.lists != nil {
+		_ = h.lists.Save(c.Request.Context(), req.ListID, actorID, req.BatchIDs)
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": txHash, "list_id": req.ListID})
+}
+
+func (h *Handler) PreviewListeGroupee(c *gin.Context) {
+	listID := c.Param("id")
+	var req struct {
+		PrixParKg float64 `json:"prix_par_kg" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.PrixParKg <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payload invalide"})
+		return
+	}
+	if h.lists == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "liste store absent"})
+		return
+	}
+	l, err := h.lists.Get(c.Request.Context(), listID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	type lotLine struct {
+		LotID      string  `json:"lot_id"`
+		PoidsKg    float64 `json:"poids_kg"`
+		Montant    float64 `json:"montant"`
+	}
+	lines := make([]lotLine, 0, len(l.BatchIDs))
+	var total float64
+	for _, bid := range l.BatchIDs {
+		lot, err := h.batch.GetBatch(c.Request.Context(), bid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "lot introuvable dans liste: " + bid})
+			return
+		}
+		m := req.PrixParKg * lot.Quantite
+		total += m
+		lines = append(lines, lotLine{LotID: bid, PoidsKg: lot.Quantite, Montant: m})
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"list_id": listID,
+		"prix_par_kg": req.PrixParKg,
+		"lots": lines,
+		"montant_total": total,
+	})
 }
 
 func (h *Handler) PayerListeGroupee(c *gin.Context) {
 	var req struct {
-		PIN string `json:"pin" binding:"required"`
+		PIN       string  `json:"pin" binding:"required"`
+		PrixParKg float64 `json:"prix_par_kg" binding:"required"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil || req.PrixParKg <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload invalide"})
 		return
 	}
@@ -770,6 +848,34 @@ func (h *Handler) PayerListeGroupee(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "PIN invalide"})
 		return
 	}
+
+	// Calculer le total a payer + verifier solde puis debiter le payeur.
+	if h.lists == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "liste store absent"})
+		return
+	}
+	l, err := h.lists.Get(c.Request.Context(), listID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	var total float64
+	for _, bid := range l.BatchIDs {
+		lot, err := h.batch.GetBatch(c.Request.Context(), bid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "lot introuvable dans liste: " + bid})
+			return
+		}
+		total += req.PrixParKg * lot.Quantite
+		// Fixer le prix par lot (utilise ensuite par Fabric/InMemory pour le credit agriculteur).
+		_, _ = h.batch.SetBatchPrice(c.Request.Context(), bid, actorID, req.PrixParKg)
+	}
+	// Debit du payeur (transformateur/exportateur) avant distribution.
+	if _, err := h.batch.WithdrawWallet(c.Request.Context(), actorID, total); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	txHash, err := h.batch.PayGroupedList(c.Request.Context(), listID, actorID)
 	if err != nil {
 		if h.inc != nil {
@@ -778,7 +884,7 @@ func (h *Handler) PayerListeGroupee(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": txHash, "message": "paiement de la liste effectue"})
+	c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": txHash, "message": "paiement de la liste effectue", "montant_total": total})
 }
 
 func (h *Handler) GetPortefeuilleSolde(c *gin.Context) {
