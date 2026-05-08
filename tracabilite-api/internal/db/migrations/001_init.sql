@@ -12,7 +12,14 @@ DO $$ BEGIN
         'ministere'
     );
 EXCEPTION
-    WHEN duplicate_object THEN null;
+    WHEN duplicate_object THEN
+        -- Le type existe déjà: on s'assure que toutes les valeurs attendues sont présentes.
+        ALTER TYPE actor_role ADD VALUE IF NOT EXISTS 'admin';
+        ALTER TYPE actor_role ADD VALUE IF NOT EXISTS 'agriculteur';
+        ALTER TYPE actor_role ADD VALUE IF NOT EXISTS 'cooperative';
+        ALTER TYPE actor_role ADD VALUE IF NOT EXISTS 'transformateur';
+        ALTER TYPE actor_role ADD VALUE IF NOT EXISTS 'exportateur';
+        ALTER TYPE actor_role ADD VALUE IF NOT EXISTS 'ministere';
 END $$;
 
 CREATE TABLE IF NOT EXISTS actors (
