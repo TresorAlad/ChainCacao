@@ -36,7 +36,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgres://chaincacao:chaincacao@postgres:5432/chaincacao?sslmode=disable
+      DATABASE_URL: postgresql://neondb_owner:npg_kbFeDL0Cr7WX@ep-lucky-lab-ankoqx1q-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
       REDIS_URL: redis://redis:6379/0
     volumes:
       - ../fabric-samples/test-network/organizations:/fabric-crypto:ro

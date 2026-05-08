@@ -6,4 +6,4 @@ INSERT INTO actors (id, nom, email, org_id, role, pin) VALUES
     ('actor-exp-001', 'Exportateur SA', 'export@chaincacao.tg', 'ExportateurMSP', 'exportateur', '3333'),
     ('actor-min-001', 'Ministère Agriculture', 'ministere@chaincacao.tg', 'MinistereMSP', 'ministere', '8888'),
     ('actor-admin-001', 'Admin Platform', 'admin@chaincacao.tg', 'PlatformMSP', 'admin', '9999')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
