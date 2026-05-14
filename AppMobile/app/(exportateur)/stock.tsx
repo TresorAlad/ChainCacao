@@ -84,6 +84,21 @@ export default function StockScreen() {
                 <View style={[styles.progressBar, { width: `${item.progress * 100}%` }]} />
               </View>
 
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                <TouchableOpacity
+                  style={[styles.linkBtn, { backgroundColor: '#E8F5E9' }]}
+                  onPress={() => router.push(`/(exportateur)/rapport-eudr?lotId=${encodeURIComponent(item.id)}` as any)}
+                >
+                  <Text style={[styles.linkBtnText, { color: '#1B5E20' }]}>Rapport EUDR</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.linkBtn, { backgroundColor: '#FFF3E0' }]}
+                  onPress={() => router.push(`/(exportateur)/paiement?lotId=${encodeURIComponent(item.id)}` as any)}
+                >
+                  <Text style={[styles.linkBtnText, { color: '#E65100' }]}>Confirmer / payer</Text>
+                </TouchableOpacity>
+              </View>
+
               <TouchableOpacity style={styles.exportButton}>
                 <MaterialCommunityIcons name="truck-delivery-outline" size={20} color="white" />
                 <Text style={styles.exportButtonText}>Détails de l'expédition</Text>
@@ -198,6 +213,8 @@ const styles = StyleSheet.create({
     gap: 10 
   },
   exportButtonText: { color: 'white', fontFamily: 'Montserrat-Bold', fontSize: 14 },
+  linkBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
+  linkBtnText: { fontFamily: 'Montserrat-Bold', fontSize: 12 },
 
   bottomTab: { 
     position: 'absolute', bottom: 0, left: 0, right: 0, 

@@ -59,8 +59,8 @@ export default function ProductionScreen() {
   // 2. RENVOYER LES DONNÉES À L'ACCUEIL
   const retournerAccueil = () => {
     router.push({
-      pathname: '/(tabs)/accueil', 
-      params: { data: JSON.stringify(productions) }
+      pathname: '/(agriculteur)/accueil',
+      params: { data: JSON.stringify(productions) },
     });
   };
 
@@ -81,7 +81,7 @@ export default function ProductionScreen() {
         
         <Text style={styles.headerTitle}>Productions</Text>
         
-        <TouchableOpacity onPress={() => router.push('/profil')}>
+        <TouchableOpacity onPress={() => router.push('/(agriculteur)/profil' as any)}>
           <MaterialCommunityIcons name="account-circle" size={28} color="white" />
         </TouchableOpacity>
       </LinearGradient>
@@ -125,7 +125,7 @@ export default function ProductionScreen() {
             <TouchableOpacity 
               style={styles.card}
               onPress={() => router.push({
-                pathname: "/caracteristiqueslot",
+                pathname: '/caracteristiqueslot',
                 params: {
                   title: item.title,
                   status: item.status,
@@ -149,7 +149,7 @@ export default function ProductionScreen() {
         />
       </View>
 
-      <TouchableOpacity style={styles.fab} onPress={() => router.push('/creationlot')}>
+      <TouchableOpacity style={styles.fab} onPress={() => router.push('/(agriculteur)/nouveaulot' as any)}>
         <MaterialCommunityIcons name="plus" size={35} color="white" />
       </TouchableOpacity>
     </SafeAreaView>

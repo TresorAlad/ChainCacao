@@ -7,16 +7,20 @@ import {
   ScrollView, 
   StatusBar,
   ActivityIndicator,
-  Platform 
+  Platform,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
+import { myLotsApi, getApiError } from '@/services/api';
 
 export default function MainDashboard() {
   const router = useRouter();
   const [fontsLoaded, setFontsLoaded] = useState(false);
+  const [lotsRecus, setLotsRecus] = useState(0);
+  const [poidsTotal, setPoidsTotal] = useState(0);
+  const [margeEstimee, setMargeEstimee] = useState(0);
 
   // CHARGEMENT DES POLICES
   useEffect(() => {
@@ -34,6 +38,21 @@ export default function MainDashboard() {
       }
     }
     loadFonts();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await myLotsApi.list();
+        const lots = data.lots ?? [];
+        setLotsRecus(lots.length);
+        const kg = lots.reduce((s, b) => s + (b.quantite ?? 0), 0);
+        setPoidsTotal(Math.round(kg));
+        setMargeEstimee(Math.round(kg * 150));
+      } catch (e) {
+        console.warn(getApiError(e));
+      }
+    })();
   }, []);
 
   if (!fontsLoaded) {
@@ -67,11 +86,11 @@ export default function MainDashboard() {
             <TouchableOpacity 
               style={styles.mainGreenCard}
               activeOpacity={0.85}
-              onPress={() => router.push('/lots_recus')}
+              onPress={() => router.push('/(cooperative)/lots_recus' as any)}
             >
               <View>
                 <Text style={styles.todayLabel}>Lots reçus aujourd'hui</Text>
-                <Text style={styles.todayValue}>12</Text>
+                <Text style={styles.todayValue}>{lotsRecus}</Text>
               </View>
               <View style={styles.iconCircle}>
                 <MaterialCommunityIcons name="package-variant-closed" size={35} color="white" />
@@ -82,14 +101,14 @@ export default function MainDashboard() {
                <View style={styles.whiteCard}>
                   <Text style={styles.smallLabel}>Poids total</Text>
                   <Text style={styles.statText}>
-                    <Text style={styles.greenValue}>850</Text> Kg
+                    <Text style={styles.greenValue}>{poidsTotal}</Text> Kg
                   </Text>
                </View>
 
                <View style={styles.whiteCard}>
                   <Text style={styles.smallLabel}>Marge estimée</Text>
                   <Text style={styles.statText}>
-                    <Text style={styles.greenValue}>120.000</Text> FCFA
+                    <Text style={styles.greenValue}>{margeEstimee.toLocaleString('fr-FR')}</Text> FCFA
                   </Text>
                </View>
             </View>
@@ -97,7 +116,7 @@ export default function MainDashboard() {
             {/* ACTIONS PRINCIPALES */}
             <TouchableOpacity 
               style={styles.scanButton} 
-              onPress={() => router.push('/scanner')}
+              onPress={() => router.push('/(cooperative)/scanner' as any)}
               activeOpacity={0.8}
             >
                <MaterialCommunityIcons name="qrcode-scan" size={50} color="white" />
@@ -107,7 +126,7 @@ export default function MainDashboard() {
             <TouchableOpacity 
               style={[styles.scanButton, styles.listButton]} 
               activeOpacity={0.8}
-              onPress={() => router.push('/generation_liste')}
+              onPress={() => router.push('/(cooperative)/generation_liste' as any)}
             >
                <MaterialCommunityIcons name="format-list-bulleted-type" size={30} color="white" />
                <Text style={styles.listText}>Créer une liste groupée</Text>
@@ -127,22 +146,22 @@ export default function MainDashboard() {
           <TabItem 
             icon="camera" 
             label="Scanner" 
-            onPress={() => router.push('/scanner')} 
+            onPress={() => router.push('/(cooperative)/scanner' as any)} 
           />
           <TabItem 
             icon="package-variant-closed" 
             label="Lots" 
-            onPress={() => router.push('/lot')} 
+            onPress={() => router.push('/(cooperative)/lot' as any)} 
           />
           <TabItem 
             icon="chart-timeline-variant" 
             label="Historique" 
-            onPress={() => router.push('/historique')} 
+            onPress={() => router.push('/historique' as any)} 
           />
           <TabItem 
             icon="account" 
             label="Profil" 
-            onPress={() => router.push('/profil')} 
+            onPress={() => router.push('/(cooperative)/profil' as any)} 
           />
         </View>
       </SafeAreaView>

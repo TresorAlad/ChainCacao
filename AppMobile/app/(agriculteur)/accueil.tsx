@@ -18,6 +18,7 @@ import Svg, { Circle } from 'react-native-svg';
 // Modules pour le mode hors-ligne
 import * as Network from 'expo-network';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { myLotsApi, getApiError } from '@/services/api';
 
 const { width } = Dimensions.get('window');
 
@@ -43,12 +44,30 @@ export default function AccueilAgriculteur() {
 
         // 2. Vérifier la connexion
         const network = await Network.getNetworkStateAsync();
-        setIsOffline(!network.isConnected);
+        setIsOffline(!(network.isConnected && network.isInternetReachable));
 
         // 3. Charger le cache local
         const cachedData = await AsyncStorage.getItem('user_stats');
         if (cachedData) {
           setStats(JSON.parse(cachedData));
+        }
+
+        if (network.isConnected && network.isInternetReachable) {
+          try {
+            const { data } = await myLotsApi.list();
+            const lots = data.lots ?? [];
+            const production = lots.reduce((s, b) => s + (b.quantite ?? 0), 0);
+            setStats((prev) => {
+              const next = {
+                production: Math.round(production) || prev.production,
+                revenus: prev.revenus,
+              };
+              void AsyncStorage.setItem('user_stats', JSON.stringify(next));
+              return next;
+            });
+          } catch (e) {
+            console.warn(getApiError(e));
+          }
         }
       } catch (e) {
         console.warn("Erreur lors de l'initialisation :", e);
@@ -180,10 +199,10 @@ export default function AccueilAgriculteur() {
         {/* NAVIGATION BASSE */}
         <View style={styles.bottomTab}>
           <TabItem icon="home" label="Accueil" active onPress={() => {}} />
-          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => handleNavigation('/meslots')} />
-          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => handleNavigation('/nouveaulot')} />
-          <TabItem icon="wallet-outline" label="Portefeuille" onPress={() => handleNavigation('/portefeuille')} />
-          <TabItem icon="account-circle-outline" label="Profil" onPress={() => handleNavigation('/profil')} />
+          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => handleNavigation('/(agriculteur)/meslots')} />
+          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => handleNavigation('/(agriculteur)/nouveaulot')} />
+          <TabItem icon="wallet-outline" label="Portefeuille" onPress={() => handleNavigation('/(agriculteur)/portefeuille')} />
+          <TabItem icon="account-circle-outline" label="Profil" onPress={() => handleNavigation('/(agriculteur)/profil')} />
         </View>
       </SafeAreaView>
     </SafeAreaProvider>

@@ -18,6 +18,7 @@ import * as Font from 'expo-font';
 // --- MODULES HORS-LIGNE ---
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Network from 'expo-network';
+import { useAuth } from '@/hooks/use-auth';
 
 // Données par défaut (au cas où le stockage est vide)
 const DEFAULT_USER = {
@@ -31,6 +32,7 @@ const DEFAULT_USER = {
 
 export default function ProfilAgriculteur() {
   const router = useRouter();
+  const { logout } = useAuth();
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [userData, setUserData] = useState<any>(null);
   const [isOffline, setIsOffline] = useState(false);
@@ -68,9 +70,16 @@ export default function ProfilAgriculteur() {
   }, []);
 
   const handleLogout = () => {
-    Alert.alert("Déconnexion", "Voulez-vous vraiment vous déconnecter ?", [
-      { text: "Annuler", style: "cancel" },
-      { text: "Déconnexion", onPress: () => router.replace('/login' as any), style: 'destructive' }
+    Alert.alert('Déconnexion', 'Voulez-vous vraiment vous déconnecter ?', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Déconnexion',
+        style: 'destructive',
+        onPress: async () => {
+          await logout();
+          router.replace('/login' as any);
+        },
+      },
     ]);
   };
 
@@ -142,7 +151,7 @@ export default function ProfilAgriculteur() {
                 <Image 
                   source={{ uri: parcelle.image }} 
                   style={styles.parcelleImage}
-                  defaultSource={require('../../assets/images/icon.png')} // Image de secours locale
+                  defaultSource={require('../../assets/images/app-icon.png')}
                 />
                 <View style={styles.parcelleInfo}>
                   <Text style={styles.parcelleName}>{parcelle.nom}</Text>
@@ -163,10 +172,10 @@ export default function ProfilAgriculteur() {
 
         {/* NAVIGATION BASSE */}
         <View style={styles.bottomTab}>
-          <TabItem icon="home-outline" label="Accueil" onPress={() => navigateTo('/accueil')} />
-          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => navigateTo('/lots')} />
-          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => navigateTo('/nouveaulot')} />
-          <TabItem icon="wallet-outline" label="Wallet" onPress={() => navigateTo('/portefeuille')} />
+          <TabItem icon="home-outline" label="Accueil" onPress={() => navigateTo('/(agriculteur)/accueil')} />
+          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => navigateTo('/(agriculteur)/meslots')} />
+          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => navigateTo('/(agriculteur)/nouveaulot')} />
+          <TabItem icon="wallet-outline" label="Wallet" onPress={() => navigateTo('/(agriculteur)/portefeuille')} />
           <TabItem icon="account-circle" label="Profil" active />
         </View>
       </SafeAreaView>

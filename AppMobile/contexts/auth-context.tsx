@@ -66,7 +66,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } catch (e) {
             const status = (e as AxiosError).response?.status;
             if (status === 401 || status === 403) {
-              await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
+              await AsyncStorage.removeItem(TOKEN_KEY);
+              await AsyncStorage.removeItem(USER_KEY);
               setToken(null);
               setUser(null);
             }

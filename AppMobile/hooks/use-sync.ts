@@ -43,12 +43,20 @@ async function syncPendingLots(): Promise<void> {
 
         const idx = updated.findIndex((l) => l.id === lot.id);
 
+        const lat = typeof lot.latitude === 'number' ? lot.latitude : 6.1375;
+        const lng = typeof lot.longitude === 'number' ? lot.longitude : 1.2123;
+
         const { data } = await batchApi.create({
           culture,
           quantite: parseFloat(lot.poids) || 0,
           lieu,
           date_recolte: dateISO,
           notes: lot.title !== lot.typeCacao ? lot.title : undefined,
+          variete: lot.typeCacao,
+          parcelle: lot.destination,
+          latitude: lat,
+          longitude: lng,
+          client_lot_id: lot.id.startsWith('local_') ? lot.id : undefined,
         });
 
         const serverId = data.batch?.id ?? lot.id;

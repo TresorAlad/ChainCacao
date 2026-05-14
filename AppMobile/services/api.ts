@@ -26,7 +26,7 @@ export function setSessionInvalidateHandler(fn: (() => Promise<void>) | null) {
 // Instance Axios centrale
 export const api = axios.create({
   baseURL: API_BASE,
-  timeout: 10000,
+  timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -92,7 +92,6 @@ export interface ActorInfo {
   orgID?: string;
   org_id?: string;
   email?: string;
-  /** Enrichi côté mobile à l'inscription (non renvoyé par le backend actuel) */
   gps_location?: string;
   field_surface?: string;
   created_at?: string;
@@ -108,16 +107,22 @@ export const authApi = {
 // ─── BATCH ────────────────────────────────────────────────────────────────────
 
 export interface CreateBatchPayload {
-  culture: string;       // type de produit (cacao, maïs…)
-  quantite: number;      // poids en kg
-  lieu: string;          // localisation / GPS
-  /** ISO YYYY-MM-DD — JSON snake_case pour Gin */
+  culture: string;
+  quantite: number;
+  lieu: string;
   date_recolte: string;
   notes?: string;
+  variete?: string;
+  parcelle?: string;
+  latitude?: number;
+  longitude?: number;
+  region?: string;
+  village?: string;
+  client_lot_id?: string;
 }
 
 export interface BatchResponse {
-  id: string;            // UUID du lot
+  id: string;
   tx_hash?: string;
   culture?: string;
   quantite?: number;
@@ -167,7 +172,6 @@ export interface BatchHistoryApiResponse {
   events?: BatchTimelineEvent[];
 }
 
-/** Réponse POST /api/v1/batch/create */
 export interface CreateBatchResponse {
   success?: boolean;
   tx_hash?: string;
@@ -186,6 +190,11 @@ export interface TransferApiResponse {
   batch?: BatchResponse;
 }
 
+export interface GetBatchApiResponse {
+  success?: boolean;
+  lot?: BatchResponse;
+}
+
 export const batchApi = {
   create: (payload: CreateBatchPayload) =>
     api.post<CreateBatchResponse>('/api/v1/batch/create', payload),
@@ -194,7 +203,7 @@ export const batchApi = {
     api.post<TransferApiResponse>('/api/v1/batch/transfer', payload),
 
   get: (id: string) =>
-    api.get<BatchResponse>(`/api/v1/batch/${encodeURIComponent(id)}`),
+    api.get<GetBatchApiResponse>(`/api/v1/batch/${encodeURIComponent(id)}`),
 
   history: (id: string) =>
     api.get<BatchHistoryApiResponse>(`/api/v1/batch/${encodeURIComponent(id)}/history`),
@@ -210,8 +219,147 @@ export interface ActorsListResponse {
   actors?: ActorInfo[];
 }
 
+export interface MyLotsResponse {
+  success?: boolean;
+  lots?: BatchResponse[];
+}
+
 export const actorsApi = {
   list: () => api.get<ActorsListResponse>('/api/v1/actors'),
+};
+
+export const myLotsApi = {
+  list: () => api.get<MyLotsResponse>('/api/v1/actors/me/lots'),
+};
+
+// ─── SYNC OFFLINE (tableau attendu par le backend) ───────────────────────────
+
+export interface SyncBatchInput {
+  client_lot_id?: string;
+  culture: string;
+  variete?: string;
+  quantite: number;
+  lieu: string;
+  latitude: number;
+  longitude: number;
+  region?: string;
+  village?: string;
+  parcelle?: string;
+  date_recolte: string;
+  photo_url?: string;
+  notes?: string;
+}
+
+export interface SyncResultItem {
+  index: number;
+  client_lot_id?: string;
+  lot_id?: string;
+  tx_hash?: string;
+  error?: string;
+}
+
+export interface SyncOfflineResponse {
+  success?: boolean;
+  results?: SyncResultItem[];
+}
+
+export const syncApi = {
+  /** POST /api/v1/sync — corps = tableau de lots à créer côté serveur */
+  pushLots: (items: SyncBatchInput[]) =>
+    api.post<SyncOfflineResponse>('/api/v1/sync', items),
+};
+
+// ─── WALLET ─────────────────────────────────────────────────────────────────
+
+export interface WalletSoldeResponse {
+  success?: boolean;
+  balance?: number;
+  currency?: string;
+}
+
+export interface WalletMutationPayload {
+  montant: number;
+  pin: string;
+}
+
+export interface WalletMutationResponse {
+  success?: boolean;
+  tx_hash?: string;
+  message?: string;
+}
+
+export const walletApi = {
+  solde: () => api.get<WalletSoldeResponse>('/api/v1/portefeuille/solde'),
+  depot: (payload: WalletMutationPayload) =>
+    api.post<WalletMutationResponse>('/api/v1/portefeuille/depot', payload),
+  retrait: (payload: WalletMutationPayload) =>
+    api.post<WalletMutationResponse>('/api/v1/portefeuille/retrait', payload),
+};
+
+// ─── QR CODE (public) ───────────────────────────────────────────────────────
+
+export interface QrCodeJsonResponse {
+  success?: boolean;
+  lot_id?: string;
+  verify_url?: string;
+  qrcode_png_base64?: string;
+  hint?: string;
+}
+
+export const qrcodeApi = {
+  /** JSON avec image base64 (pas ?format=png) */
+  getJson: (lotId: string) =>
+    api.get<QrCodeJsonResponse>(`/api/v1/qrcode/${encodeURIComponent(lotId)}`),
+};
+
+// ─── POSITION LOT (JWT) ─────────────────────────────────────────────────────
+
+export interface LotPositionResponse {
+  success?: boolean;
+  position?: {
+    statut?: string;
+    proprietaire_id?: string;
+    proprietaire_nom?: string;
+    org_id?: string;
+  };
+}
+
+export const lotApi = {
+  position: (lotId: string) =>
+    api.get<LotPositionResponse>(`/api/v1/lot/${encodeURIComponent(lotId)}/position`),
+};
+
+// ─── EUDR ────────────────────────────────────────────────────────────────────
+
+export interface EudrReportResponse {
+  success?: boolean;
+  report?: Record<string, unknown>;
+}
+
+export const eudrApi = {
+  report: (lotId: string) =>
+    api.get<EudrReportResponse>(`/api/v1/eudr/${encodeURIComponent(lotId)}/report`),
+};
+
+// ─── CONFIRMER RÉCEPTION / PAIEMENT LOT ─────────────────────────────────────
+
+export interface ConfirmerLotPayload {
+  pin: string;
+}
+
+export interface ConfirmerLotResponse {
+  success?: boolean;
+  tx_hash?: string;
+  message?: string;
+  montant_total?: number;
+}
+
+export const lotActionApi = {
+  confirmer: (lotId: string, payload: ConfirmerLotPayload) =>
+    api.post<ConfirmerLotResponse>(
+      `/api/v1/lot/${encodeURIComponent(lotId)}/confirmer`,
+      payload
+    ),
 };
 
 // ─── HEALTH ───────────────────────────────────────────────────────────────────

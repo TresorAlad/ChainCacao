@@ -16,6 +16,9 @@ export interface Lot {
   destination?: string;
   typeCacao?: string;
   synced: boolean; // true = confirmé blockchain, false = en attente de sync
+  /** GPS pour POST /api/v1/batch/create (obligatoire côté API) */
+  latitude?: number;
+  longitude?: number;
 }
 
 type LotsByActor = Record<string, Lot[]>;

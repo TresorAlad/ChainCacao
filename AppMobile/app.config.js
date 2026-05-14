@@ -65,11 +65,17 @@ module.exports = {
       ],
     },
     web: {
-      favicon: './assets/images/favicon.png',
+      favicon: './assets/images/app-icon.png',
     },
     plugins: [
       withCleartextPlugin,
       'expo-router',
+      [
+        'expo-camera',
+        {
+          cameraPermission: 'Autoriser ChainCacao à utiliser la caméra pour scanner les codes QR des lots.',
+        },
+      ],
       [
         'expo-location',
         {

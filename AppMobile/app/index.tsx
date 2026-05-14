@@ -1,21 +1,31 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ImageBackground, StyleSheet, StatusBar, Dimensions, Platform, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  ImageBackground,
+  StyleSheet,
+  StatusBar,
+  Dimensions,
+  ActivityIndicator,
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import * as Font from 'expo-font'; // Import indispensable
+import * as Font from 'expo-font';
+import { useAuth } from '@/hooks/use-auth';
+import { homePathForActor } from '@/lib/home-path';
 
 const { width, height } = Dimensions.get('window');
 
 export default function SplashScreen() {
   const router = useRouter();
+  const { initialized, isAuthenticated, user } = useAuth();
   const [fontsLoaded, setFontsLoaded] = useState(false);
 
   useEffect(() => {
-    // 1. Charger les polices
     async function prepare() {
       try {
         await Font.loadAsync({
-          'Montserrat-Bold': require('../../assets/fonts/Montserrat-Bold.ttf'),
-          'Montserrat-Regular': require('../../assets/fonts/Montserrat-Regular.ttf'),
+          'Montserrat-Bold': require('../assets/fonts/Montserrat-Bold.ttf'),
+          'Montserrat-Regular': require('../assets/fonts/Montserrat-Regular.ttf'),
         });
       } catch (e) {
         console.warn(e);
@@ -23,18 +33,21 @@ export default function SplashScreen() {
         setFontsLoaded(true);
       }
     }
-
     prepare();
-
-    // 2. Navigation automatique après 3 secondes
-    const timer = setTimeout(() => {
-      router.replace('/login');
-    }, 3000);
-
-    return () => clearTimeout(timer);
   }, []);
 
-  // Si les polices ne sont pas prêtes, on affiche un écran vide ou un loader discret
+  useEffect(() => {
+    if (!fontsLoaded || !initialized) return;
+    const timer = setTimeout(() => {
+      if (isAuthenticated && user) {
+        router.replace(homePathForActor(user));
+      } else {
+        router.replace('/login');
+      }
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [fontsLoaded, initialized, isAuthenticated, user, router]);
+
   if (!fontsLoaded) {
     return (
       <View style={[styles.container, { backgroundColor: '#1B5E20', justifyContent: 'center' }]}>
@@ -46,12 +59,8 @@ export default function SplashScreen() {
   return (
     <View style={styles.container}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
-      <ImageBackground 
-        source={require('../../assets/images/accueil.jpg')} 
-        style={styles.background}
-      >
+      <ImageBackground source={require('../assets/images/accueil.jpg')} style={styles.background}>
         <View style={styles.overlay}>
-          {/* Application de Montserrat-Bold ici */}
           <Text style={styles.title}>ChainCacao</Text>
         </View>
       </ImageBackground>
@@ -62,18 +71,16 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   background: { width, height, flex: 1 },
-  overlay: { 
-    flex: 1, 
-    backgroundColor: 'rgba(0,0,0,0.3)', 
-    justifyContent: 'center', 
-    alignItems: 'center' 
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
     color: '#FFFFFF',
     fontSize: 55,
-    // On remplace le Platform.select par notre nouvelle police
-    fontFamily: 'Montserrat-Bold', 
+    fontFamily: 'Montserrat-Bold',
     textAlign: 'center',
-    // Note : On retire fontWeight: 'bold' car Montserrat-Bold l'est déjà
   },
 });

@@ -1,67 +1,93 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  FlatList, 
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
   StatusBar,
   ActivityIndicator,
   ImageBackground,
-  RefreshControl // Pour permettre à l'utilisateur de forcer la synchro
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
-
-// AJOUTS HORS-LIGNE
 import * as Network from 'expo-network';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-interface Lot {
+import { useAuth } from '@/hooks/use-auth';
+import { readLotsListForActor, type Lot } from '@/hooks/use-storage';
+import { myLotsApi, type BatchResponse, getApiError } from '@/services/api';
+
+type DisplayLot = {
   id: string;
   nom: string;
   poids: string;
   date: string;
-  statut: 'En attente' | 'Validé' | 'Transféré';
-  isSynced: boolean; 
+  statut: string;
+  isSynced: boolean;
+};
+
+function mapServerLot(b: BatchResponse): DisplayLot {
+  return {
+    id: b.id,
+    nom: `${b.culture ?? 'Lot'} — ${b.lieu ?? ''}`.trim(),
+    poids: String(b.quantite ?? 0),
+    date: b.date_recolte ?? b.timestamp ?? '',
+    statut: b.statut ?? 'Validé',
+    isSynced: true,
+  };
+}
+
+function mapLocalLot(l: Lot): DisplayLot {
+  return {
+    id: l.id,
+    nom: l.title,
+    poids: l.poids,
+    date: l.date,
+    statut: l.synced ? 'Validé' : 'En attente',
+    isSynced: l.synced,
+  };
 }
 
 export default function MesLots() {
   const router = useRouter();
+  const { user } = useAuth();
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
-  
-  // État initial vide (sera rempli par le cache ou l'API)
-  const [lots, setLots] = useState<Lot[]>([]);
+  const [lots, setLots] = useState<DisplayLot[]>([]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setRefreshing(true);
     try {
-      // 1. Vérifier la connexion
       const state = await Network.getNetworkStateAsync();
-      const connected = state.isConnected && state.isInternetReachable;
+      const connected = !!(state.isConnected && state.isInternetReachable);
       setIsOffline(!connected);
 
-      if (connected) {
-        // ICI : Appel API réel normalement
-        // simulation : setLots(apiResponse)
-        // syncWithCache(apiResponse)
-      } else {
-        // 2. Charger depuis le stockage local si hors-ligne
-        const savedLots = await AsyncStorage.getItem('user_lots');
-        if (savedLots) {
-          setLots(JSON.parse(savedLots));
+      const local = await readLotsListForActor(user?.id);
+      const localMapped = local.map(mapLocalLot);
+      const byId = new Map<string, DisplayLot>();
+      localMapped.forEach((l) => byId.set(l.id, l));
+
+      if (connected && user?.id) {
+        try {
+          const { data } = await myLotsApi.list();
+          const remote = (data.lots ?? []).map(mapServerLot);
+          remote.forEach((l) => byId.set(l.id, l));
+        } catch (e) {
+          console.warn('API mes lots:', getApiError(e));
         }
       }
+
+      setLots(Array.from(byId.values()).sort((a, b) => (a.date < b.date ? 1 : -1)));
     } catch (e) {
-      console.error("Erreur de chargement", e);
+      console.error('Erreur de chargement', e);
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [user?.id]);
 
   useEffect(() => {
     async function init() {
@@ -72,34 +98,34 @@ export default function MesLots() {
         });
         await loadData();
       } catch (e) {
-        console.warn("Erreur init");
+        console.warn('Erreur init');
       } finally {
         setFontsLoaded(true);
       }
     }
     init();
-  }, []);
+  }, [loadData]);
 
   const handleNavigation = (path: string) => {
-    if (path === '/accueil') {
-      router.replace('/accueil' as any);
-    } else {
-      router.push(path as any);
-    }
+    router.replace(path as any);
   };
 
-  const renderLotItem = ({ item }: { item: Lot }) => (
-    <TouchableOpacity style={styles.lotCard} activeOpacity={0.8}>
+  const renderLotItem = ({ item }: { item: DisplayLot }) => (
+    <TouchableOpacity
+      style={styles.lotCard}
+      activeOpacity={0.8}
+      onPress={() => router.push(`/(agriculteur)/qr-lot?lotId=${encodeURIComponent(item.id)}` as any)}
+    >
       <View style={styles.lotMainInfo}>
         <View style={styles.syncIndicator}>
-            <MaterialCommunityIcons 
-              name={item.isSynced ? "cloud-check" : "cloud-sync-outline"} 
-              size={14} 
-              color={item.isSynced ? "#4CAF50" : "#FF9800"} 
-            />
-            <Text style={[styles.syncText, { color: item.isSynced ? "#4CAF50" : "#FF9800" }]}>
-              {item.isSynced ? "Synchronisé" : "Attente de réseau"}
-            </Text>
+          <MaterialCommunityIcons
+            name={item.isSynced ? 'cloud-check' : 'cloud-sync-outline'}
+            size={14}
+            color={item.isSynced ? '#4CAF50' : '#FF9800'}
+          />
+          <Text style={[styles.syncText, { color: item.isSynced ? '#4CAF50' : '#FF9800' }]}>
+            {item.isSynced ? 'Synchronisé' : 'Attente de réseau'}
+          </Text>
         </View>
 
         <View style={styles.rowBetween}>
@@ -107,18 +133,30 @@ export default function MesLots() {
             <Text style={styles.lotNom}>{item.nom}</Text>
             <Text style={styles.lotDate}>Récolté le {item.date}</Text>
           </View>
-          
+
           <View style={styles.rightInfo}>
-             <Text style={styles.weightText}>{item.poids} Kg</Text>
-             <View style={[styles.statusBadge, { 
-                backgroundColor: item.statut === 'Validé' ? '#E8F5E9' : item.statut === 'En attente' ? '#FFF3E0' : '#E3F2FD' 
-             }]}>
-                <Text style={[styles.statusText, { 
-                    color: item.statut === 'Validé' ? '#2E7D32' : item.statut === 'En attente' ? '#EF6C00' : '#1976D2' 
-                }]}>
-                    {item.statut}
-                </Text>
-             </View>
+            <Text style={styles.weightText}>{item.poids} Kg</Text>
+            <View
+              style={[
+                styles.statusBadge,
+                {
+                  backgroundColor:
+                    item.statut === 'Validé' ? '#E8F5E9' : item.statut === 'En attente' ? '#FFF3E0' : '#E3F2FD',
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  {
+                    color:
+                      item.statut === 'Validé' ? '#2E7D32' : item.statut === 'En attente' ? '#EF6C00' : '#1976D2',
+                  },
+                ]}
+              >
+                {item.statut}
+              </Text>
+            </View>
           </View>
         </View>
       </View>
@@ -139,8 +177,8 @@ export default function MesLots() {
         <Stack.Screen options={{ headerShown: false }} />
         <StatusBar barStyle="light-content" />
 
-        <ImageBackground 
-          source={{ uri: 'https://images.unsplash.com/photo-1585250001962-6761005f7004?q=80&w=800&auto=format&fit=crop' }} 
+        <ImageBackground
+          source={{ uri: 'https://images.unsplash.com/photo-1585250001962-6761005f7004?q=80&w=800&auto=format&fit=crop' }}
           style={styles.heroImage}
         >
           <View style={styles.overlay}>
@@ -149,10 +187,8 @@ export default function MesLots() {
               <Text style={styles.heroCount}>{lots.length} lots</Text>
             </View>
             <View style={styles.statusRow}>
-                <View style={[styles.dot, { backgroundColor: isOffline ? '#FF5252' : '#4CAF50' }]} />
-                <Text style={styles.heroSubtitle}>
-                    {isOffline ? "Mode hors-ligne" : "Connecté au réseau"}
-                </Text>
+              <View style={[styles.dot, { backgroundColor: isOffline ? '#FF5252' : '#4CAF50' }]} />
+              <Text style={styles.heroSubtitle}>{isOffline ? 'Mode hors-ligne' : 'Connecté au réseau'}</Text>
             </View>
           </View>
         </ImageBackground>
@@ -164,9 +200,7 @@ export default function MesLots() {
             renderItem={renderLotItem}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={loadData} colors={['#2E7D32']} />
-            }
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadData} colors={['#2E7D32']} />}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <MaterialCommunityIcons name="archive-off-outline" size={60} color="#CCC" />
@@ -177,13 +211,16 @@ export default function MesLots() {
           />
         </View>
 
-        {/* NAVIGATION BASSE */}
         <View style={styles.bottomTab}>
-          <TabItem icon="home-outline" label="Accueil" onPress={() => handleNavigation('/accueil')} />
+          <TabItem icon="home-outline" label="Accueil" onPress={() => handleNavigation('/(agriculteur)/accueil')} />
           <TabItem icon="archive" label="Mes Lots" active onPress={() => {}} />
-          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => handleNavigation('/nouveaulot')} />
-          <TabItem icon="wallet-outline" label="Portefeuille" />
-          <TabItem icon="account-circle-outline" label="Profil" />
+          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => handleNavigation('/(agriculteur)/nouveaulot')} />
+          <TabItem
+            icon="wallet-outline"
+            label="Portefeuille"
+            onPress={() => handleNavigation('/(agriculteur)/portefeuille')}
+          />
+          <TabItem icon="account-circle-outline" label="Profil" onPress={() => handleNavigation('/(agriculteur)/profil')} />
         </View>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -192,15 +229,13 @@ export default function MesLots() {
 
 const TabItem = ({ icon, label, active = false, isMain = false, onPress }: any) => (
   <TouchableOpacity style={styles.tabItem} onPress={onPress} activeOpacity={0.6}>
-    <MaterialCommunityIcons 
-        name={icon} 
-        size={isMain ? 38 : 24} 
-        color={active || isMain ? "#2E7D32" : "#888"} 
-    />
-    <Text style={[styles.tabLabel, { 
-      color: active ? "#2E7D32" : "#888", 
-      fontFamily: active ? 'Montserrat-Bold' : 'Montserrat-Regular' 
-    }]}>
+    <MaterialCommunityIcons name={icon} size={isMain ? 38 : 24} color={active || isMain ? '#2E7D32' : '#888'} />
+    <Text
+      style={[
+        styles.tabLabel,
+        { color: active ? '#2E7D32' : '#888', fontFamily: active ? 'Montserrat-Bold' : 'Montserrat-Regular' },
+      ]}
+    >
       {label}
     </Text>
   </TouchableOpacity>
@@ -219,9 +254,29 @@ const styles = StyleSheet.create({
   heroSubtitle: { color: 'rgba(255,255,255,0.9)', fontSize: 12, fontFamily: 'Montserrat-Regular' },
   body: { flex: 1, backgroundColor: '#F5F5F5', borderTopLeftRadius: 25, borderTopRightRadius: 25, marginTop: -25 },
   listContent: { padding: 20, paddingBottom: 100 },
-  lotCard: { backgroundColor: 'white', borderRadius: 12, marginBottom: 12, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, borderLeftWidth: 5, borderLeftColor: '#2E7D32' },
+  lotCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    marginBottom: 12,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    borderLeftWidth: 5,
+    borderLeftColor: '#2E7D32',
+  },
   lotMainInfo: { padding: 15 },
-  syncIndicator: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, backgroundColor: '#F9F9F9', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 },
+  syncIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    backgroundColor: '#F9F9F9',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
   syncText: { fontSize: 10, fontFamily: 'Montserrat-Regular', marginLeft: 4 },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   lotNom: { fontSize: 16, fontFamily: 'Montserrat-Bold', color: '#333' },
@@ -233,7 +288,18 @@ const styles = StyleSheet.create({
   emptyContainer: { alignItems: 'center', marginTop: 60 },
   emptyText: { textAlign: 'center', marginTop: 10, color: '#999', fontFamily: 'Montserrat-Bold' },
   emptySubText: { fontSize: 11, color: '#AAA', marginTop: 5 },
-  bottomTab: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 75, backgroundColor: 'white', flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#EEE', paddingBottom: 10 },
+  bottomTab: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 75,
+    backgroundColor: 'white',
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#EEE',
+    paddingBottom: 10,
+  },
   tabItem: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  tabLabel: { fontSize: 10, marginTop: 4 }
+  tabLabel: { fontSize: 10, marginTop: 4 },
 });

@@ -12,20 +12,22 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
+import { myLotsApi, getApiError } from '@/services/api';
 
 const EXPORT_DATA = {
-  stockTotal: "145.8",
-  lotsExpedies: 48,
   recentShipments: [
     { id: 'S1', destination: 'Anvers, Belgique', poids: '25T', statut: 'En mer', date: '10/05/2026' },
     { id: 'S2', destination: 'Le Havre, France', poids: '20T', statut: 'Chargement', date: '12/05/2026' },
     { id: 'S3', destination: 'Hambourg, Allemagne', poids: '18T', statut: 'Douane', date: '13/05/2026' },
-  ]
+  ],
 };
 
 export default function ExportateurDashboard() {
   const router = useRouter();
   const [fontsLoaded, setFontsLoaded] = useState(false);
+  const [stockTotal, setStockTotal] = useState('0');
+  const [lotsExpedies, setLotsExpedies] = useState(0);
+  const [shipments, setShipments] = useState(EXPORT_DATA.recentShipments);
 
   useEffect(() => {
     async function loadResources() {
@@ -41,6 +43,28 @@ export default function ExportateurDashboard() {
       }
     }
     loadResources();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await myLotsApi.list();
+        const lots = data.lots ?? [];
+        const kg = lots.reduce((s, b) => s + (b.quantite ?? 0), 0);
+        setStockTotal((kg / 1000).toFixed(1));
+        setLotsExpedies(lots.length);
+        const mapped = lots.slice(0, 5).map((b, i) => ({
+          id: b.id || String(i),
+          destination: b.lieu || '—',
+          poids: `${b.quantite ?? 0} kg`,
+          statut: b.statut || 'Stock',
+          date: b.date_recolte || b.timestamp || '',
+        }));
+        if (mapped.length > 0) setShipments(mapped);
+      } catch (e) {
+        console.warn(getApiError(e));
+      }
+    })();
   }, []);
 
   if (!fontsLoaded) return (
@@ -80,7 +104,7 @@ export default function ExportateurDashboard() {
                   <MaterialCommunityIcons name="warehouse" size={22} color="#1B5E20" />
                 </View>
                 <View>
-                  <Text style={styles.statValue}>{EXPORT_DATA.stockTotal}T</Text>
+                  <Text style={styles.statValue}>{stockTotal}T</Text>
                   <Text style={styles.statLabel}>Stock Entrepôt</Text>
                 </View>
               </View>
@@ -89,7 +113,7 @@ export default function ExportateurDashboard() {
                   <MaterialCommunityIcons name="truck-check" size={22} color="#1B5E20" />
                 </View>
                 <View>
-                  <Text style={styles.statValue}>{EXPORT_DATA.lotsExpedies}</Text>
+                  <Text style={styles.statValue}>{lotsExpedies}</Text>
                   <Text style={styles.statLabel}>Lots Expédiés</Text>
                 </View>
               </View>
@@ -103,7 +127,7 @@ export default function ExportateurDashboard() {
               </TouchableOpacity>
             </View>
 
-            {EXPORT_DATA.recentShipments.map((item) => (
+            {shipments.map((item) => (
               <View key={item.id} style={styles.shipmentCard}>
                 <View style={styles.shipmentIcon}>
                    <MaterialCommunityIcons name="ferry" size={24} color="#1B5E20" />

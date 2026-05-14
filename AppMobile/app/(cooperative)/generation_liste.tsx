@@ -137,11 +137,11 @@ export default function GenerationListeScreen() {
 
       {/* NAVIGATION BASSE */}
       <View style={styles.bottomTab}>
-        <TabItem icon="home-variant" label="Dashboard" onPress={() => router.push('/accueil')} />
+        <TabItem icon="home-variant" label="Dashboard" onPress={() => router.push('/(cooperative)/accueil' as any)} />
         <TabItem icon="camera" label="Scanner" onPress={() => router.push('/scanner')} />
         <TabItem icon="package-variant-closed" label="Lots" active color={brandGreen} />
         <TabItem icon="chart-timeline-variant" label="Historique" />
-        <TabItem icon="account" label="Profil" onPress={() => router.push('/profil')} />
+        <TabItem icon="account" label="Profil" onPress={() => router.push('/(cooperative)/profil' as any)} />
       </View>
     </SafeAreaView>
   );

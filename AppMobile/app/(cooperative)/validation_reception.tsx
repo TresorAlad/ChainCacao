@@ -128,7 +128,7 @@ export default function ValidationReceptionScreen() {
               style={styles.btnValider}
               onPress={() => {
                 console.log("Validation du lot avec poids:", poidsReception);
-                router.replace('/accueil');
+                router.replace('/(cooperative)/accueil' as any);
               }}
             >
               <Text style={styles.btnValiderText}>Valider</Text>

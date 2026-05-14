@@ -132,12 +132,12 @@ export default function ProductionScreen() {
         <TabItem 
           icon="home-variant" 
           label="Dashboard" 
-          onPress={() => router.push('/accueil')} 
+          onPress={() => router.push('/(cooperative)/accueil' as any)} 
         />
         <TabItem 
           icon="camera" 
           label="Scanner" 
-          onPress={() => router.push('/scanner')} 
+          onPress={() => router.push('/(cooperative)/scanner' as any)} 
         />
         <TabItem 
           icon="package-variant-closed" 
@@ -148,12 +148,12 @@ export default function ProductionScreen() {
         <TabItem 
           icon="chart-timeline-variant" 
           label="Historique" 
-          onPress={() => console.log('Historique')}
+          onPress={() => router.push('/historique' as any)}
         />
         <TabItem 
           icon="account" 
           label="Profil" 
-          onPress={() => router.push('/profil')}
+          onPress={() => router.push('/(cooperative)/profil' as any)}
         />
       </View>
     </SafeAreaView>
