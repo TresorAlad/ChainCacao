@@ -94,6 +94,7 @@ export interface ActorInfo {
   email?: string;
   gps_location?: string;
   field_surface?: string;
+  org_name?: string;
   created_at?: string;
 }
 
@@ -114,11 +115,49 @@ export interface CreateBatchPayload {
   notes?: string;
   variete?: string;
   parcelle?: string;
+  /** Compat JSON uniquement ; création recommandée : multipart + photo (GPS EXIF). */
   latitude?: number;
   longitude?: number;
   region?: string;
   village?: string;
   client_lot_id?: string;
+}
+
+/** Champs texte pour `multipart/form-data` (champ fichier séparé). */
+export interface CreateBatchMultipartFields {
+  culture: string;
+  quantite: number;
+  lieu: string;
+  date_recolte: string;
+  notes?: string;
+  variete?: string;
+  parcelle?: string;
+  region?: string;
+  village?: string;
+  client_lot_id?: string;
+  /**
+   * Position GPS du téléphone (remplie automatiquement par l’app, jamais par saisie utilisateur).
+   * Secours côté serveur si la photo n’a pas d’EXIF GPS.
+   */
+  latitude?: number;
+  longitude?: number;
+}
+
+function appendBatchMultipartFields(form: FormData, fields: CreateBatchMultipartFields) {
+  form.append('culture', fields.culture);
+  form.append('quantite', String(fields.quantite));
+  form.append('lieu', fields.lieu);
+  form.append('date_recolte', fields.date_recolte);
+  if (fields.notes != null && fields.notes !== '') form.append('notes', fields.notes);
+  if (fields.variete != null && fields.variete !== '') form.append('variete', fields.variete);
+  if (fields.parcelle != null && fields.parcelle !== '') form.append('parcelle', fields.parcelle);
+  if (fields.region != null && fields.region !== '') form.append('region', fields.region);
+  if (fields.village != null && fields.village !== '') form.append('village', fields.village);
+  if (fields.client_lot_id != null && fields.client_lot_id !== '') form.append('client_lot_id', fields.client_lot_id);
+  if (fields.latitude != null && fields.longitude != null && fields.latitude !== 0 && fields.longitude !== 0) {
+    form.append('latitude', String(fields.latitude));
+    form.append('longitude', String(fields.longitude));
+  }
 }
 
 export interface BatchResponse {
@@ -198,6 +237,25 @@ export interface GetBatchApiResponse {
 export const batchApi = {
   create: (payload: CreateBatchPayload) =>
     api.post<CreateBatchResponse>('/api/v1/batch/create', payload),
+
+  /**
+   * Création lot avec photo : le serveur lit latitude/longitude dans les EXIF du fichier.
+   * Ne pas fixer `Content-Type` à `application/json` (instance Axios) : boundary multipart.
+   */
+  createWithPhoto: (imageUri: string, fields: CreateBatchMultipartFields) => {
+    const form = new FormData();
+    const lower = imageUri.toLowerCase();
+    const ext = lower.endsWith('.png') ? 'png' : 'jpg';
+    const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+    form.append('file', { uri: imageUri, name: `lot_${Date.now()}.${ext}`, type: mime } as any);
+    appendBatchMultipartFields(form, fields);
+    return api.post<CreateBatchResponse>('/api/v1/batch/create', form, {
+      transformRequest: (data, headers) => {
+        delete (headers as Record<string, unknown>)['Content-Type'];
+        return data as string;
+      },
+    });
+  },
 
   transfer: (payload: TransferPayload) =>
     api.post<TransferApiResponse>('/api/v1/batch/transfer', payload),
@@ -354,10 +412,27 @@ export interface ConfirmerLotResponse {
   montant_total?: number;
 }
 
+export interface ConfirmerReceptionPayload {
+  pin: string;
+}
+
+export interface ConfirmerReceptionResponse {
+  success?: boolean;
+  tx_hash?: string;
+  message?: string;
+  lot?: BatchResponse;
+}
+
 export const lotActionApi = {
   confirmer: (lotId: string, payload: ConfirmerLotPayload) =>
     api.post<ConfirmerLotResponse>(
       `/api/v1/lot/${encodeURIComponent(lotId)}/confirmer`,
+      payload
+    ),
+  /** Le destinataire (propriétaire actuel) confirme la réception physique après transfert (`en_transit` → `recu`). */
+  confirmerReception: (lotId: string, payload: ConfirmerReceptionPayload) =>
+    api.post<ConfirmerReceptionResponse>(
+      `/api/v1/lot/${encodeURIComponent(lotId)}/reception`,
       payload
     ),
 };

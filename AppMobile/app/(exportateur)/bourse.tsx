@@ -9,6 +9,9 @@ import {
   StatusBar,
   SafeAreaView,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -30,6 +33,40 @@ export default function BourseScreen() {
   const router = useRouter();
   const [balance, setBalance] = useState<number | null>(null);
   const [chartData, setChartData] = useState<number[]>([0, 0, 0, 0, 0, 0]);
+  const [modal, setModal] = useState<null | 'depot' | 'retrait'>(null);
+  const [pinInput, setPinInput] = useState('');
+  const [amountStr, setAmountStr] = useState('');
+
+  const closeModal = () => {
+    setModal(null);
+    setPinInput('');
+    setAmountStr('');
+  };
+
+  const submitWallet = async () => {
+    const m = parseFloat(amountStr.replace(',', '.'));
+    if (!pinInput.trim()) {
+      Alert.alert('PIN', 'Saisissez votre code PIN.');
+      return;
+    }
+    if (!m || m <= 0) {
+      Alert.alert('Montant', 'Montant invalide.');
+      return;
+    }
+    try {
+      if (modal === 'depot') {
+        await walletApi.depot({ montant: m, pin: pinInput.trim() });
+      } else if (modal === 'retrait') {
+        await walletApi.retrait({ montant: m, pin: pinInput.trim() });
+      }
+      const { data } = await walletApi.solde();
+      if (typeof data.balance === 'number') setBalance(data.balance);
+      Alert.alert('Succès', modal === 'depot' ? 'Dépôt effectué.' : 'Retrait effectué.');
+      closeModal();
+    } catch (e) {
+      Alert.alert('Erreur', getApiError(e));
+    }
+  };
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -78,9 +115,9 @@ export default function BourseScreen() {
             </Text>
           )}
           <View style={styles.walletActions}>
-            <ActionBtn icon="plus-circle-outline" label="Dépôt" />
-            <ActionBtn icon="minus-circle-outline" label="Retrait" />
-            <ActionBtn icon="swap-horizontal" label="Échange" />
+            <ActionBtn icon="plus-circle-outline" label="Dépôt" onPress={() => { setAmountStr('10000'); setModal('depot'); }} />
+            <ActionBtn icon="minus-circle-outline" label="Retrait" onPress={() => { setAmountStr('5000'); setModal('retrait'); }} />
+            <ActionBtn icon="swap-horizontal" label="Échange" onPress={() => Alert.alert('Bientôt', 'Fonctionnalité à venir.')} />
           </View>
         </View>
 
@@ -134,6 +171,37 @@ export default function BourseScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
+      <Modal visible={modal !== null} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{modal === 'depot' ? 'Dépôt' : 'Retrait'}</Text>
+            <Text style={styles.modalLabel}>Montant (FCFA)</Text>
+            <TextInput
+              style={styles.modalInput}
+              keyboardType="decimal-pad"
+              value={amountStr}
+              onChangeText={setAmountStr}
+            />
+            <Text style={styles.modalLabel}>Code PIN</Text>
+            <TextInput
+              style={styles.modalInput}
+              secureTextEntry
+              keyboardType="number-pad"
+              value={pinInput}
+              onChangeText={setPinInput}
+            />
+            <View style={styles.modalRow}>
+              <TouchableOpacity style={styles.modalBtnGhost} onPress={closeModal}>
+                <Text>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalBtnPrimary} onPress={() => void submitWallet()}>
+                <Text style={{ color: 'white', fontWeight: '700' }}>Confirmer</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.bottomTab}>
         <TabItem icon="home-variant" label="Accueil" onPress={() => router.push('/(exportateur)/accueil')} />
         <TabItem icon="chart-line" label="Bourse" active />
@@ -145,10 +213,10 @@ export default function BourseScreen() {
   );
 }
 
-const ActionBtn = ({ icon, label }: any) => (
-  <TouchableOpacity style={styles.actionBtn}>
+const ActionBtn = ({ icon, label, onPress }: { icon: string; label: string; onPress?: () => void }) => (
+  <TouchableOpacity style={styles.actionBtn} onPress={onPress}>
     <View style={styles.actionIconCircle}>
-      <MaterialCommunityIcons name={icon} size={22} color="#1B5E20" />
+      <MaterialCommunityIcons name={icon as any} size={22} color="#1B5E20" />
     </View>
     <Text style={styles.actionLabel}>{label}</Text>
   </TouchableOpacity>
@@ -266,4 +334,34 @@ const styles = StyleSheet.create({
   },
   tabItem: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 5 },
   tabLabel: { fontSize: 10, marginTop: 5 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 16, color: '#1B5E20' },
+  modalLabel: { fontSize: 12, color: '#666', marginBottom: 6 },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#DDD',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+    fontSize: 16,
+  },
+  modalRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 8 },
+  modalBtnGhost: { paddingVertical: 10, paddingHorizontal: 16 },
+  modalBtnPrimary: {
+    backgroundColor: '#1B5E20',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+  },
 });

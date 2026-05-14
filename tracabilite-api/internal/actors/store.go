@@ -25,11 +25,14 @@ type Store interface {
 }
 
 type UpdateInput struct {
-	Nom       *string      `json:"nom,omitempty"`
-	Email     *string      `json:"email,omitempty"`
-	OrgID     *string      `json:"org_id,omitempty"`
-	Role      *models.Role `json:"role,omitempty"`
-	Suspended *bool        `json:"suspended,omitempty"`
+	Nom          *string      `json:"nom,omitempty"`
+	Email        *string      `json:"email,omitempty"`
+	OrgID        *string      `json:"org_id,omitempty"`
+	Role         *models.Role `json:"role,omitempty"`
+	Suspended    *bool        `json:"suspended,omitempty"`
+	GPSLocation  *string      `json:"gps_location,omitempty"`
+	FieldSurface *string      `json:"field_surface,omitempty"`
+	OrgName      *string      `json:"org_name,omitempty"`
 }
 
 type memoryStore struct {
@@ -42,21 +45,48 @@ func NewMemoryStore() Store {
 }
 
 func newMemoryStore() *memoryStore {
-	return &memoryStore{
-		actors: []models.Actor{
-			{ID: "actor-agri-001", Nom: "Coop Agri Nord", Email: "agri@chaincacao.tg", OrgID: "AgriculteurMSP", Role: models.RoleAgriculteur, PIN: "1111"},
-			{ID: "actor-coop-001", Nom: "Cooperative Plateaux", Email: "coop@chaincacao.tg", OrgID: "CooperativeMSP", Role: models.RoleCooperative, PIN: "4444"},
-			{ID: "actor-trans-001", Nom: "Usine Cacao Plus", Email: "transfo@chaincacao.tg", OrgID: "TransformateurMSP", Role: models.RoleTransformateur, PIN: "2222"},
-			{ID: "actor-exp-001", Nom: "Exportateur SA", Email: "export@chaincacao.tg", OrgID: "ExportateurMSP", Role: models.RoleExportateur, PIN: "3333"},
-			{ID: "actor-min-001", Nom: "Ministère Agriculture", Email: "ministere@chaincacao.tg", OrgID: "MinistereMSP", Role: models.RoleMinistere, PIN: "8888"},
-			{ID: "actor-admin-001", Nom: "Admin Platform", Email: "admin@chaincacao.tg", OrgID: "PlatformMSP", Role: models.RoleAdmin, PIN: "9999"},
-		},
+	demos := []struct {
+		id    string
+		nom   string
+		email string
+		org   string
+		role  models.Role
+		pin   string
+	}{
+		{"actor-agri-001", "Coop Agri Nord", "agri@chaincacao.tg", "AgriculteurMSP", models.RoleAgriculteur, "1111"},
+		{"actor-coop-001", "Cooperative Plateaux", "coop@chaincacao.tg", "CooperativeMSP", models.RoleCooperative, "4444"},
+		{"actor-trans-001", "Usine Cacao Plus", "transfo@chaincacao.tg", "TransformateurMSP", models.RoleTransformateur, "2222"},
+		{"actor-exp-001", "Exportateur SA", "export@chaincacao.tg", "ExportateurMSP", models.RoleExportateur, "3333"},
+		{"actor-min-001", "Ministère Agriculture", "ministere@chaincacao.tg", "MinistereMSP", models.RoleMinistere, "8888"},
+		{"actor-admin-001", "Admin Platform", "admin@chaincacao.tg", "PlatformMSP", models.RoleAdmin, "9999"},
 	}
+	var actors []models.Actor
+	for _, d := range demos {
+		hash, err := bcrypt.GenerateFromPassword([]byte(d.pin), bcrypt.DefaultCost)
+		if err != nil {
+			panic("actors demo pin hash: " + err.Error())
+		}
+		actors = append(actors, models.Actor{
+			ID:      d.id,
+			Nom:     d.nom,
+			Email:   d.email,
+			OrgID:   d.org,
+			Role:    d.role,
+			PIN:     "",
+			PINHash: string(hash),
+		})
+	}
+	return &memoryStore{actors: actors}
 }
 
 func (m *memoryStore) List(_ context.Context) ([]models.Actor, error) {
 	out := make([]models.Actor, len(m.actors))
 	copy(out, m.actors)
+	for i := range out {
+		out[i].PIN = ""
+		out[i].PINHash = ""
+		out[i].PasswordHash = ""
+	}
 	return out, nil
 }
 
@@ -124,6 +154,15 @@ func (m *memoryStore) Update(_ context.Context, id string, in UpdateInput) (mode
 		}
 		if in.Suspended != nil {
 			m.actors[i].Suspended = *in.Suspended
+		}
+		if in.GPSLocation != nil {
+			m.actors[i].GPSLocation = strings.TrimSpace(*in.GPSLocation)
+		}
+		if in.FieldSurface != nil {
+			m.actors[i].FieldSurface = strings.TrimSpace(*in.FieldSurface)
+		}
+		if in.OrgName != nil {
+			m.actors[i].OrgName = strings.TrimSpace(*in.OrgName)
 		}
 		return m.actors[i], nil
 	}
@@ -212,7 +251,10 @@ func SeedDemoPasswordsForPG(ctx context.Context, pool *pgxpool.Pool) error {
 }
 
 func (p *pgStore) List(ctx context.Context) ([]models.Actor, error) {
-	rows, err := p.pool.Query(ctx, `SELECT id, nom, COALESCE(email,''), org_id, role::text, COALESCE(suspended,false), COALESCE(pin_hash,''), COALESCE(password_hash,'') FROM actors ORDER BY nom`)
+	rows, err := p.pool.Query(ctx, `SELECT id, nom, COALESCE(email,''), org_id, role::text, COALESCE(suspended,false),
+		COALESCE(pin_hash,''), COALESCE(password_hash,''),
+		COALESCE(gps_location,''), COALESCE(field_surface,''), COALESCE(org_name,'')
+		FROM actors ORDER BY nom`)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +262,7 @@ func (p *pgStore) List(ctx context.Context) ([]models.Actor, error) {
 	var list []models.Actor
 	for rows.Next() {
 		var a models.Actor
-		if err := rows.Scan(&a.ID, &a.Nom, &a.Email, &a.OrgID, &a.Role, &a.Suspended, &a.PINHash, &a.PasswordHash); err != nil {
+		if err := rows.Scan(&a.ID, &a.Nom, &a.Email, &a.OrgID, &a.Role, &a.Suspended, &a.PINHash, &a.PasswordHash, &a.GPSLocation, &a.FieldSurface, &a.OrgName); err != nil {
 			return nil, err
 		}
 		list = append(list, a)
@@ -231,9 +273,12 @@ func (p *pgStore) List(ctx context.Context) ([]models.Actor, error) {
 func (p *pgStore) FindByID(ctx context.Context, id string) (models.Actor, error) {
 	var a models.Actor
 	err := p.pool.QueryRow(ctx,
-		`SELECT id, nom, COALESCE(email,''), org_id, role::text, COALESCE(suspended,false), COALESCE(pin_hash,''), COALESCE(password_hash,'') FROM actors WHERE id=$1`,
+		`SELECT id, nom, COALESCE(email,''), org_id, role::text, COALESCE(suspended,false),
+			COALESCE(pin_hash,''), COALESCE(password_hash,''),
+			COALESCE(gps_location,''), COALESCE(field_surface,''), COALESCE(org_name,'')
+			FROM actors WHERE id=$1`,
 		id,
-	).Scan(&a.ID, &a.Nom, &a.Email, &a.OrgID, &a.Role, &a.Suspended, &a.PINHash, &a.PasswordHash)
+	).Scan(&a.ID, &a.Nom, &a.Email, &a.OrgID, &a.Role, &a.Suspended, &a.PINHash, &a.PasswordHash, &a.GPSLocation, &a.FieldSurface, &a.OrgName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return models.Actor{}, errors.New("acteur introuvable")
 	}
@@ -247,9 +292,12 @@ func (p *pgStore) FindByEmail(ctx context.Context, email string) (models.Actor, 
 	email = strings.ToLower(strings.TrimSpace(email))
 	var a models.Actor
 	err := p.pool.QueryRow(ctx,
-		`SELECT id, nom, COALESCE(email,''), org_id, role::text, COALESCE(suspended,false), COALESCE(pin_hash,''), COALESCE(password_hash,'') FROM actors WHERE lower(email)=$1`,
+		`SELECT id, nom, COALESCE(email,''), org_id, role::text, COALESCE(suspended,false),
+			COALESCE(pin_hash,''), COALESCE(password_hash,''),
+			COALESCE(gps_location,''), COALESCE(field_surface,''), COALESCE(org_name,'')
+			FROM actors WHERE lower(email)=$1`,
 		email,
-	).Scan(&a.ID, &a.Nom, &a.Email, &a.OrgID, &a.Role, &a.Suspended, &a.PINHash, &a.PasswordHash)
+	).Scan(&a.ID, &a.Nom, &a.Email, &a.OrgID, &a.Role, &a.Suspended, &a.PINHash, &a.PasswordHash, &a.GPSLocation, &a.FieldSurface, &a.OrgName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return models.Actor{}, errors.New("acteur introuvable")
 	}
@@ -302,9 +350,19 @@ func (p *pgStore) Update(ctx context.Context, id string, in UpdateInput) (models
 	if in.Suspended != nil {
 		cur.Suspended = *in.Suspended
 	}
+	if in.GPSLocation != nil {
+		cur.GPSLocation = strings.TrimSpace(*in.GPSLocation)
+	}
+	if in.FieldSurface != nil {
+		cur.FieldSurface = strings.TrimSpace(*in.FieldSurface)
+	}
+	if in.OrgName != nil {
+		cur.OrgName = strings.TrimSpace(*in.OrgName)
+	}
 
-	_, err = p.pool.Exec(ctx, `UPDATE actors SET nom=$2, email=$3, org_id=$4, role=$5::actor_role, suspended=$6 WHERE id=$1`,
+	_, err = p.pool.Exec(ctx, `UPDATE actors SET nom=$2, email=$3, org_id=$4, role=$5::actor_role, suspended=$6, gps_location=$7, field_surface=$8, org_name=$9 WHERE id=$1`,
 		id, cur.Nom, nullIfEmpty(cur.Email), cur.OrgID, string(cur.Role), cur.Suspended,
+		nullIfEmpty(cur.GPSLocation), nullIfEmpty(cur.FieldSurface), nullIfEmpty(cur.OrgName),
 	)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "unique") {

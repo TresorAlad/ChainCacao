@@ -5,7 +5,6 @@ import {
   StyleSheet, 
   TouchableOpacity, 
   ScrollView, 
-  Image,
   StatusBar,
   ActivityIndicator,
   Alert
@@ -16,50 +15,25 @@ import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
 
 // --- MODULES HORS-LIGNE ---
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Network from 'expo-network';
 import { useAuth } from '@/hooks/use-auth';
 
-// Données par défaut (au cas où le stockage est vide)
-const DEFAULT_USER = {
-  nom: "Koffi Mensah",
-  telephone: "+228 90 00 00 00",
-  parcelles: [
-    { id: '1', nom: 'Parcelle Nord - Kpalimé', surface: '2.5 Ha', image: 'https://images.unsplash.com/photo-1590005354167-6da97870c91d?q=80&w=400' },
-    { id: '2', nom: 'Zone Foret - Atakpamé', surface: '1.8 Ha', image: 'https://images.unsplash.com/photo-1530537025136-9b51684c9809?q=80&w=400' },
-  ]
-};
-
 export default function ProfilAgriculteur() {
   const router = useRouter();
-  const { logout } = useAuth();
+  const { logout, user, initialized } = useAuth();
   const [fontsLoaded, setFontsLoaded] = useState(false);
-  const [userData, setUserData] = useState<any>(null);
   const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
     async function initProfil() {
       try {
-        // 1. Charger les polices
         await Font.loadAsync({
           'Montserrat-Bold': require('../../assets/fonts/Montserrat-Bold.ttf'),
           'Montserrat-Regular': require('../../assets/fonts/Montserrat-Regular.ttf'),
         });
 
-        // 2. Vérifier le réseau
         const net = await Network.getNetworkStateAsync();
         setIsOffline(!net.isConnected);
-
-        // 3. Charger les données locales
-        const savedData = await AsyncStorage.getItem('user_profile_data');
-        if (savedData) {
-          setUserData(JSON.parse(savedData));
-        } else {
-          // Si rien en local, on met les données par défaut et on les sauvegarde
-          setUserData(DEFAULT_USER);
-          await AsyncStorage.setItem('user_profile_data', JSON.stringify(DEFAULT_USER));
-        }
-
       } catch (e) {
         console.warn("Erreur d'initialisation profil");
       } finally {
@@ -87,7 +61,7 @@ export default function ProfilAgriculteur() {
     router.replace(path as any);
   };
 
-  if (!fontsLoaded || !userData) {
+  if (!fontsLoaded || !initialized) {
     return (
       <View style={styles.loaderContainer}>
         <ActivityIndicator size="large" color="#1B5E20" />
@@ -95,82 +69,66 @@ export default function ProfilAgriculteur() {
     );
   }
 
+  if (!user) {
+    return (
+      <View style={styles.loaderContainer}>
+        <Text style={{ fontFamily: 'Montserrat-Regular', color: '#666' }}>Session invalide</Text>
+        <TouchableOpacity onPress={() => router.replace('/login' as any)} style={{ marginTop: 16 }}>
+          <Text style={{ color: '#1B5E20', fontWeight: '700' }}>Connexion</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const displayName = user.nom || user.name || 'Agriculteur';
+  const org = user.org_id || user.orgID || '—';
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container} edges={['top']}>
         <Stack.Screen options={{ headerShown: false }} />
         <StatusBar barStyle="light-content" />
-        
+
         <View style={styles.header}>
           <Text style={styles.brandText}>Mon Profil</Text>
-          {isOffline && (
-            <MaterialCommunityIcons name="cloud-off-outline" size={20} color="#FFCDD2" />
-          )}
+          {isOffline && <MaterialCommunityIcons name="cloud-off-outline" size={20} color="#FFCDD2" />}
         </View>
 
         <View style={styles.body}>
           <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-            
-            {/* 1. INFOS PERSONNELLES */}
             <View style={styles.profileHeader}>
               <View style={styles.avatarContainer}>
                 <MaterialCommunityIcons name="account" size={60} color="#2E7D32" />
               </View>
-              <Text style={styles.userName}>{userData.nom}</Text>
-              <Text style={styles.userPhone}>{userData.telephone}</Text>
+              <Text style={styles.userName}>{displayName}</Text>
+              <Text style={styles.userPhone}>{user.email || '—'}</Text>
+              <Text style={styles.roleLine}>{user.role || '—'} · {org}</Text>
+              {user.org_name ? <Text style={styles.metaLine}>{user.org_name}</Text> : null}
+              {user.gps_location ? <Text style={styles.metaLine}>GPS : {user.gps_location}</Text> : null}
+              {user.field_surface ? <Text style={styles.metaLine}>Surface : {user.field_surface}</Text> : null}
               {isOffline && <Text style={styles.offlineTag}>Mode consultation hors-ligne</Text>}
             </View>
 
-            {/* 2. ACTIONS PROFIL */}
             <View style={styles.actionRow}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.editBtn, isOffline && { opacity: 0.6 }]}
                 disabled={isOffline}
-                onPress={() => Alert.alert("Infos", "La modification requiert une connexion.")}
+                onPress={() => Alert.alert('Infos', 'La modification requiert une connexion.')}
               >
                 <MaterialCommunityIcons name="pencil" size={18} color="white" />
                 <Text style={styles.btnText}>Modifier</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
                 <MaterialCommunityIcons name="logout" size={18} color="#C62828" />
                 <Text style={[styles.btnText, { color: '#C62828' }]}>Quitter</Text>
               </TouchableOpacity>
             </View>
 
-            {/* 3. LISTE DES PARCELLES */}
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Mes Parcelles</Text>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{userData.parcelles.length}</Text>
-              </View>
-            </View>
-
-            {userData.parcelles.map((parcelle: any) => (
-              <View key={parcelle.id} style={styles.parcelleCard}>
-                <Image 
-                  source={{ uri: parcelle.image }} 
-                  style={styles.parcelleImage}
-                  defaultSource={require('../../assets/images/app-icon.png')}
-                />
-                <View style={styles.parcelleInfo}>
-                  <Text style={styles.parcelleName}>{parcelle.nom}</Text>
-                  <View style={styles.parcelleMeta}>
-                    <MaterialCommunityIcons name="layers-outline" size={16} color="#666" />
-                    <Text style={styles.parcelleSurface}> {parcelle.surface}</Text>
-                  </View>
-                </View>
-                <TouchableOpacity style={styles.arrowIcon}>
-                  <MaterialCommunityIcons name="chevron-right" size={24} color="#CCC" />
-                </TouchableOpacity>
-              </View>
-            ))}
-
             <View style={{ height: 100 }} />
           </ScrollView>
         </View>
 
-        {/* NAVIGATION BASSE */}
         <View style={styles.bottomTab}>
           <TabItem icon="home-outline" label="Accueil" onPress={() => navigateTo('/(agriculteur)/accueil')} />
           <TabItem icon="archive-outline" label="Mes Lots" onPress={() => navigateTo('/(agriculteur)/meslots')} />
@@ -210,22 +168,13 @@ const styles = StyleSheet.create({
   avatarContainer: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#A5D6A7' },
   userName: { fontSize: 20, fontFamily: 'Montserrat-Bold', color: '#1A1A1A' },
   userPhone: { fontSize: 14, fontFamily: 'Montserrat-Regular', color: '#666', marginTop: 4 },
+  roleLine: { fontSize: 13, fontFamily: 'Montserrat-Regular', color: '#444', marginTop: 6 },
+  metaLine: { fontSize: 12, fontFamily: 'Montserrat-Regular', color: '#666', marginTop: 4 },
   offlineTag: { fontSize: 10, color: '#C62828', fontFamily: 'Montserrat-Bold', marginTop: 5, textTransform: 'uppercase' },
   actionRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 20, gap: 12 },
   editBtn: { flex: 1, backgroundColor: '#2E7D32', flexDirection: 'row', height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', gap: 8 },
   logoutBtn: { flex: 1, backgroundColor: 'transparent', flexDirection: 'row', height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: '#C62828' },
   btnText: { color: 'white', fontFamily: 'Montserrat-Bold', fontSize: 13 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15, gap: 10 },
-  sectionTitle: { fontSize: 18, fontFamily: 'Montserrat-Bold', color: '#1A1A1A' },
-  badge: { backgroundColor: '#2E7D32', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
-  badgeText: { color: 'white', fontSize: 12, fontFamily: 'Montserrat-Bold' },
-  parcelleCard: { flexDirection: 'row', backgroundColor: 'white', borderRadius: 12, marginBottom: 12, overflow: 'hidden', elevation: 2, alignItems: 'center' },
-  parcelleImage: { width: 70, height: 70, backgroundColor: '#DDD' },
-  parcelleInfo: { flex: 1, paddingHorizontal: 15 },
-  parcelleName: { fontSize: 15, fontFamily: 'Montserrat-Bold', color: '#333' },
-  parcelleMeta: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  parcelleSurface: { fontSize: 13, fontFamily: 'Montserrat-Regular', color: '#666' },
-  arrowIcon: { paddingRight: 10 },
   bottomTab: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 75, backgroundColor: 'white', flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#EEE', paddingBottom: 10 },
   tabItem: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   tabLabel: { fontSize: 10, marginTop: 4 }

@@ -193,6 +193,23 @@ func (c *ProxyClient) SetBatchPrice(ctx context.Context, batchID, actorID string
 	return out.TxHash, err
 }
 
+func (c *ProxyClient) GetBatchPrice(ctx context.Context, batchID string) (float64, error) {
+	var out struct {
+		Price float64 `json:"price"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/v1/fabric/batch/"+batchID+"/price", nil, &out)
+	return out.Price, err
+}
+
+func (c *ProxyClient) ConfirmPhysicalReceipt(ctx context.Context, batchID, actorID string) (string, models.Batch, error) {
+	var out proxyTxBatchResponse
+	err := c.doJSON(ctx, http.MethodPost, "/v1/fabric/batch/confirm-reception", map[string]any{
+		"batch_id": batchID,
+		"actor_id": actorID,
+	}, &out)
+	return out.TxHash, out.Batch, err
+}
+
 func (c *ProxyClient) ConfirmBatchReceipt(ctx context.Context, batchID, actorID string) (string, error) {
 	var out proxyTxBatchResponse
 	err := c.doJSON(ctx, http.MethodPost, "/v1/fabric/batch/confirm", map[string]any{"batch_id": batchID, "actor_id": actorID}, &out)

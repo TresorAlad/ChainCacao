@@ -394,6 +394,46 @@ func (g *GatewayClient) SetBatchPrice(ctx context.Context, batchID, actorID stri
 	return txID, err
 }
 
+func (g *GatewayClient) GetBatchPrice(ctx context.Context, batchID string) (float64, error) {
+	if ctx != nil && ctx.Err() != nil {
+		return 0, ctx.Err()
+	}
+	data, err := g.contract.EvaluateTransaction("GetBatchPrice", batchID)
+	if err != nil {
+		return 0, err
+	}
+	var p float64
+	if err := json.Unmarshal(data, &p); err == nil && p > 0 {
+		return p, nil
+	}
+	var m struct {
+		Price     float64 `json:"price"`
+		PrixParKg float64 `json:"prix_par_kg"`
+	}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return 0, err
+	}
+	if m.Price > 0 {
+		return m.Price, nil
+	}
+	if m.PrixParKg > 0 {
+		return m.PrixParKg, nil
+	}
+	return 0, nil
+}
+
+func (g *GatewayClient) ConfirmPhysicalReceipt(ctx context.Context, batchID, actorID string) (string, models.Batch, error) {
+	txID, _, err := g.submit(ctx, "ConfirmPhysicalReceipt", batchID, actorID)
+	if err != nil {
+		return "", models.Batch{}, err
+	}
+	b, err := g.GetBatch(ctx, batchID)
+	if err != nil {
+		return txID, models.Batch{}, err
+	}
+	return txID, b, nil
+}
+
 func (g *GatewayClient) ConfirmBatchReceipt(ctx context.Context, batchID, actorID string) (string, error) {
 	txID, _, err := g.submit(ctx, "ConfirmBatchReceipt", batchID, actorID)
 	return txID, err

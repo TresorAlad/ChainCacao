@@ -47,6 +47,7 @@ func NewRouter(handler *Handler, jwt *auth.JWTService, rdb *redis.Client) *gin.E
 			protected.PUT("/lot/:id/corriger", auth.RequireAnyRole(models.RoleAgriculteur, models.RoleCooperative, models.RoleAdmin), handler.CorrigerLot)
 			protected.GET("/lot/:id/position", handler.GetLotPosition)
 			protected.POST("/lot/:id/prix", auth.RequireAnyRole(models.RoleAgriculteur, models.RoleTransformateur, models.RoleExportateur, models.RoleAdmin), handler.SetLotPrix)
+			protected.POST("/lot/:id/reception", auth.RequireAnyRole(models.RoleAgriculteur, models.RoleCooperative, models.RoleTransformateur, models.RoleExportateur, models.RoleAdmin), handler.ConfirmerReceptionLot)
 			protected.POST("/lot/:id/confirmer", auth.RequireAnyRole(models.RoleTransformateur, models.RoleExportateur, models.RoleAdmin), handler.ConfirmerLot)
 			protected.GET("/lot/:id/paiement", auth.RequireAnyRole(models.RoleAgriculteur, models.RoleCooperative, models.RoleAdmin), handler.GetLotPaiement)
 			

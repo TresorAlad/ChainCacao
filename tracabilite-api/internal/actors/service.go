@@ -58,14 +58,26 @@ func (s *Service) SetPIN(ctx context.Context, id string, pin string) (models.Act
 	return s.store.SetPIN(ctx, id, pin)
 }
 
-// InitMemoryWebPasswords active le login email sur le store memoire (meme secret que PIN).
+// InitMemoryWebPasswords active le login email sur le store memoire (meme secret que PIN demo).
 func InitMemoryWebPasswords(store Store) error {
 	m, ok := store.(*memoryStore)
 	if !ok {
 		return nil
 	}
+	demoPass := map[string]string{
+		"actor-agri-001":  "1111",
+		"actor-coop-001":  "4444",
+		"actor-trans-001": "2222",
+		"actor-exp-001":   "3333",
+		"actor-min-001":   "8888",
+		"actor-admin-001": "9999",
+	}
 	for i := range m.actors {
-		hash, err := bcrypt.GenerateFromPassword([]byte(m.actors[i].PIN), bcrypt.DefaultCost)
+		pass := demoPass[m.actors[i].ID]
+		if pass == "" {
+			pass = "changeme"
+		}
+		hash, err := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
 		if err != nil {
 			return err
 		}

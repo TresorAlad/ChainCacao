@@ -28,6 +28,10 @@ type Client interface {
 
 	UpdateBatch(ctx context.Context, batchID, actorID string, variete, parcelle, notes string, poids float64, justification string) (txHash string, updated models.Batch, err error)
 	SetBatchPrice(ctx context.Context, batchID, actorID string, price float64) (txHash string, err error)
+	// GetBatchPrice retourne le prix au kg (>0) ou 0 si non defini.
+	GetBatchPrice(ctx context.Context, batchID string) (float64, error)
+	// ConfirmPhysicalReceipt : le proprietaire actuel (destinataire) confirme la reception ; statut en_transit -> recu.
+	ConfirmPhysicalReceipt(ctx context.Context, batchID, actorID string) (txHash string, updated models.Batch, err error)
 	ConfirmBatchReceipt(ctx context.Context, batchID, actorID string) (txHash string, err error)
 	GetPaymentStatus(ctx context.Context, batchID string) (map[string]any, error)
 	CreateGroupedList(ctx context.Context, listID string, batchIDs []string, actorID string) (txHash string, err error)
@@ -48,6 +52,9 @@ type InMemoryClient struct {
 	margins      map[string]float64  // orgID -> margin
 	prices       map[string]float64  // batchID -> price
 	payments     map[string]string   // batchID -> status
+	// sellers: dernier vendeur connu pour un lot (acteur qui a transfere vers le proprietaire actuel).
+	// Permet de crediter le bon compte au paiement (le proprietaire courant est l'acheteur).
+	sellers map[string]string // batchID -> actorID du vendeur
 }
 
 func NewInMemoryClient() *InMemoryClient {
@@ -59,6 +66,7 @@ func NewInMemoryClient() *InMemoryClient {
 		margins:      make(map[string]float64),
 		prices:       make(map[string]float64),
 		payments:     make(map[string]string),
+		sellers:      make(map[string]string),
 	}
 }
 
@@ -73,6 +81,7 @@ func (c *InMemoryClient) CreateBatch(_ context.Context, batch models.Batch, acto
 	batch.Timestamp = now
 	batch.Statut = "cree"
 	c.batches[batch.ID] = batch
+	c.sellers[batch.ID] = actorID // createur = beneficiaire du paiement si aucun transfert
 
 	txHash := newTxHash()
 	c.history[batch.ID] = append(c.history[batch.ID], models.BatchHistoryEvent{
@@ -100,9 +109,10 @@ func (c *InMemoryClient) TransferBatch(_ context.Context, batchID, fromActorID, 
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	batch.Proprietaire = toActorID
-	batch.Statut = "transfere"
+	batch.Statut = "en_transit"
 	batch.Timestamp = now
 	c.batches[batchID] = batch
+	c.sellers[batchID] = fromActorID // vendeur = precedent proprietaire
 
 	txHash := newTxHash()
 	c.history[batchID] = append(c.history[batchID], models.BatchHistoryEvent{
@@ -305,12 +315,55 @@ func (c *InMemoryClient) SetBatchPrice(_ context.Context, batchID, actorID strin
 	return newTxHash(), nil
 }
 
+func (c *InMemoryClient) GetBatchPrice(_ context.Context, batchID string) (float64, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	p := c.prices[batchID]
+	return p, nil
+}
+
+func (c *InMemoryClient) ConfirmPhysicalReceipt(_ context.Context, batchID, actorID string) (string, models.Batch, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	batch, exists := c.batches[batchID]
+	if !exists {
+		return "", models.Batch{}, errors.New("batch introuvable")
+	}
+	if batch.Proprietaire != actorID {
+		return "", models.Batch{}, errors.New("seul le destinataire (proprietaire actuel) peut confirmer la reception")
+	}
+	if batch.Statut != "en_transit" {
+		return "", models.Batch{}, fmt.Errorf("le lot n'est pas en attente de reception (statut: %s)", batch.Statut)
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	batch.Statut = "recu"
+	batch.Timestamp = now
+	c.batches[batchID] = batch
+
+	txHash := newTxHash()
+	c.history[batchID] = append(c.history[batchID], models.BatchHistoryEvent{
+		BatchID:      batchID,
+		Type:         "reception",
+		ActorID:      actorID,
+		TxHash:       txHash,
+		CreatedAtISO: now,
+		Payload:      batch,
+	})
+	return txHash, batch, nil
+}
+
 func (c *InMemoryClient) ConfirmBatchReceipt(_ context.Context, batchID, actorID string) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	batch, exists := c.batches[batchID]
 	if !exists {
 		return "", errors.New("batch introuvable")
+	}
+	if batch.Statut == "en_transit" {
+		return "", errors.New("reception physique non confirmee: le destinataire doit confirmer la reception du lot avant paiement")
+	}
+	if batch.Statut == "paye" {
+		return "", errors.New("lot deja paye")
 	}
 	
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -329,9 +382,12 @@ func (c *InMemoryClient) ConfirmBatchReceipt(_ context.Context, batchID, actorID
 		return "", errors.New("solde insuffisant")
 	}
 	c.wallets[actorID] -= amount
-	
-	// Simuler le paiement a l'agriculteur (on ne debite pas l'acheteur ici, just credit)
-	c.wallets[batch.Proprietaire] += amount
+
+	seller, ok := c.sellers[batchID]
+	if !ok || seller == "" {
+		seller = batch.Proprietaire // pas de transfert : createur = vendeur
+	}
+	c.wallets[seller] += amount
 
 	txHash := newTxHash()
 	c.history[batchID] = append(c.history[batchID], models.BatchHistoryEvent{
@@ -373,13 +429,20 @@ func (c *InMemoryClient) PayGroupedList(_ context.Context, listID, actorID strin
 	txHash := newTxHash()
 	for _, batchID := range batchIDs {
 		if b, ok := c.batches[batchID]; ok {
+			if b.Statut == "en_transit" {
+				return "", fmt.Errorf("lot %s en transit: reception non confirmee", batchID)
+			}
 			b.Statut = "paye"
 			b.Timestamp = now
 			c.batches[batchID] = b
 			c.payments[batchID] = "paye"
 			price := c.prices[batchID]
 			if price <= 0 { price = 1500 }
-			c.wallets[b.Proprietaire] += price * b.Quantite
+			seller, ok := c.sellers[batchID]
+			if !ok || seller == "" {
+				seller = b.Proprietaire
+			}
+			c.wallets[seller] += price * b.Quantite
 			
 			c.history[batchID] = append(c.history[batchID], models.BatchHistoryEvent{
 				BatchID:      batchID,

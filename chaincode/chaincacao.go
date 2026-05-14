@@ -137,7 +137,8 @@ func (s *SmartContract) TransferBatch(ctx contractapi.TransactionContextInterfac
 	now := time.Now().UTC().Format(time.RFC3339)
 	prev := batch.Proprietaire
 	batch.Proprietaire = toActorID
-	batch.Statut = "transfere"
+	// Le destinataire doit confirmer la reception physique avant paiement / operations finales.
+	batch.Statut = "en_transit"
 	batch.Timestamp = now
 
 	newRaw, err := json.Marshal(batch)
@@ -154,6 +155,47 @@ func (s *SmartContract) TransferBatch(ctx contractapi.TransactionContextInterfac
 		FromActorID:  prev,
 		ToActorID:    toActorID,
 		Commentaire:  commentaire,
+		TxHash:       txID,
+		CreatedAtISO: now,
+		Payload:      batch,
+	})
+}
+
+// ConfirmPhysicalReceipt : le proprietaire actuel (destinataire du transfert) confirme avoir recu le lot.
+func (s *SmartContract) ConfirmPhysicalReceipt(ctx contractapi.TransactionContextInterface, batchID, actorID string) error {
+	raw, err := ctx.GetStub().GetState(batchID)
+	if err != nil {
+		return err
+	}
+	if raw == nil {
+		return fmt.Errorf("lot %s introuvable", batchID)
+	}
+	var batch Batch
+	if err := json.Unmarshal(raw, &batch); err != nil {
+		return err
+	}
+	if batch.Proprietaire != actorID {
+		return fmt.Errorf("seul le destinataire (proprietaire actuel) peut confirmer la reception")
+	}
+	if batch.Statut != "en_transit" {
+		return fmt.Errorf("le lot n'est pas en attente de reception (statut: %s)", batch.Statut)
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	batch.Statut = "recu"
+	batch.Timestamp = now
+
+	newRaw, err := json.Marshal(batch)
+	if err != nil {
+		return err
+	}
+	if err := ctx.GetStub().PutState(batchID, newRaw); err != nil {
+		return err
+	}
+	txID := ctx.GetStub().GetTxID()
+	return s.appendHistory(ctx, BatchHistoryEvent{
+		BatchID:      batchID,
+		Type:         "reception",
+		ActorID:      actorID,
 		TxHash:       txID,
 		CreatedAtISO: now,
 		Payload:      batch,

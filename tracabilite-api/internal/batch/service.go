@@ -173,6 +173,19 @@ func (s *Service) SetBatchPrice(ctx context.Context, batchID, actorID string, pr
 	return s.fabricClient.SetBatchPrice(ctx, batchID, actorID, price)
 }
 
+func (s *Service) GetBatchPricePerKg(ctx context.Context, batchID string) (float64, error) {
+	return s.fabricClient.GetBatchPrice(ctx, batchID)
+}
+
+func (s *Service) ConfirmPhysicalReceipt(ctx context.Context, batchID, actorID string) (string, models.Batch, error) {
+	txHash, updated, err := s.fabricClient.ConfirmPhysicalReceipt(ctx, strings.TrimSpace(batchID), actorID)
+	if err != nil {
+		return "", models.Batch{}, err
+	}
+	updated = s.enrichOwnerOrg(ctx, updated)
+	return txHash, updated, nil
+}
+
 func (s *Service) ConfirmBatchReceipt(ctx context.Context, batchID, actorID string) (string, error) {
 	return s.fabricClient.ConfirmBatchReceipt(ctx, batchID, actorID)
 }

@@ -31,6 +31,7 @@ export default function RootLayout() {
             <Stack.Screen name="production" />
             <Stack.Screen name="creationlot" />
             <Stack.Screen name="caracteristiqueslot" />
+            <Stack.Screen name="confirmer-reception-lot" />
           </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>

@@ -19,6 +19,7 @@ export default function MainDashboard() {
   const router = useRouter();
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [lotsRecus, setLotsRecus] = useState(0);
+  const [lotsEnTransit, setLotsEnTransit] = useState(0);
   const [poidsTotal, setPoidsTotal] = useState(0);
   const [margeEstimee, setMargeEstimee] = useState(0);
 
@@ -46,6 +47,8 @@ export default function MainDashboard() {
         const { data } = await myLotsApi.list();
         const lots = data.lots ?? [];
         setLotsRecus(lots.length);
+        const transit = lots.filter((b) => String(b.statut ?? '').toLowerCase() === 'en_transit').length;
+        setLotsEnTransit(transit);
         const kg = lots.reduce((s, b) => s + (b.quantite ?? 0), 0);
         setPoidsTotal(Math.round(kg));
         setMargeEstimee(Math.round(kg * 150));
@@ -89,8 +92,9 @@ export default function MainDashboard() {
               onPress={() => router.push('/(cooperative)/lots_recus' as any)}
             >
               <View>
-                <Text style={styles.todayLabel}>Lots reçus aujourd'hui</Text>
-                <Text style={styles.todayValue}>{lotsRecus}</Text>
+                <Text style={styles.todayLabel}>Lots en transit (à confirmer)</Text>
+                <Text style={styles.todayValue}>{lotsEnTransit}</Text>
+                <Text style={styles.todaySub}>Total lots : {lotsRecus}</Text>
               </View>
               <View style={styles.iconCircle}>
                 <MaterialCommunityIcons name="package-variant-closed" size={35} color="white" />
@@ -215,6 +219,7 @@ const styles = StyleSheet.create({
   },
   todayLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontFamily: 'Montserrat-Regular' },
   todayValue: { color: 'white', fontSize: 40, fontFamily: 'Montserrat-Bold' },
+  todaySub: { color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 6, fontFamily: 'Montserrat-Regular' },
   iconCircle: {
     backgroundColor: '#43A047',
     width: 65,

@@ -16,7 +16,9 @@ export interface Lot {
   destination?: string;
   typeCacao?: string;
   synced: boolean; // true = confirmé blockchain, false = en attente de sync
-  /** GPS pour POST /api/v1/batch/create (obligatoire côté API) */
+  /** Copie locale (documentDirectory) pour sync hors ligne après prise de vue. */
+  photoUri?: string;
+  /** @deprecated Ancien flux JSON ; non utilisé pour la création multipart. */
   latitude?: number;
   longitude?: number;
 }

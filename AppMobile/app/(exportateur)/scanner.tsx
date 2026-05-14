@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, StatusBar, Alert } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useFocusEffect } from 'expo-router';
+
+import { batchApi, getApiError, isNetworkError } from '@/services/api';
+import { extractLotIdFromScanPayload } from '@/utils/lotQr';
 
 export default function ScannerScreen() {
   const router = useRouter();
@@ -13,6 +16,12 @@ export default function ScannerScreen() {
   useEffect(() => {
     requestPermission();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setScanned(false);
+    }, [])
+  );
 
   if (!permission) return <View style={{ flex: 1, backgroundColor: 'black' }} />;
   
@@ -28,12 +37,25 @@ export default function ScannerScreen() {
     );
   }
 
-  const handleBarCodeScanned = ({ data }: { data: string }) => {
+  const handleBarCodeScanned = async ({ data }: { data: string }) => {
     if (scanned) return;
     setScanned(true);
-    Alert.alert("Lot Détecté", `ID: ${data}`, [
-      { text: "OK", onPress: () => setScanned(false) }
-    ]);
+    const lotId = extractLotIdFromScanPayload(data);
+    if (!lotId) {
+      Alert.alert('Scan', 'Impossible de lire un identifiant de lot.', [
+        { text: 'OK', onPress: () => setScanned(false) },
+      ]);
+      return;
+    }
+    try {
+      await batchApi.verify(lotId);
+      router.push({ pathname: '/historique', params: { lotId } } as any);
+    } catch (e) {
+      const msg = isNetworkError(e)
+        ? 'Réseau indisponible. Réessayez plus tard.'
+        : getApiError(e);
+      Alert.alert('Vérification lot', msg, [{ text: 'OK', onPress: () => setScanned(false) }]);
+    }
   };
 
   return (

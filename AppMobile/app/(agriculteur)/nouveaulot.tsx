@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   StatusBar,
   ActivityIndicator,
   Alert,
+  Modal,
+  Image,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -17,6 +19,8 @@ import * as Font from 'expo-font';
 import { Picker } from '@react-native-picker/picker';
 import * as Network from 'expo-network';
 import * as Location from 'expo-location';
+import { Paths, File, Directory } from 'expo-file-system';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 import { useLots, type Lot } from '@/hooks/use-storage';
 import { useAuth } from '@/hooks/use-auth';
@@ -42,6 +46,13 @@ export default function NouveauLot() {
   const [poids, setPoids] = useState('');
   const [parcelle, setParcelle] = useState('');
   const [dateRecolte] = useState(new Date().toLocaleDateString('fr-FR'));
+  /** Aperçu immédiat après capture (fichier temporaire ou copié). */
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+
+  const [showCamera, setShowCamera] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const cameraRef = useRef<InstanceType<typeof CameraView> | null>(null);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const varietesCacao = ['Amelonado', 'Criollo', 'Trinitario', 'Forastero'];
   const varietesCafe = ['Robustra', 'Arabica', 'Niaouli'];
@@ -62,9 +73,39 @@ export default function NouveauLot() {
     loadFonts();
   }, []);
 
+  const openCameraModal = async () => {
+    const cam = await requestCameraPermission();
+    if (!cam.granted) {
+      Alert.alert('Caméra', "L'accès à la caméra est nécessaire pour photographier le lot.");
+      return;
+    }
+    setCameraReady(false);
+    setShowCamera(true);
+  };
+
+  const capturePhoto = async () => {
+    if (!cameraRef.current || !cameraReady) return;
+    try {
+      const pic = await cameraRef.current.takePictureAsync({
+        quality: 0.88,
+        exif: true,
+      });
+      if (pic?.uri) {
+        setPhotoUri(pic.uri);
+        setShowCamera(false);
+      }
+    } catch {
+      Alert.alert('Photo', 'Impossible de prendre la photo. Réessayez.');
+    }
+  };
+
   const handleValider = async () => {
     if (!variete || !poids || !parcelle) {
       Alert.alert('Champs manquants', 'Veuillez remplir toutes les informations.');
+      return;
+    }
+    if (!photoUri) {
+      Alert.alert('Photo obligatoire', 'Prenez une photo du lot : la position est lue dans les métadonnées de l’image.');
       return;
     }
 
@@ -75,15 +116,6 @@ export default function NouveauLot() {
 
     setIsSubmitting(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('GPS requis', "L'API exige latitude et longitude pour créer un lot.");
-        return;
-      }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const latitude = pos.coords.latitude;
-      const longitude = pos.coords.longitude;
-
       const network = await Network.getNetworkStateAsync();
       const isConnected = !!(network.isConnected && network.isInternetReachable);
 
@@ -91,6 +123,53 @@ export default function NouveauLot() {
       const culture = typeProduit === 'Cacao' ? 'Cacao' : 'Cafe';
       const dateIso = frDateToIso(dateRecolte);
       const qty = parseFloat(poids.replace(',', '.')) || 0;
+
+      const pendingDir = new Directory(Paths.document, 'pending-lots');
+      pendingDir.create({ intermediates: true, idempotent: true });
+      const destFile = new File(pendingDir, `${localId}.jpg`);
+      const srcFile = new File(photoUri);
+      srcFile.copy(destFile);
+      const storedPhoto = destFile.uri;
+
+      // Position du téléphone (secours si la photo n’a pas d’EXIF GPS) — pas de saisie manuelle.
+      let lat: number | undefined;
+      let lon: number | undefined;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          try {
+            const pos = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            });
+            lat = pos.coords.latitude;
+            lon = pos.coords.longitude;
+          } catch {
+            /* ignore */
+          }
+          if (lat == null || lon == null) {
+            const last = await Location.getLastKnownPositionAsync({ maxAge: 86_400_000 });
+            if (last?.coords) {
+              lat = last.coords.latitude;
+              lon = last.coords.longitude;
+            }
+          }
+        }
+      } catch {
+        /* l’API peut encore accepter le lot si l’EXIF contient le GPS */
+      }
+
+      const fields = {
+        culture,
+        quantite: qty,
+        lieu: parcelle,
+        date_recolte: dateIso,
+        notes: variete,
+        variete,
+        parcelle,
+        client_lot_id: localId,
+        latitude: lat,
+        longitude: lon,
+      };
 
       const lotRow: Lot = {
         id: localId,
@@ -101,28 +180,20 @@ export default function NouveauLot() {
         destination: parcelle,
         typeCacao: variete,
         synced: false,
-        latitude,
-        longitude,
+        photoUri: storedPhoto,
+        latitude: lat,
+        longitude: lon,
       };
 
       if (isConnected) {
         try {
-          const { data } = await batchApi.create({
-            culture,
-            quantite: qty,
-            lieu: parcelle,
-            date_recolte: dateIso,
-            notes: variete,
-            variete,
-            parcelle,
-            latitude,
-            longitude,
-            client_lot_id: localId,
-          });
+          const { data } = await batchApi.createWithPhoto(storedPhoto, fields);
           const serverId = data.batch?.id ?? localId;
+          await destFile.delete();
           await saveLot({
             ...lotRow,
             id: serverId,
+            photoUri: undefined,
             synced: true,
             status: 'Terminé',
           });
@@ -141,7 +212,7 @@ export default function NouveauLot() {
       await saveLot(lotRow);
       Alert.alert(
         'Mode hors-ligne',
-        'Lot enregistré localement. Il sera synchronisé automatiquement dès que le réseau sera disponible.',
+        'Lot enregistré localement avec la photo. Il sera envoyé automatiquement dès que le réseau sera disponible.',
         [{ text: 'OK', onPress: () => router.replace('/(agriculteur)/meslots' as any) }]
       );
     } catch (error) {
@@ -165,6 +236,42 @@ export default function NouveauLot() {
         <Stack.Screen options={{ headerShown: false }} />
         <StatusBar barStyle="light-content" />
 
+        <Modal visible={showCamera} animationType="slide" onRequestClose={() => setShowCamera(false)}>
+          <View style={styles.cameraModal}>
+            {cameraPermission?.granted ? (
+              <CameraView
+                ref={cameraRef}
+                style={StyleSheet.absoluteFillObject}
+                facing="back"
+                onCameraReady={() => setCameraReady(true)}
+              />
+            ) : (
+              <View style={styles.cameraDenied}>
+                <Text style={styles.cameraDeniedText}>Permission caméra requise.</Text>
+              </View>
+            )}
+            <SafeAreaView style={styles.cameraOverlay} edges={['top', 'bottom']}>
+              <View style={styles.cameraTopBar}>
+                <TouchableOpacity onPress={() => setShowCamera(false)} style={styles.cameraIconBtn}>
+                  <MaterialCommunityIcons name="close" size={28} color="white" />
+                </TouchableOpacity>
+                <Text style={styles.cameraTitle}>Photo du lot</Text>
+                <View style={{ width: 44 }} />
+              </View>
+              <View style={{ flex: 1 }} />
+              <View style={styles.cameraBottomBar}>
+                <TouchableOpacity
+                  style={[styles.shutterBtn, (!cameraReady || !cameraPermission?.granted) && { opacity: 0.5 }]}
+                  onPress={capturePhoto}
+                  disabled={!cameraReady || !cameraPermission?.granted}
+                >
+                  <View style={styles.shutterInner} />
+                </TouchableOpacity>
+              </View>
+            </SafeAreaView>
+          </View>
+        </Modal>
+
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <MaterialCommunityIcons name="arrow-left" size={28} color="white" />
@@ -175,8 +282,21 @@ export default function NouveauLot() {
         <View style={styles.body}>
           <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             <Text style={styles.instructionText}>
-              Enregistrez votre récolte. Le GPS est utilisé pour la conformité API.
+              Prenez une photo du lot : le serveur lit la position dans les métadonnées EXIF (pas de saisie GPS dans
+              l’app). Si le serveur refuse la photo, vérifiez dans les réglages du téléphone que la caméra ou les photos
+              peuvent enregistrer la position — ChainCacao ne demande pas la localisation sur cet écran.
             </Text>
+
+            <TouchableOpacity style={styles.photoBtn} onPress={openCameraModal}>
+              <MaterialCommunityIcons name="camera" size={28} color="white" />
+              <Text style={styles.photoBtnText}>{photoUri ? 'Reprendre la photo' : 'Prendre la photo du lot'}</Text>
+            </TouchableOpacity>
+
+            {photoUri ? (
+              <View style={styles.previewWrap}>
+                <Image source={{ uri: photoUri }} style={styles.previewImg} resizeMode="cover" />
+              </View>
+            ) : null}
 
             <View style={styles.typeSelectionRow}>
               <TouchableOpacity
@@ -295,7 +415,26 @@ const styles = StyleSheet.create({
   headerTitle: { color: 'white', fontSize: 20, fontFamily: 'Montserrat-Bold', marginLeft: 15 },
   body: { flex: 1, backgroundColor: '#F5F5F5', borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   content: { padding: 20, paddingBottom: 100 },
-  instructionText: { fontFamily: 'Montserrat-Regular', fontSize: 13, color: '#666', marginBottom: 20, textAlign: 'center' },
+  instructionText: { fontFamily: 'Montserrat-Regular', fontSize: 13, color: '#666', marginBottom: 16, textAlign: 'center' },
+  photoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#2E7D32',
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  photoBtnText: { color: 'white', fontFamily: 'Montserrat-Bold', fontSize: 15 },
+  previewWrap: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  previewImg: { width: '100%', height: 180, backgroundColor: '#EEE' },
   typeSelectionRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
   typeFrame: {
     width: '48%',
@@ -350,4 +489,28 @@ const styles = StyleSheet.create({
   },
   tabItem: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   tabLabel: { fontSize: 9, marginTop: 2 },
+  cameraModal: { flex: 1, backgroundColor: 'black' },
+  cameraOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between' },
+  cameraTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
+  cameraIconBtn: { padding: 8 },
+  cameraTitle: { color: 'white', fontFamily: 'Montserrat-Bold', fontSize: 16 },
+  cameraBottomBar: { alignItems: 'center', paddingBottom: 28 },
+  shutterBtn: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 4,
+    borderColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shutterInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'white' },
+  cameraDenied: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  cameraDeniedText: { color: 'white', fontFamily: 'Montserrat-Regular' },
 });

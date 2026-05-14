@@ -50,6 +50,9 @@ type Actor struct {
 	OrgID        string `json:"org_id"`
 	Role         Role   `json:"role"`
 	Suspended    bool   `json:"suspended,omitempty"`
+	GPSLocation  string `json:"gps_location,omitempty"`
+	FieldSurface string `json:"field_surface,omitempty"`
+	OrgName      string `json:"org_name,omitempty"`
 	PIN          string `json:"-"`
 	PINHash      string `json:"-"`
 	PasswordHash string `json:"-"`

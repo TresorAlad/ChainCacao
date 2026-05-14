@@ -151,9 +151,14 @@ export default function HistoriqueScreen() {
     { icon: string; color: string; label: string }
   > = {
     creation: { icon: 'sprout', color: '#2E7D32', label: 'Création' },
-    transfert: { icon: 'truck-delivery', color: '#1565C0', label: 'Transfert' },
+    transfert: { icon: 'truck-delivery', color: '#1565C0', label: 'Transfert / transit' },
+    reception: { icon: 'package-check', color: '#00897B', label: 'Réception confirmée' },
+    paiement: { icon: 'cash-multiple', color: '#E65100', label: 'Paiement' },
     transformation: { icon: 'cog', color: '#6A1B9A', label: 'Transformation' },
     certification: { icon: 'shield-check', color: '#00695C', label: 'Certification' },
+    export: { icon: 'airplane', color: '#5E35B1', label: 'Export' },
+    maj_poids: { icon: 'weight-kilogram', color: '#546E7A', label: 'Mise à jour du poids' },
+    other: { icon: 'timeline-text-outline', color: '#78909C', label: 'Événement' },
   };
 
   return (
@@ -287,7 +292,7 @@ export default function HistoriqueScreen() {
 
               <Text style={styles.timelineTitle}>Frise chronologique</Text>
               {events.map((event, index) => {
-                const cfg = eventConfig[event.type];
+                const cfg = eventConfig[event.type] ?? eventConfig.other;
                 return (
                   <View key={index} style={styles.timelineItem}>
                     <View style={styles.timelineLeft}>

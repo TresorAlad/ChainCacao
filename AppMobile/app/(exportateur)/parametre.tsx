@@ -5,9 +5,11 @@ import {
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { logout } = useAuth();
   
   // États pour les switchs
   const [isNotifEnabled, setIsNotifEnabled] = useState(true);
@@ -92,7 +94,13 @@ export default function SettingsScreen() {
         </View>
 
         {/* BOUTON DÉCONNEXION */}
-        <TouchableOpacity style={styles.logoutBtn}>
+        <TouchableOpacity
+          style={styles.logoutBtn}
+          onPress={async () => {
+            await logout();
+            router.replace('/login' as any);
+          }}
+        >
           <MaterialCommunityIcons name="logout" size={22} color="#C62828" />
           <Text style={styles.logoutText}>Déconnexion</Text>
         </TouchableOpacity>

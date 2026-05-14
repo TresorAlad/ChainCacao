@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -164,6 +165,47 @@ func (h *Handler) Signup(c *gin.Context) {
 		return
 	}
 
+	if strings.TrimSpace(req.PINCode) != "" {
+		actor, err = h.actors.SetPIN(c.Request.Context(), actor.ID, req.PINCode)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	prof := actors.UpdateInput{}
+	if v := strings.TrimSpace(req.GPSLocation); v != "" {
+		prof.GPSLocation = &v
+	}
+	if v := strings.TrimSpace(req.FieldSurface); v != "" {
+		prof.FieldSurface = &v
+	}
+	if v := strings.TrimSpace(req.OrgName); v != "" {
+		prof.OrgName = &v
+	}
+	if prof.GPSLocation != nil || prof.FieldSurface != nil || prof.OrgName != nil {
+		actor, err = h.actors.Update(c.Request.Context(), actor.ID, prof)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	// Crédit démo portefeuille (même règle que cmd/api au démarrage) : les nouveaux comptes
+	// exportateur / transformateur n’étaient pas crédités avant le prochain redémarrage.
+	if os.Getenv("DEMO_INITIAL_CREDIT") != "false" && (role == models.RoleExportateur || role == models.RoleTransformateur) {
+		initial := 2000000.0
+		if v := os.Getenv("DEMO_INITIAL_CREDIT_AMOUNT"); v != "" {
+			if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+				initial = f
+			}
+		}
+		ctx := c.Request.Context()
+		if bal, err := h.batch.GetWalletBalance(ctx, actor.ID); err == nil && bal < initial {
+			_, _ = h.batch.DepositWallet(ctx, actor.ID, initial-bal)
+		}
+	}
+
 	// Auto-login: retourner un JWT directement
 	token, err := h.jwt.Generate(actor.ID, actor.OrgID, actor.Role)
 	if err != nil {
@@ -212,10 +254,17 @@ func (h *Handler) CreateBatch(c *gin.Context) {
 			return
 		}
 
-		gps, err := exif.ExtractGPS(bytes.NewReader(raw))
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "photo invalide: GPS EXIF requis"})
-			return
+		gps, errGPS := exif.ExtractGPS(bytes.NewReader(raw))
+		var lat, lon float64
+		if errGPS == nil {
+			lat, lon = gps.Latitude, gps.Longitude
+		} else {
+			lat = parseFloatDefault(c.PostForm("latitude"), 0)
+			lon = parseFloatDefault(c.PostForm("longitude"), 0)
+			if lat == 0 || lon == 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "photo sans GPS dans les métadonnées : activez la localisation sur le téléphone pour que l’app envoie la position, ou fournissez la position GPS (secours technique)."})
+				return
+			}
 		}
 
 		// Upload photo et stocker URL dans le lot.
@@ -226,12 +275,13 @@ func (h *Handler) CreateBatch(c *gin.Context) {
 		}
 
 		req = batch.CreateBatchInput{
+			ClientLotID: c.PostForm("client_lot_id"),
 			Culture:     c.PostForm("culture"),
 			Variete:     c.PostForm("variete"),
 			Quantite:    parseFloatDefault(c.PostForm("quantite"), 0),
 			Lieu:        c.PostForm("lieu"),
-			Latitude:    gps.Latitude,
-			Longitude:   gps.Longitude,
+			Latitude:    lat,
+			Longitude:   lon,
 			Region:      c.PostForm("region"),
 			Village:     c.PostForm("village"),
 			Parcelle:    c.PostForm("parcelle"),
@@ -729,22 +779,21 @@ func (h *Handler) ConfirmerLot(c *gin.Context) {
 		return
 	}
 
-	// Debit acheteur (transformateur/exportateur) puis paiement.
+	// Paiement : le client Fabric (memoire ou chaincode) applique le debit acheteur et le credit vendeur.
 	lot, err := h.batch.GetBatch(c.Request.Context(), batchID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	// Prix/kg: si non défini, Fabric mock utilise 1500 par défaut.
-	// Pour le backend, on applique le même défaut pour afficher/débiter correctement.
-	price := 1500.0
-	// Pas d'API GetPrice ici: on assume que SetLotPrix a été appelé.
-	// On laisse le défaut à 1500 pour rester cohérent avec InMemoryClient.
-	total := price * lot.Quantite
-	if _, err := h.batch.WithdrawWallet(c.Request.Context(), actorID, total); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if strings.EqualFold(strings.TrimSpace(lot.Statut), "en_transit") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "le destinataire doit d'abord confirmer la reception physique du lot avant tout paiement"})
 		return
 	}
+	price, _ := h.batch.GetBatchPricePerKg(c.Request.Context(), batchID)
+	if price <= 0 {
+		price = 1500.0
+	}
+	total := price * lot.Quantite
 	txHash, err := h.batch.ConfirmBatchReceipt(c.Request.Context(), batchID, actorID)
 	if err != nil {
 		if h.inc != nil {
@@ -754,6 +803,34 @@ func (h *Handler) ConfirmerLot(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": txHash, "message": "lot confirme et paiement initie", "montant_total": total})
+}
+
+func (h *Handler) ConfirmerReceptionLot(c *gin.Context) {
+	var req struct {
+		PIN string `json:"pin" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payload invalide"})
+		return
+	}
+	batchID := c.Param("id")
+	actorID := c.GetString(auth.ContextActorID)
+	_, err := h.actors.Authenticate(c.Request.Context(), actorID, req.PIN)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "PIN invalide"})
+		return
+	}
+	txHash, updated, err := h.batch.ConfirmPhysicalReceipt(c.Request.Context(), batchID, actorID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success":  true,
+		"tx_hash":  txHash,
+		"message":  "reception du lot confirmee",
+		"lot":      updated,
+	})
 }
 
 func (h *Handler) GetLotPaiement(c *gin.Context) {
@@ -819,6 +896,10 @@ func (h *Handler) PreviewListeGroupee(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "lot introuvable dans liste: " + bid})
 			return
 		}
+		if strings.EqualFold(strings.TrimSpace(lot.Statut), "en_transit") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "lot " + bid + " encore en transit: reception non confirmee par le destinataire"})
+			return
+		}
 		m := req.PrixParKg * lot.Quantite
 		total += m
 		lines = append(lines, lotLine{LotID: bid, PoidsKg: lot.Quantite, Montant: m})
@@ -864,6 +945,10 @@ func (h *Handler) PayerListeGroupee(c *gin.Context) {
 		lot, err := h.batch.GetBatch(c.Request.Context(), bid)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "lot introuvable dans liste: " + bid})
+			return
+		}
+		if strings.EqualFold(strings.TrimSpace(lot.Statut), "en_transit") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "lot " + bid + " encore en transit: reception non confirmee par le destinataire"})
 			return
 		}
 		total += req.PrixParKg * lot.Quantite

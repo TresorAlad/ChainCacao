@@ -1,7 +1,18 @@
 import type { BatchResponse, BatchTimelineEvent, VerifyBatchResponse } from '@/services/api';
 
+export type TimelineEventKind =
+  | 'creation'
+  | 'transfert'
+  | 'reception'
+  | 'paiement'
+  | 'transformation'
+  | 'certification'
+  | 'export'
+  | 'maj_poids'
+  | 'other';
+
 export interface TimelineDisplayEvent {
-  type: 'creation' | 'transfert' | 'transformation' | 'certification';
+  type: TimelineEventKind;
   date: string;
   acteur: string;
   detail: string;
@@ -14,15 +25,22 @@ export function parseTimelineEvents(events: BatchTimelineEvent[]): TimelineDispl
     const p = e.payload || {};
     const statut = String(p.statut || '').toLowerCase();
     const evtType = String(e.type || '').toLowerCase();
-    let type: TimelineDisplayEvent['type'] = 'creation';
-    if (
-      evtType.includes('transfer') ||
-      statut.includes('transfér') ||
-      statut.includes('transfer')
-    ) {
+
+    let type: TimelineEventKind = 'other';
+    if (evtType === 'creation' || evtType.includes('creat')) {
+      type = 'creation';
+    } else if (evtType === 'reception' || evtType.includes('reception')) {
+      type = 'reception';
+    } else if (evtType === 'paiement' || evtType === 'paiement_liste' || evtType.includes('paiement')) {
+      type = 'paiement';
+    } else if (evtType === 'transfert' || evtType.includes('transfer') || statut.includes('transit')) {
       type = 'transfert';
     } else if (evtType.includes('transform') || statut.includes('transform')) {
       type = 'transformation';
+    } else if (evtType === 'export' || evtType.includes('export')) {
+      type = 'export';
+    } else if (evtType === 'maj_poids' || evtType.includes('poids')) {
+      type = 'maj_poids';
     }
 
     let date = '—';
@@ -41,7 +59,9 @@ export function parseTimelineEvents(events: BatchTimelineEvent[]): TimelineDispl
       '—';
 
     let detail = `${p.culture ?? '—'} · ${p.quantite ?? '—'} kg · ${p.lieu ?? '—'}`;
+    if (p.statut) detail += ` · statut: ${p.statut}`;
     if (e.commentaire) detail += ` · ${e.commentaire}`;
+    if (type === 'paiement') detail += ' · Paiement enregistré sur la chaîne';
 
     return {
       type,
