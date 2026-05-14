@@ -4,16 +4,19 @@ import {
   TouchableOpacity, StatusBar, Dimensions, KeyboardAvoidingView,
   Platform, ScrollView, ActivityIndicator, Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useAuth } from '@/hooks/use-auth';
+import { USER_KEY, type ActorInfo } from '@/services/api';
+import { homePathForActor } from '@/lib/home-path';
 
 const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, loading, error, initialized, isAuthenticated } = useAuth();
+  const { login, loading, error, initialized, isAuthenticated, user } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,10 +35,10 @@ export default function LoginScreen() {
 
   useEffect(() => {
     if (!initialized) return;
-    if (isAuthenticated) {
-      router.replace('/(tabs)/accueil');
+    if (isAuthenticated && user) {
+      router.replace(homePathForActor(user));
     }
-  }, [initialized, isAuthenticated, router]);
+  }, [initialized, isAuthenticated, user, router]);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -44,7 +47,9 @@ export default function LoginScreen() {
     }
     const ok = await login(email.trim(), password.trim());
     if (ok) {
-      router.replace('/(tabs)/accueil');
+      const raw = await AsyncStorage.getItem(USER_KEY);
+      const actor = raw ? (JSON.parse(raw) as ActorInfo) : null;
+      router.replace(homePathForActor(actor));
     }
   };
 
@@ -63,8 +68,8 @@ export default function LoginScreen() {
         promptMessage: 'Accès Chaincacao',
         fallbackLabel: 'Utiliser le mot de passe',
       });
-      if (result.success) {
-        router.replace('/(tabs)/accueil');
+      if (result.success && user) {
+        router.replace(homePathForActor(user));
       }
     } finally {
       setBiometricLoading(false);

@@ -10,6 +10,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Location from 'expo-location';
 import { authApi, getApiError } from '@/services/api';
+import { homePathForActor } from '@/lib/home-path';
 import { saveProfileExtrasForActor } from '@/hooks/profile-extra';
 import { useAuth } from '@/hooks/use-auth';
 
@@ -127,7 +128,7 @@ export default function RegisterScreen() {
       await applySessionFromSignup(data.token, enriched);
 
       Alert.alert('Compte créé ✓', 'Votre compte a été créé. Vous êtes connecté.', [
-        { text: 'OK', onPress: () => router.replace('/(tabs)/accueil') },
+        { text: 'OK', onPress: () => router.replace(homePathForActor(enriched)) },
       ]);
     } catch (e) {
       Alert.alert('Inscription impossible', getApiError(e));
