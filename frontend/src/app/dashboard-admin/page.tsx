@@ -1,15 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { RoleLayout } from '@/components/RoleLayout'
 import { KPICard, Badge, Button } from '@/components/ui'
 import { getRoleTheme } from '@/lib/role-themes'
-import api from '@/lib/api'
+import api, { type ActorDTO } from '@/lib/api'
 import type { DashboardStats } from '@/lib/dashboard-stats'
 import type { ActivityChartRow, RecentTransferRow } from '@/lib/dashboard-types'
+import { LocationMap } from '@/components/maps/LocationMapDynamic'
+import { markersFromActors, SUPERVISION_ACTOR_MAP_PIN, type MapMarker } from '@/lib/geo-utils'
+import { filterAnnuaireActors } from '@/lib/actors-utils'
 import {
   CubeIcon,
   DocumentCheckIcon,
@@ -20,6 +23,7 @@ import {
   ServerStackIcon,
   ExclamationTriangleIcon,
   TruckIcon,
+  MapIcon,
 } from '@heroicons/react/24/outline'
 
 export default function AdminDashboardPage() {
@@ -33,6 +37,7 @@ export default function AdminDashboardPage() {
   const [recentTransfers, setRecentTransfers] = useState<RecentTransferRow[]>([])
   const [chartData, setChartData] = useState<ActivityChartRow[]>([])
   const [alertsCount, setAlertsCount] = useState<number | null>(null)
+  const [actors, setActors] = useState<ActorDTO[]>([])
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
@@ -87,6 +92,21 @@ export default function AdminDashboardPage() {
         .catch(() => setAlertsCount(null))
     }
   }, [isAuthenticated, user])
+
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== 'admin') return
+    api
+      .get<{ success: boolean; actors: ActorDTO[] }>('/actors', { params: { limit: 500 } })
+      .then((res) => setActors(filterAnnuaireActors(res.data.actors || [])))
+      .catch(() => setActors([]))
+  }, [isAuthenticated, user?.role])
+
+  const adminActorMapMarkers = useMemo<MapMarker[]>(
+    () => markersFromActors(actors, { idPrefix: 'admin-actor', pinColor: SUPERVISION_ACTOR_MAP_PIN }),
+    [actors]
+  )
+
+  const adminGpsActorCount = adminActorMapMarkers.length
 
   if (loading) {
     return (
@@ -168,6 +188,28 @@ export default function AdminDashboardPage() {
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Alertes Système</p>
             <p className="text-3xl font-black text-[#B71C1C] mt-1">{statsLoading ? '—' : alertsCount ?? '—'}</p>
           </div>
+        </div>
+
+        {/* Acteurs géolocalisés (pastilles rouges) */}
+        <div className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-[var(--color-border)] mb-10">
+          <div className="p-6 border-b border-[var(--color-border)] flex items-center gap-2">
+            <MapIcon className="w-5 h-5 text-[#33691E]" />
+            <h3 className="text-xl font-black text-[var(--color-primary)]">Carte des acteurs de la filière</h3>
+          </div>
+          <LocationMap height="300px" markers={adminActorMapMarkers} />
+          <p className="px-6 py-3 text-xs text-[var(--color-muted)] border-t border-[var(--color-border)] flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-full bg-[#c62828] border border-white shadow-sm" aria-hidden />
+              Pastilles rouges : position GPS des acteurs enregistrés (hors comptes administration / ministère).
+            </span>
+            {adminGpsActorCount > 0 ? (
+              <span className="font-semibold text-[var(--color-earth)]">
+                {adminGpsActorCount} point{adminGpsActorCount > 1 ? 's' : ''} affiché{adminGpsActorCount > 1 ? 's' : ''}.
+              </span>
+            ) : (
+              <span>Aucun GPS saisi à l&apos;inscription pour l&apos;instant.</span>
+            )}
+          </p>
         </div>
 
         {/* Activity Chart Section */}

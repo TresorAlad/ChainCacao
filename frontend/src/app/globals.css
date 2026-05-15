@@ -695,3 +695,8 @@ select.form-input {
   font-family: inherit;
   border-radius: 0.75rem;
 }
+
+.location-map-wrapper .chaincacao-map-marker-dot {
+  background: transparent !important;
+  border: none !important;
+}

@@ -6,10 +6,10 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { RoleLayout } from '@/components/RoleLayout'
 import { getRoleTheme } from '@/lib/role-themes'
-import { getRoleBasedRedirect, isAdminRole, isMinistereRole, normalizeUserRole } from '@/lib/role-utils'
+import { getRoleBasedRedirect, isAdminRole, isMinistereRole } from '@/lib/role-utils'
 import api, { type ActorDTO, type Batch, type BatchHistoryEvent } from '@/lib/api'
 import { LocationMap } from '@/components/maps/LocationMapDynamic'
-import { coordsFromLot, markersFromActors, type MapMarker } from '@/lib/geo-utils'
+import { coordsFromLot, markersFromActors, SUPERVISION_ACTOR_MAP_PIN, SUPERVISION_AUDIT_LOT_MAP_PIN, type MapMarker } from '@/lib/geo-utils'
 import type { DashboardStats } from '@/lib/dashboard-stats'
 import {
   GlobeAmericasIcon,
@@ -54,7 +54,7 @@ export default function MinistereDashboardPage() {
     Promise.all([
       api.get<{ success: boolean; stats: DashboardStats }>('/dashboard/stats').catch(() => ({ data: { stats: {} } })),
       api.get<{ success: boolean; alerts: Record<string, unknown> }>('/dashboard/alerts-count').catch(() => null),
-      api.get<{ success: boolean; actors: ActorDTO[] }>('/actors').catch(() => ({ data: { actors: [] } })),
+      api.get<{ success: boolean; actors: ActorDTO[] }>('/actors', { params: { limit: 500 } }).catch(() => ({ data: { actors: [] } })),
     ])
       .then(([statsRes, alertsRes, actorsRes]) => {
         setStats(statsRes.data.stats || {})
@@ -89,7 +89,10 @@ export default function MinistereDashboardPage() {
   }
 
   const mapMarkers = useMemo<MapMarker[]>(() => {
-    const fromActors = markersFromActors(actors, { idPrefix: 'actor' })
+    const fromActors = markersFromActors(actors, {
+      idPrefix: 'actor',
+      pinColor: SUPERVISION_ACTOR_MAP_PIN,
+    })
     const auditCoords = auditLot ? coordsFromLot(auditLot.latitude, auditLot.longitude) : null
     if (auditCoords && auditLot) {
       return [
@@ -97,7 +100,8 @@ export default function MinistereDashboardPage() {
         {
           ...auditCoords,
           id: `audit-${auditLot.id}`,
-          label: `Audit : ${auditLot.id}`,
+          label: `Lot audité : ${auditLot.id}`,
+          pinColor: SUPERVISION_AUDIT_LOT_MAP_PIN,
         },
       ]
     }
@@ -207,10 +211,25 @@ export default function MinistereDashboardPage() {
             </div>
             <LocationMap height="280px" markers={mapMarkers} />
             <p className="px-6 py-3 text-xs text-[var(--color-muted)] border-t border-[var(--color-border)]">
-              {gpsActorCount > 0
-                ? `${gpsActorCount} acteur(s) géolocalisé(s) sur la carte nationale`
-                : 'Aucun acteur avec GPS enregistré — les coordonnées sont saisies à l’inscription'}
-              {auditLot ? ' · Lot audité affiché si GPS disponible' : ''}
+              {gpsActorCount > 0 ? (
+                <>
+                  <span className="inline-flex items-center gap-1.5 mr-2">
+                    <span className="inline-block h-3 w-3 shrink-0 rounded-full bg-[#c62828] border border-white shadow-sm" aria-hidden />
+                    Points rouges : « acteurs inscrits ayant renseigné leur GPS » à l&apos;enregistrement ({gpsActorCount}).{' '}
+                  </span>
+                  {auditLot ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      Pastille bleue :
+                      <span className="inline-block h-3 w-3 shrink-0 rounded-full bg-[#1565c0] border border-white shadow-sm" aria-hidden />
+                      position du lot audité.
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  Aucune pastille rouge pour l&apos;instant : aucun acteur de la filière n&apos;a renseigné GPS à l&apos;inscription ; les coordonnées se saisissent lors de la création de compte ou sur le formulaire d&apos;enregistrement.
+                </>
+              )}
             </p>
           </div>
         </div>

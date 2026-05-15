@@ -18,8 +18,30 @@ import {
   type MapMarker,
 } from '@/lib/geo-utils'
 
+const divIconByColor = new Map<string, L.DivIcon>()
+
+function divIconForPinColor(hex: string): L.DivIcon {
+  let icon = divIconByColor.get(hex)
+  if (!icon) {
+    icon = L.divIcon({
+      className: 'chaincacao-map-marker-dot',
+      html: `<div style="width:14px;height:14px;border-radius:50%;background:${hex};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>`,
+      iconSize: [18, 18],
+      iconAnchor: [9, 9],
+      popupAnchor: [0, -12],
+    })
+    divIconByColor.set(hex, icon)
+  }
+  return icon
+}
+
+function markerIcon(m: MapMarker): L.Icon | L.DivIcon {
+  if (m.pinColor) return divIconForPinColor(m.pinColor)
+  return markerIconDefault
+}
+
 // Corrige les icônes Leaflet sous Webpack / Next.js
-const markerIcon = L.icon({
+const markerIconDefault = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
@@ -135,7 +157,7 @@ export function LocationMap({
           <Marker
             key={m.id ?? `${m.lat}-${m.lng}-${m.label ?? ''}`}
             position={[m.lat, m.lng]}
-            icon={markerIcon}
+            icon={markerIcon(m)}
           >
             {m.label && <Popup>{m.label}</Popup>}
           </Marker>

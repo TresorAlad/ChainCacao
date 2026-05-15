@@ -28,7 +28,12 @@ export function coordsFromLot(lat?: number | null, lng?: number | null): LatLng 
   return { lat, lng }
 }
 
-export type MapMarker = LatLng & { label?: string; id?: string }
+/** Couleur des pastilles acteurs (supervision admin / ministère). */
+export const SUPERVISION_ACTOR_MAP_PIN = '#c62828'
+/** Lot en cours d’audit sur la carte supervision. */
+export const SUPERVISION_AUDIT_LOT_MAP_PIN = '#1565c0'
+
+export type MapMarker = LatLng & { label?: string; id?: string; pinColor?: string }
 
 export type ActorWithGps = {
   id: string
@@ -39,9 +44,10 @@ export type ActorWithGps = {
 
 export function markersFromActors(
   actors: ActorWithGps[],
-  options?: { roleFilter?: string; idPrefix?: string }
+  options?: { roleFilter?: string; idPrefix?: string; pinColor?: string }
 ): MapMarker[] {
   const markers: MapMarker[] = []
+  const pinColor = options?.pinColor
   for (const actor of actors) {
     if (options?.roleFilter && actor.role !== options.roleFilter) continue
     const raw = actor.gps_location?.trim()
@@ -52,14 +58,17 @@ export function markersFromActors(
       ...c,
       id: options?.idPrefix ? `${options.idPrefix}-${actor.id}` : actor.id,
       label: `${actor.nom}${actor.role ? ` (${actor.role})` : ''}`,
+      ...(pinColor ? { pinColor } : {}),
     })
   }
   return markers
 }
 
 export function markersFromLots(
-  lots: Array<{ id: string; culture?: string; latitude?: number | null; longitude?: number | null }>
+  lots: Array<{ id: string; culture?: string; latitude?: number | null; longitude?: number | null }>,
+  options?: { pinColor?: string }
 ): MapMarker[] {
+  const pinColor = options?.pinColor
   const markers: MapMarker[] = []
   for (const lot of lots) {
     const c = coordsFromLot(lot.latitude, lot.longitude)
@@ -68,6 +77,7 @@ export function markersFromLots(
       ...c,
       id: `lot-${lot.id}`,
       label: `${lot.id}${lot.culture ? ` — ${lot.culture}` : ''}`,
+      ...(pinColor ? { pinColor } : {}),
     })
   }
   return markers
