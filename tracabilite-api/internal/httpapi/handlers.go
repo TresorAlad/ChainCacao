@@ -674,10 +674,33 @@ func (h *Handler) Me(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
+	hasPIN := strings.TrimSpace(actor.PINHash) != "" || strings.TrimSpace(actor.PIN) != ""
 	actor.PIN = ""
 	actor.PINHash = ""
 	actor.PasswordHash = ""
-	c.JSON(http.StatusOK, gin.H{"success": true, "actor": actor})
+	c.JSON(http.StatusOK, gin.H{"success": true, "actor": actor, "has_pin": hasPIN})
+}
+
+// VerifyPinUnlock valide le PIN de l'utilisateur connecté (accès application).
+func (h *Handler) VerifyPinUnlock(c *gin.Context) {
+	var req struct {
+		PIN string `json:"pin" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "code pin requis"})
+		return
+	}
+	pin := strings.TrimSpace(req.PIN)
+	if len(pin) != 4 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "le code pin doit contenir 4 chiffres"})
+		return
+	}
+	actorID := c.GetString(auth.ContextActorID)
+	if _, err := h.actors.Authenticate(c.Request.Context(), actorID, pin); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "code pin incorrect"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 func (h *Handler) Health(c *gin.Context) {

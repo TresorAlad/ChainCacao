@@ -35,6 +35,7 @@ func NewRouter(handler *Handler, jwt *auth.JWTService, rdb *redis.Client) *gin.E
 		protected.Use(auth.JWTMiddleware(jwt))
 		{
 			protected.GET("/me", handler.Me)
+			protected.POST("/auth/verify-pin", handler.VerifyPinUnlock)
 
 			// Nouvelles routes spec v2.1
 			protected.POST("/lot", auth.RequireAnyRole(models.RoleAgriculteur, models.RoleAdmin), handler.CreateBatch)

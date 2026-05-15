@@ -9,6 +9,8 @@ import { BrandLogo } from '@/components/BrandLogo'
 import { getRoleBasedRedirect } from '@/lib/role-utils'
 import type { UserRole } from '@/lib/role-utils'
 import { getErrorMessage } from '@/lib/error-utils'
+import api from '@/lib/api'
+import { markPinUnlocked, setHasPinRequired } from '@/lib/pin-session'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -21,7 +23,21 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (authLoading || !isAuthenticated || !user?.role) return
-    router.replace(getRoleBasedRedirect(user.role as UserRole))
+    void (async () => {
+      try {
+        const { data } = await api.get<{ has_pin?: boolean }>('/me')
+        if (data.has_pin) {
+          setHasPinRequired(true)
+          router.replace('/pin-unlock')
+          return
+        }
+        setHasPinRequired(false)
+        markPinUnlocked()
+        router.replace(getRoleBasedRedirect(user.role as UserRole))
+      } catch {
+        router.replace(getRoleBasedRedirect(user.role as UserRole))
+      }
+    })()
   }, [authLoading, isAuthenticated, user?.role, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,6 +47,18 @@ export default function LoginPage() {
 
     try {
       const loggedIn = await login(email.trim(), password, 'email')
+      try {
+        const { data } = await api.get<{ has_pin?: boolean }>('/me')
+        if (data.has_pin) {
+          setHasPinRequired(true)
+          router.replace('/pin-unlock')
+          return
+        }
+        setHasPinRequired(false)
+        markPinUnlocked()
+      } catch {
+        /* ignore */
+      }
       router.replace(getRoleBasedRedirect(loggedIn.role as UserRole))
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Identifiants invalides'))

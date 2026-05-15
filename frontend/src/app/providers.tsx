@@ -4,12 +4,14 @@ import { ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { WebChannelGuard } from '@/components/WebChannelGuard'
+import { PinUnlockGuard } from '@/components/PinUnlockGuard'
 import AppShell from '@/components/AppShell'
 import { SidebarLayoutProvider } from '@/contexts/SidebarLayoutContext'
 
 export default function Providers({ children }: { children: ReactNode }) {
   const pathname = usePathname()
-  const isAuthPage = pathname === '/login' || pathname === '/register'
+  const isAuthPage =
+    pathname === '/login' || pathname === '/register' || pathname === '/pin-unlock'
   /** Pages sans sidebar : landing, auth, vérification publique */
   const isPublicPage =
     pathname == null ||
@@ -21,6 +23,7 @@ export default function Providers({ children }: { children: ReactNode }) {
 
   return (
     <AuthProvider>
+      <PinUnlockGuard>
       <WebChannelGuard>
         {isPublicPage ? (
           <div className="min-h-screen">
@@ -32,6 +35,7 @@ export default function Providers({ children }: { children: ReactNode }) {
           </SidebarLayoutProvider>
         )}
       </WebChannelGuard>
+      </PinUnlockGuard>
     </AuthProvider>
   )
 }

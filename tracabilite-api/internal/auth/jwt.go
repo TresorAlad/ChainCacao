@@ -9,7 +9,7 @@ import (
 	"tracabilite-api/pkg/models"
 )
 
-const defaultJWTDuration = 24 * time.Hour
+const defaultJWTDuration = 30 * 24 * time.Hour // 30 jours — session mobile persistante
 
 type Claims struct {
 	ActorID string      `json:"actor_id"`
@@ -30,6 +30,15 @@ func NewJWTService() *JWTService {
 	return &JWTService{secret: []byte(secret)}
 }
 
+func jwtDuration() time.Duration {
+	if h := os.Getenv("JWT_DURATION_HOURS"); h != "" {
+		if n, err := time.ParseDuration(h + "h"); err == nil && n > 0 {
+			return n
+		}
+	}
+	return defaultJWTDuration
+}
+
 func (s *JWTService) Generate(actorID, orgID string, role models.Role) (string, error) {
 	now := time.Now()
 	claims := Claims{
@@ -37,7 +46,7 @@ func (s *JWTService) Generate(actorID, orgID string, role models.Role) (string, 
 		OrgID:   orgID,
 		Role:    role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(now.Add(defaultJWTDuration)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(jwtDuration())),
 			IssuedAt:  jwt.NewNumericDate(now),
 		},
 	}

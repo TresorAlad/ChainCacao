@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -24,6 +25,10 @@ func ConnectPool(ctx context.Context) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, err
+	}
+	// Neon / PgBouncer (pooler) : évite SQLSTATE 08P01 "prepared statement name is already in use"
+	if os.Getenv("PG_SIMPLE_PROTOCOL") != "false" {
+		cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 	}
 	cfg.MaxConns = int32(envIntDefault("PG_MAX_CONNS", 25))
 	cfg.MinConns = int32(envIntDefault("PG_MIN_CONNS", 5))

@@ -10,6 +10,7 @@ import {
   clearSignupChannel,
 } from '@/lib/signup-channel-storage'
 import { setAuthSessionCookie, clearAuthSessionCookie } from '@/lib/auth-session-cookie'
+import { clearPinSession } from '@/lib/pin-session'
 import { decodeJwtPayload, isJwtExpired } from '@/lib/jwt-utils'
 
 export type RegisterExtras = {
@@ -276,6 +277,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
+    clearPinSession()
     void clearAuthSessionCookie()
     setUser(null)
   }

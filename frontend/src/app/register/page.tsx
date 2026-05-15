@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { EyeIcon, EyeOffIcon, MapPinIcon } from 'lucide-react'
 import { BrandLogo } from '@/components/BrandLogo'
 import { UserRole, getRoleBasedRedirect } from '@/lib/role-utils'
+import { markPinUnlocked, setHasPinRequired } from '@/lib/pin-session'
 
 function orgLabelForRole(role: UserRole): string {
   switch (role) {
@@ -30,7 +31,7 @@ export default function RegisterPage() {
   const [gpsLocation, setGpsLocation] = useState('')
   const [fieldSurface, setFieldSurface] = useState('')
   const [orgName, setOrgName] = useState('')
-  const [usePin, setUsePin] = useState(false)
+  const [usePin] = useState(true)
   const [pinCode, setPinCode] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -90,8 +91,8 @@ export default function RegisterPage() {
       setError('Les mots de passe ne correspondent pas.')
       return
     }
-    if (usePin && pinCode.trim().length !== 4) {
-      setError('Le code PIN doit contenir 4 chiffres.')
+    if (pinCode.trim().length !== 4) {
+      setError('Le code PIN est obligatoire (4 chiffres) pour accéder à l’application.')
       return
     }
     if (!gpsLocation.trim()) {
@@ -105,10 +106,12 @@ export default function RegisterPage() {
         gps_location: gpsLocation.trim(),
         field_surface: role === 'agriculteur' ? fieldSurface.trim() : undefined,
         org_name: role !== 'agriculteur' ? orgName.trim() : undefined,
-        pin_code: usePin ? pinCode.trim() : undefined,
+        pin_code: pinCode.trim(),
         preferred_client: 'web',
       })
-      router.replace(getRoleBasedRedirect(jwtRole))
+      setHasPinRequired(true)
+      markPinUnlocked()
+      router.replace(getRoleBasedRedirect(jwtRole as UserRole))
     } catch (err: unknown) {
       let message = 'Erreur lors de la création du compte'
       if (err instanceof Error && err.message) {
@@ -341,22 +344,17 @@ export default function RegisterPage() {
             </div>
 
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-primary)]/5 p-4 space-y-3">
-              <p className="text-sm font-semibold text-[var(--color-primary)]">Sécurisation du compte</p>
+              <p className="text-sm font-semibold text-[var(--color-primary)]">Code PIN d&apos;accès</p>
               <p className="text-body-sm text-[var(--color-muted)]">
-                La connexion par empreinte sur l’appareil est disponible dans l’application mobile ChainCacao.
+                Obligatoire : vous le saisirez à chaque ouverture de l&apos;application (web et mobile).
               </p>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={usePin}
-                  onChange={(e) => setUsePin(e.target.checked)}
-                  disabled={isLoading}
-                />
-                <span className="text-sm text-[var(--color-earth)]">Définir un code PIN pour l&apos;application mobile</span>
-              </label>
-              {usePin && (
+              <div className="form-group mb-0">
+                <label htmlFor="pin" className="form-label form-label-required">
+                  Code PIN (4 chiffres)
+                </label>
                 <div className="relative">
                   <input
+                    id="pin"
                     type={showPin ? 'text' : 'password'}
                     inputMode="numeric"
                     maxLength={4}
@@ -375,7 +373,7 @@ export default function RegisterPage() {
                     {showPin ? <EyeOffIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
                   </button>
                 </div>
-              )}
+              </div>
             </div>
 
             <div className="pt-2">
