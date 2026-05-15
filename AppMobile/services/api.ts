@@ -11,7 +11,18 @@ type ExpoExtra = { apiUrl?: string };
 /** URL de base : `extra.apiUrl` dans app.config.js (EXPO_PUBLIC_API_URL en build). */
 export function getApiBaseUrl(): string {
   const fromExtra = (Constants.expoConfig?.extra as ExpoExtra | undefined)?.apiUrl;
-  if (typeof fromExtra === 'string' && fromExtra.trim()) return fromExtra.trim();
+  if (typeof fromExtra === 'string' && fromExtra.trim()) {
+    const url = fromExtra.trim();
+    if (url.includes('127.0.0.1') || url.includes('localhost')) {
+      console.warn(
+        '[ChainCacao] ⚠️  URL API localhost détectée (' + url + ').\n' +
+        'Ce build pointe vers localhost et ne fonctionnera PAS sur un téléphone réel.\n' +
+        'Rebuild avec : eas build --profile preview --platform android\n' +
+        'Ou en local   : EXPO_PUBLIC_API_URL=http://13.60.214.56:8080 npx expo run:android'
+      );
+    }
+    return url;
+  }
   throw new Error('API URL non configurée : définissez EXPO_PUBLIC_API_URL ou extra.apiUrl dans app.config.js');
 }
 
@@ -64,7 +75,10 @@ export function getApiError(e: unknown): string {
     return `Délai dépassé — API : ${API_BASE}`;
   }
   if (err.code === 'ERR_NETWORK' || !err.response) {
-    return `Impossible de joindre l'API (${API_BASE}). Vérifiez Internet, que le serveur écoute sur le port 8080, et l'URL EXPO_PUBLIC_API_URL au build.`;
+    if (API_BASE.includes('127.0.0.1') || API_BASE.includes('localhost')) {
+      return `URL API incorrecte (${API_BASE}) — ce build pointe vers localhost et ne peut pas joindre le serveur depuis un téléphone réel. Rebuilder avec : eas build --profile preview`;
+    }
+    return `Réseau indisponible — mode hors-ligne activé`;
   }
   return err.message || 'Erreur inconnue';
 }

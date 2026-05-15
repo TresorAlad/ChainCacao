@@ -16,6 +16,7 @@ import {
   HAS_PIN_KEY,
   ActorInfo,
   getApiError,
+  isNetworkError,
   meApi,
 } from '@/services/api';
 import { actorInfoFromToken, isJwtExpired } from '@/lib/jwt-utils';
@@ -25,6 +26,7 @@ import {
   StoredProfileExtras,
 } from '@/hooks/profile-extra';
 import { registerForPushNotifications } from '@/services/push-notifications';
+import { storePinHash, verifyPinLocal, clearPinHash } from '@/lib/pin-local';
 
 export type AuthContextValue = {
   token: string | null;
@@ -44,7 +46,7 @@ export type AuthContextValue = {
   unlockWithPin: (pin: string) => Promise<boolean>;
   grantPinUnlock: () => void;
   updateProfile: (patch: Partial<StoredProfileExtras>) => Promise<void>;
-  applySessionFromSignup: (token: string, actor: ActorInfo, withPin?: boolean) => Promise<void>;
+  applySessionFromSignup: (token: string, actor: ActorInfo, withPin?: boolean, rawPin?: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -115,6 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       AsyncStorage.removeItem(TOKEN_KEY),
       AsyncStorage.removeItem(USER_KEY),
       AsyncStorage.removeItem(HAS_PIN_KEY),
+      clearPinHash(),
     ]);
     setToken(null);
     setUser(null);
@@ -239,10 +242,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setPinUnlockError(null);
     try {
       await meApi.verifyPin(pin);
+      // Mettre à jour le hash local à chaque vérification réseau réussie.
+      await storePinHash(pin);
       setPinUnlocked(true);
       setPinUnlockError(null);
       return true;
     } catch (e) {
+      if (isNetworkError(e)) {
+        // Fallback offline : vérifier le hash stocké localement dans SecureStore.
+        const localOk = await verifyPinLocal(pin);
+        if (localOk === true) {
+          setPinUnlocked(true);
+          setPinUnlockError(null);
+          return true;
+        }
+        if (localOk === false) {
+          setPinUnlockError('Code PIN incorrect.');
+          return false;
+        }
+        // localOk === null : pas de hash enregistré, on ne peut pas vérifier hors-ligne.
+        setPinUnlockError('Réseau indisponible — connectez-vous une fois en ligne pour activer le déverrouillage hors-ligne.');
+        return false;
+      }
       setPinUnlockError(getApiError(e));
       return false;
     } finally {
@@ -279,11 +300,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const applySessionFromSignup = useCallback(
-    async (newToken: string, actor: ActorInfo, withPin = false) => {
+    async (newToken: string, actor: ActorInfo, withPin = false, rawPin?: string) => {
       const full = await persistSession(newToken, actor);
       setToken(newToken);
       setUser(full);
       await applyHasPinFromApi(withPin);
+      // Stocker le hash du PIN localement pour le fallback offline.
+      if (withPin && rawPin) {
+        await storePinHash(rawPin);
+      }
       setPinUnlocked(true);
       void registerForPushNotifications();
     },

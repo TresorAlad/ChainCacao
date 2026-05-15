@@ -12,7 +12,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
-import { myLotsApi, getApiError } from '@/services/api';
+import { myLotsApi, portefeuilleApi, getApiError } from '@/services/api';
 
 const EXPORT_DATA = {
   recentShipments: [
@@ -28,6 +28,7 @@ export default function ExportateurDashboard() {
   const [stockTotal, setStockTotal] = useState('0');
   const [lotsExpedies, setLotsExpedies] = useState(0);
   const [shipments, setShipments] = useState(EXPORT_DATA.recentShipments);
+  const [solde, setSolde] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadResources() {
@@ -67,6 +68,12 @@ export default function ExportateurDashboard() {
     })();
   }, []);
 
+  useEffect(() => {
+    portefeuilleApi.solde()
+      .then(({ data }) => { if (typeof data.balance === 'number') setSolde(data.balance); })
+      .catch(() => {});
+  }, []);
+
   if (!fontsLoaded) return (
     <View style={styles.loaderContainer}>
       <ActivityIndicator size="large" color="#1B5E20" />
@@ -97,6 +104,26 @@ export default function ExportateurDashboard() {
         <View style={styles.body}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             
+            {/* CARTE PORTEFEUILLE */}
+            <TouchableOpacity
+              style={styles.soldeCard}
+              onPress={() => router.push('/(exportateur)/portefeuille' as any)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.soldeCardLeft}>
+                <MaterialCommunityIcons name="wallet" size={28} color="white" />
+                <View style={{ marginLeft: 14 }}>
+                  <Text style={styles.soldeCardLabel}>Portefeuille démo</Text>
+                  <Text style={styles.soldeCardValue}>
+                    {solde !== null
+                      ? `${Math.round(solde).toLocaleString('fr-FR')} FCFA`
+                      : '— FCFA'}
+                  </Text>
+                </View>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color="rgba(255,255,255,0.7)" />
+            </TouchableOpacity>
+
             {/* STATS */}
             <View style={styles.statsGrid}>
               <View style={styles.statCard}>
@@ -163,33 +190,13 @@ export default function ExportateurDashboard() {
           </ScrollView>
         </View>
 
-        {/* BOTTOM NAVIGATION HARMONISÉE (5 ONGLET) */}
+        {/* BOTTOM NAVIGATION */}
         <View style={styles.bottomTab}>
-          <TabItem 
-            icon="home-variant" 
-            label="Accueil" 
-            active 
-          />
-          <TabItem 
-            icon="chart-line" 
-            label="Bourse" 
-            onPress={() => router.push('/(exportateur)/bourse')} 
-          />
-          <TabItem 
-            icon="qrcode-scan" 
-            label="Scanner" 
-            onPress={() => router.push('/(exportateur)/scanner')} 
-          />
-          <TabItem 
-            icon="package-variant-closed" 
-            label="Stock" 
-            onPress={() => router.push('/(exportateur)/stock')} 
-          />
-          <TabItem 
-            icon="file-document-outline" 
-            label="Rapport" 
-            onPress={() => router.push('/(exportateur)/rapport')} 
-          />
+          <TabItem icon="home-variant" label="Accueil" active />
+          <TabItem icon="wallet" label="Portefeuille" onPress={() => router.push('/(exportateur)/portefeuille' as any)} />
+          <TabItem icon="qrcode-scan" label="Scanner" onPress={() => router.push('/(exportateur)/scanner')} />
+          <TabItem icon="package-variant-closed" label="Stock" onPress={() => router.push('/(exportateur)/stock')} />
+          <TabItem icon="file-document-outline" label="Rapport" onPress={() => router.push('/(exportateur)/rapport')} />
         </View>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -222,6 +229,19 @@ const styles = StyleSheet.create({
   body: { flex: 1, backgroundColor: '#F8F9FA', borderTopLeftRadius: 30, borderTopRightRadius: 30 },
   scrollContent: { padding: 20 },
   
+  soldeCard: {
+    backgroundColor: '#1B5E20',
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    elevation: 3,
+  },
+  soldeCardLeft: { flexDirection: 'row', alignItems: 'center' },
+  soldeCardLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontFamily: 'Montserrat-Regular' },
+  soldeCardValue: { color: 'white', fontSize: 20, fontFamily: 'Montserrat-Bold', marginTop: 2 },
   statsGrid: { flexDirection: 'row', gap: 12, marginBottom: 25 },
   statCard: { 
     flex: 1, 

@@ -111,7 +111,7 @@ export default function SettingsScreen() {
       {/* TA BOTTOM TAB HARMONISÉE */}
       <View style={styles.bottomTab}>
         <TabItem icon="home-variant" label="Accueil" onPress={() => router.push('/(exportateur)/accueil')} />
-        <TabItem icon="chart-line" label="Bourse" onPress={() => router.push('/(exportateur)/bourse')} />
+        <TabItem icon="wallet" label="Portefeuille" onPress={() => router.push('/(exportateur)/portefeuille' as any)} />
         <TabItem icon="qrcode-scan" label="Scanner" onPress={() => router.push('/(exportateur)/scanner')} />
         <TabItem icon="package-variant-closed" label="Stock" onPress={() => router.push('/(exportateur)/stock')} />
         <TabItem icon="file-document-outline" label="Rapport" onPress={() => router.push('/(exportateur)/rapport')} />

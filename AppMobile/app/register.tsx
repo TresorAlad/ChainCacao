@@ -132,7 +132,7 @@ export default function RegisterScreen() {
         nom: enriched.nom,
         name: enriched.name,
       });
-      await applySessionFromSignup(data.token, enriched, true);
+      await applySessionFromSignup(data.token, enriched, true, pinCode.trim());
 
       const walletMsg =
         role === 'transformateur' || role === 'exportateur'

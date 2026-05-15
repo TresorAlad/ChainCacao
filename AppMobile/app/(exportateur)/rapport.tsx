@@ -98,9 +98,9 @@ export default function RapportScreen() {
           onPress={() => router.push('/(exportateur)/accueil')} 
         />
         <TabItem 
-          icon="chart-line" 
-          label="Bourse" 
-          onPress={() => router.push('/(exportateur)/bourse')} 
+          icon="wallet" 
+          label="Portefeuille" 
+          onPress={() => router.push('/(exportateur)/portefeuille' as any)} 
         />
         <TabItem 
           icon="qrcode-scan" 
