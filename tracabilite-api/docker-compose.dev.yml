@@ -3,15 +3,14 @@
 # 1) Arrêter le conteneur api « prod » (image compilée) :
 #    docker compose stop api
 #
-# 2) Lancer l'API dev (code monté, go run dans le conteneur) :
+# 2) Lancer l'API dev (code monté, go build puis binaire dans le conteneur) :
 #    docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d api_dev
 #
 # 3) Logs : docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f api_dev
 #
-# Premier démarrage : `go run` peut télécharger ~centaines de Mo de modules puis compiler
-# (plusieurs minutes sur une petite EC2). Ne pas interrompre avant la ligne
-# « API ChainCacao ecoute sur :8080 ». Les volumes go_mod_cache / go_build_cache gardent le cache
-# entre les redémarrages du conteneur.
+# « unhealthy » est normal jusqu’à la fin du premier `go build` : /health répond seulement
+# quand l’API écoute. Ensuite vous devez voir « API ChainCacao ecoute sur :8080 ».
+# Les volumes go_mod_cache / go_build_cache gardent le cache entre les redémarrages.
 #
 # Revenir à l'image prod : docker compose -f docker-compose.yml -f docker-compose.dev.yml stop api_dev && docker compose up -d --build api
 #
@@ -28,9 +27,10 @@ services:
       - go_mod_cache:/gomodcache
       - go_build_cache:/gocache
     command:
+      # -p 2 limite la parallèle de compilation (moins de pic RAM sur petite EC2)
       - sh
       - -c
-      - apk add --no-cache git ca-certificates wget >/dev/null && go run ./cmd/api
+      - apk add --no-cache git ca-certificates wget >/dev/null && go build -p 2 -v -trimpath -o /tmp/cc-api ./cmd/api && exec /tmp/cc-api
     ports:
       - "8080:8080"
     env_file:
@@ -53,8 +53,8 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-      # Premier `go mod download` + compile sur petite VM : dépasser 90s facilement
-      start_period: 300s
+      # 10 min avant de compter les échecs du healthcheck (1er boot long)
+      start_period: 600s
 
 volumes:
   go_mod_cache:
