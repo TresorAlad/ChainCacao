@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { RoleLayout } from '@/components/RoleLayout'
@@ -18,6 +18,8 @@ import {
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import { LocationMap } from '@/components/maps/LocationMapDynamic'
+import { coordsFromLot, type MapMarker } from '@/lib/geo-utils'
 
 interface LotWithHistory {
   lot: Batch
@@ -95,6 +97,20 @@ export default function AgriculteurDashboardPage() {
     if (!d) return '—'
     try { return new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) } catch { return d }
   }
+
+  const lotMarkers = useMemo<MapMarker[]>(() => {
+    const markers: MapMarker[] = []
+    for (const { lot } of myLots) {
+      const c = coordsFromLot(lot.latitude, lot.longitude)
+      if (!c) continue
+      markers.push({
+        ...c,
+        id: lot.id,
+        label: `${lot.id} — ${lot.culture || 'Lot'}`,
+      })
+    }
+    return markers
+  }, [myLots])
 
   if (loading) {
     return (
@@ -293,18 +309,18 @@ export default function AgriculteurDashboardPage() {
         {/* Carte GPS */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12">
           <div className="lg:col-span-8 relative rounded-[2rem] overflow-hidden shadow-sm border border-[var(--color-border)] h-[400px]">
-            <img
-              src="https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/-1.28,5.12,14,0/800x400?access_token=pk.eyJ1IjoiY2hhaW5jYWNhbyIsImEiOiJjbHNnd2R2bmwwMWZpMnJvN2x3eGZ3bmM4In0.xxx"
-              alt="Vue Satellite des Parcelles"
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                e.currentTarget.src = 'https://images.unsplash.com/photo-1500382017468-9049fee74a62?auto=format&fit=crop&q=80&w=800&h=400'
-              }}
+            <LocationMap
+              height="400px"
+              markers={lotMarkers}
+              className="h-full [&_.leaflet-container]:rounded-[2rem]"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-            <div className="absolute bottom-6 left-6 flex items-center gap-2 bg-white/20 backdrop-blur-md border border-white/30 px-4 py-2 rounded-xl text-white">
+            <div className="absolute bottom-6 left-6 z-[1000] flex items-center gap-2 bg-white/90 backdrop-blur-md border border-[var(--color-border)] px-4 py-2 rounded-xl text-[var(--color-primary)] shadow-md pointer-events-none">
               <MapPinIcon className="w-5 h-5" />
-              <span className="text-sm font-bold">Vue des Parcelles • {user?.actor_id || 'Ma parcelle'}</span>
+              <span className="text-sm font-bold">
+                {lotMarkers.length > 0
+                  ? `${lotMarkers.length} lot(s) géolocalisé(s)`
+                  : 'Aucun lot avec GPS — ajoutez lat/lon à la création'}
+              </span>
             </div>
           </div>
 

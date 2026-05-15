@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { publicApi } from '@/lib/api'
 import type { Batch, BatchHistoryEvent } from '@/lib/api'
 import toast from 'react-hot-toast'
+import { LocationMap } from '@/components/maps/LocationMapDynamic'
+import { coordsFromLot } from '@/lib/geo-utils'
 
 interface VerifyResponse {
   success: boolean
@@ -106,7 +108,20 @@ export default function VerifyPage() {
                     {[result.origin.region, result.origin.village].filter(Boolean).join(' — ') || '—'}
                   </li>
                   {result.origin.parcelle && <li>Parcelle : {result.origin.parcelle}</li>}
+                  {result.origin.latitude != null && result.origin.longitude != null && (
+                    <li>
+                      GPS : {result.origin.latitude}, {result.origin.longitude}
+                    </li>
+                  )}
                 </ul>
+                {coordsFromLot(result.origin.latitude, result.origin.longitude) && (
+                  <LocationMap
+                    className="mt-4 border border-[var(--color-border)]"
+                    height="260px"
+                    latitude={result.origin.latitude}
+                    longitude={result.origin.longitude}
+                  />
+                )}
               </div>
             )}
 

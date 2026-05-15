@@ -196,17 +196,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const { data } = await authApi.login({ email, password });
+      if (!data.token) {
+        setError('Réponse serveur invalide (jeton manquant).');
+        return false;
+      }
+
+      // Enregistrer le JWT AVANT /me (l’intercepteur Axios lit AsyncStorage).
+      await AsyncStorage.setItem(TOKEN_KEY, data.token);
+      setToken(data.token);
+
       let actor: ActorInfo | null = data.actor ?? actorInfoFromToken(data.token);
       let apiHasPin = false;
-      const me = await meApi.get();
-      if (me.data.actor) {
-        actor = { ...(actor ?? {}), ...me.data.actor };
+
+      try {
+        const me = await meApi.get();
+        if (me.data.actor) {
+          actor = { ...(actor ?? {}), ...me.data.actor };
+        }
+        if (typeof me.data.has_pin === 'boolean') {
+          apiHasPin = me.data.has_pin;
+        }
+      } catch {
+        /* login réussi : ne pas bloquer si /me échoue (réseau ou API ancienne) */
       }
-      if (typeof me.data.has_pin === 'boolean') {
-        apiHasPin = me.data.has_pin;
-      }
-      const full = await persistSession(data.token, actor);
-      setToken(data.token);
+
+      const full = await mergeAndPersistActor(data.token, actor);
       setUser(full);
       await applyHasPinFromApi(apiHasPin);
       setPinUnlocked(!apiHasPin);

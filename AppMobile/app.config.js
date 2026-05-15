@@ -5,9 +5,9 @@
  */
 const { withAndroidManifest } = require('@expo/config-plugins');
 
-// API locale du projet (tracabilite-api sur le PC). Surcharge possible via EXPO_PUBLIC_API_URL.
-// Émulateur Android : préférer http://10.0.2.2:8080 — Téléphone réel : IP du PC (ex. http://192.168.x.x:8080).
-const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://127.0.0.1:8080';
+// Production par défaut (téléphone réel). En dev local : .env avec EXPO_PUBLIC_API_URL=http://10.0.2.2:8080
+const PRODUCTION_API_URL = 'http://13.60.214.56:8080';
+const apiUrl = process.env.EXPO_PUBLIC_API_URL || PRODUCTION_API_URL;
 const usesCleartextTraffic = apiUrl.startsWith('http://');
 
 /**

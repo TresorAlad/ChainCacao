@@ -8,6 +8,8 @@ import { EyeIcon, EyeOffIcon, MapPinIcon } from 'lucide-react'
 import { BrandLogo } from '@/components/BrandLogo'
 import { UserRole, getRoleBasedRedirect } from '@/lib/role-utils'
 import { markPinUnlocked, setHasPinRequired } from '@/lib/pin-session'
+import { LocationMap } from '@/components/maps/LocationMapDynamic'
+import { formatGpsString, parseGpsString } from '@/lib/geo-utils'
 
 function orgLabelForRole(role: UserRole): string {
   switch (role) {
@@ -286,6 +288,14 @@ export default function RegisterPage() {
                   </button>
                 </div>
                 <p className="form-hint">Comme sur mobile : GPS ou coordonnées au format décimal.</p>
+                <LocationMap
+                  className="mt-3"
+                  height="260px"
+                  interactive
+                  latitude={parseGpsString(gpsLocation)?.lat}
+                  longitude={parseGpsString(gpsLocation)?.lng}
+                  onPositionChange={(lat, lng) => setGpsLocation(formatGpsString(lat, lng))}
+                />
               </div>
             </div>
 

@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import { getErrorMessage } from '@/lib/error-utils'
+import { LocationMap } from '@/components/maps/LocationMapDynamic'
 
 export default function NouveauLotPage() {
   const router = useRouter()
@@ -148,29 +149,41 @@ export default function NouveauLotPage() {
                 required
               />
             </div>
-            <div className="form-group">
-              <label className="form-label">Latitude</label>
-              <input
-                type="number"
-                step="0.000001"
-                name="latitude"
-                className="form-input"
-                placeholder="Latitude (décimal)"
-                value={formData.latitude}
-                onChange={handleChange}
+            <div className="form-group md:col-span-2">
+              <label className="form-label">Position GPS du lot</label>
+              <LocationMap
+                height="300px"
+                interactive
+                latitude={parseFloat(formData.latitude) || undefined}
+                longitude={parseFloat(formData.longitude) || undefined}
+                onPositionChange={(lat, lng) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    latitude: lat.toFixed(6),
+                    longitude: lng.toFixed(6),
+                  }))
+                }
               />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Longitude</label>
-              <input
-                type="number"
-                step="0.000001"
-                name="longitude"
-                className="form-input"
-                placeholder="Longitude (décimal)"
-                value={formData.longitude}
-                onChange={handleChange}
-              />
+              <div className="grid grid-cols-2 gap-4 mt-3">
+                <input
+                  type="number"
+                  step="0.000001"
+                  name="latitude"
+                  className="form-input"
+                  placeholder="Latitude"
+                  value={formData.latitude}
+                  onChange={handleChange}
+                />
+                <input
+                  type="number"
+                  step="0.000001"
+                  name="longitude"
+                  className="form-input"
+                  placeholder="Longitude"
+                  value={formData.longitude}
+                  onChange={handleChange}
+                />
+              </div>
             </div>
             <div className="form-group">
               <label className="form-label">Région *</label>

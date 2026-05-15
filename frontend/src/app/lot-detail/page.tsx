@@ -21,6 +21,8 @@ import Link from 'next/link'
 import api, { Batch, BatchHistoryEvent } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { getErrorMessage } from '@/lib/error-utils'
+import { LocationMap } from '@/components/maps/LocationMapDynamic'
+import { coordsFromLot } from '@/lib/geo-utils'
 
 function LotDetailContent() {
   const router = useRouter()
@@ -206,6 +208,14 @@ function LotDetailContent() {
                   </p>
                 </div>
               </div>
+              {coordsFromLot(lot.latitude, lot.longitude) && (
+                <LocationMap
+                  className="mt-4 border border-[var(--color-border)]"
+                  height="280px"
+                  latitude={lot.latitude}
+                  longitude={lot.longitude}
+                />
+              )}
             </div>
           </div>
 

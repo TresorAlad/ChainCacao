@@ -43,7 +43,8 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    if (error.response?.status === 401 && sessionInvalidateHandler) {
+    const hadToken = Boolean(await AsyncStorage.getItem(TOKEN_KEY));
+    if (error.response?.status === 401 && hadToken && sessionInvalidateHandler) {
       try {
         await sessionInvalidateHandler();
       } catch {
@@ -59,8 +60,12 @@ export function getApiError(e: unknown): string {
   const err = e as AxiosError<{ error?: string; message?: string }>;
   if (err.response?.data?.error) return err.response.data.error;
   if (err.response?.data?.message) return err.response.data.message;
-  if (err.code === 'ECONNABORTED') return 'Délai d\'attente dépassé — vérifiez la connexion';
-  if (err.code === 'ERR_NETWORK') return 'Réseau indisponible — mode hors-ligne activé';
+  if (err.code === 'ECONNABORTED') {
+    return `Délai dépassé — API : ${API_BASE}`;
+  }
+  if (err.code === 'ERR_NETWORK' || !err.response) {
+    return `Impossible de joindre l'API (${API_BASE}). Vérifiez Internet ou l'URL configurée au build.`;
+  }
   return err.message || 'Erreur inconnue';
 }
 
