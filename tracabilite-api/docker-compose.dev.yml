@@ -8,6 +8,11 @@
 #
 # 3) Logs : docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f api_dev
 #
+# Premier démarrage : `go run` peut télécharger ~centaines de Mo de modules puis compiler
+# (plusieurs minutes sur une petite EC2). Ne pas interrompre avant la ligne
+# « API ChainCacao ecoute sur :8080 ». Les volumes go_mod_cache / go_build_cache gardent le cache
+# entre les redémarrages du conteneur.
+#
 # Revenir à l'image prod : docker compose -f docker-compose.yml -f docker-compose.dev.yml stop api_dev && docker compose up -d --build api
 #
 services:
@@ -19,6 +24,9 @@ services:
       - .:/src
       - ../fabric-samples/test-network/organizations:/fabric-crypto:ro
       - ./secrets:/secrets:ro
+      # Cache Go entre redémarrages (évite de retélécharger tous les modules à chaque `up`)
+      - go_mod_cache:/gomodcache
+      - go_build_cache:/gocache
     command:
       - sh
       - -c
@@ -30,6 +38,8 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: postgresql://chaincacao:chaincacao@postgres:5432/chaincacao?sslmode=disable
+      GOMODCACHE: /gomodcache
+      GOCACHE: /gocache
       # false = tenter le vrai Gateway si FABRIC_PEER_ENDPOINT est dans .env ; monter fabric-samples
       # (volumes ci-dessus). Si pas de réseau Fabric : laisser FABRIC_PEER_ENDPOINT vide → ledger mémoire.
       USE_INMEMORY_FABRIC: "false"
@@ -43,4 +53,9 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 90s
+      # Premier `go mod download` + compile sur petite VM : dépasser 90s facilement
+      start_period: 300s
+
+volumes:
+  go_mod_cache:
+  go_build_cache:
