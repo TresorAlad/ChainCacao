@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState, useEffect } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RoleLayout } from '@/components/RoleLayout'
@@ -11,6 +11,18 @@ import toast from 'react-hot-toast'
 
 const PAYMENT_ROLES = ['transformateur', 'exportateur', 'admin']
 
+type LotPreview = {
+  marge_pct: number
+  marge_fcfa: number
+  montant_brut: number
+  montant_net: number
+  montant_total_debite: number
+}
+
+function fmt(n: number) {
+  return Math.round(n).toLocaleString('fr-FR')
+}
+
 function PaiementLotContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -19,6 +31,7 @@ function PaiementLotContent() {
   const [lot, setLot] = useState<Batch | null>(null)
   const [pin, setPin] = useState('')
   const [prixParKg, setPrixParKg] = useState('')
+  const [preview, setPreview] = useState<LotPreview | null>(null)
   const [searching, setSearching] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -43,10 +56,19 @@ function PaiementLotContent() {
     }
     setSearching(true)
     setLot(null)
+    setPreview(null)
     try {
       const res = await api.get<Batch>(`/lot/${encodeURIComponent(trimmed)}`)
-      setLot(res.data as Batch)
+      const data = res.data as Batch & { lot?: Batch }
+      const b = data.lot ?? data
+      setLot(b)
       setLotId(trimmed)
+      const st = (b.statut || '').toLowerCase()
+      if (st.includes('transit')) {
+        toast('Ce lot est en transit : confirmez d’abord la réception physique.', {
+          icon: '⚠️',
+        })
+      }
     } catch {
       toast.error('Lot introuvable')
     } finally {
@@ -54,8 +76,36 @@ function PaiementLotContent() {
     }
   }
 
+  const loadPreview = useCallback(async () => {
+    if (!lot) return
+    const prix = parseFloat(prixParKg)
+    if (!prix || prix <= 0) {
+      setPreview(null)
+      return
+    }
+    try {
+      const res = await api.get<LotPreview & { success?: boolean }>(
+        `/lot/${encodeURIComponent(lot.id)}/paiement-preview?prix_par_kg=${prix}`
+      )
+      setPreview(res.data)
+    } catch {
+      setPreview(null)
+    }
+  }, [lot, prixParKg])
+
+  useEffect(() => {
+    const t = setTimeout(() => void loadPreview(), 400)
+    return () => clearTimeout(t)
+  }, [loadPreview])
+
   const handlePay = async () => {
     if (!lot) return
+    const st = (lot.statut || '').toLowerCase()
+    if (st.includes('transit')) {
+      toast.error('Réception physique requise avant le paiement')
+      router.push(`/reception-lot?lot=${encodeURIComponent(lot.id)}`)
+      return
+    }
     if (!pin || pin.length !== 4) {
       toast.error('Code PIN à 4 chiffres requis')
       return
@@ -102,7 +152,7 @@ function PaiementLotContent() {
             Paiement par identifiant
           </h1>
           <p className="text-lg mt-2 font-medium opacity-60 text-[var(--color-muted)]">
-            Saisissez l&apos;identifiant du lot (pas de scan QR sur le web). Vérifiez les informations, puis confirmez avec votre PIN.
+            Prix brut, marge coopérative et montant net affichés avant confirmation (CDC).
           </p>
         </header>
 
@@ -136,16 +186,14 @@ function PaiementLotContent() {
               <p className="text-sm text-gray-600">
                 {lot.culture} {lot.variete ? `· ${lot.variete}` : ''} — {lot.quantite} kg
               </p>
-              <p className="text-xs text-gray-500">Statut : {lot.statut || '—'} · Propriétaire : {lot.proprietaire_id}</p>
+              <p className="text-xs text-gray-500">Statut : {lot.statut || '—'}</p>
             </div>
           )}
 
           {lot && (
             <>
               <div>
-                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                  Prix par kg (FCFA, optionnel)
-                </label>
+                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Prix par kg (FCFA)</label>
                 <input
                   type="number"
                   min="0"
@@ -156,6 +204,25 @@ function PaiementLotContent() {
                   placeholder="Ex: 1200"
                 />
               </div>
+
+              {preview && prixParKg.trim() && (
+                <div className="rounded-xl border border-[#C8E6C9] bg-white p-4 text-sm space-y-2">
+                  <p>
+                    Prix brut : <strong>{fmt(preview.montant_brut)} FCFA</strong>
+                  </p>
+                  <p>
+                    Marge coopérative ({preview.marge_pct} %) :{' '}
+                    <strong>−{fmt(preview.marge_fcfa)} FCFA</strong>
+                  </p>
+                  <p className="text-[#1B5E20]">
+                    Montant net producteur : <strong>{fmt(preview.montant_net)} FCFA</strong>
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Total débité sur votre portefeuille : {fmt(preview.montant_total_debite)} FCFA
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Code PIN (4 chiffres)</label>
                 <input
@@ -170,7 +237,7 @@ function PaiementLotContent() {
               <button
                 type="button"
                 onClick={handlePay}
-                disabled={submitting}
+                disabled={submitting || !preview}
                 className="w-full py-4 bg-[#1B3A0F] text-white rounded-2xl text-sm font-black hover:brightness-110 disabled:opacity-50"
               >
                 {submitting ? 'Traitement…' : 'Confirmer le paiement'}

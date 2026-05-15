@@ -241,6 +241,20 @@ func (c *ProxyClient) SetCooperativeMargin(ctx context.Context, orgID string, ma
 	return out.TxHash, err
 }
 
+func (c *ProxyClient) GetCooperativeMargin(ctx context.Context, orgID string) (float64, error) {
+	var out struct {
+		Margin float64 `json:"margin"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/v1/fabric/cooperative/margin?org_id="+orgID, nil, &out)
+	return out.Margin, err
+}
+
+func (c *ProxyClient) ExecutePayment(ctx context.Context, in PaymentCreditInput) (string, error) {
+	var out proxyTxBatchResponse
+	err := c.doJSON(ctx, http.MethodPost, "/v1/fabric/payment/execute", in, &out)
+	return out.TxHash, err
+}
+
 func (c *ProxyClient) GetWalletBalance(ctx context.Context, actorID string) (float64, error) {
 	var out struct {
 		Balance float64 `json:"balance"`

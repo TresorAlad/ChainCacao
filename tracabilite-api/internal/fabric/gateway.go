@@ -465,6 +465,59 @@ func (g *GatewayClient) SetCooperativeMargin(ctx context.Context, orgID string, 
 	return txID, err
 }
 
+func (g *GatewayClient) GetCooperativeMargin(ctx context.Context, orgID string) (float64, error) {
+	data, err := g.contract.EvaluateTransaction("GetCooperativeMargin", orgID)
+	if err != nil {
+		return 0, nil
+	}
+	var m struct {
+		Margin float64 `json:"margin"`
+	}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return 0, nil
+	}
+	return m.Margin, nil
+}
+
+func (g *GatewayClient) ExecutePayment(ctx context.Context, in PaymentCreditInput) (string, error) {
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return "", err
+	}
+	txID, _, err := g.submit(ctx, "ExecutePayment", string(payload))
+	if err == nil {
+		return txID, nil
+	}
+	if _, wErr := g.WithdrawWallet(ctx, in.PayerID, in.TotalBrut); wErr != nil {
+		return "", wErr
+	}
+	var lastTx string
+	for _, ln := range in.Lines {
+		if ln.Net > 0 && ln.SellerID != "" {
+			tx, dErr := g.DepositWallet(ctx, ln.SellerID, ln.Net)
+			if dErr != nil {
+				return "", dErr
+			}
+			lastTx = tx
+		}
+	}
+	if in.CoopActorID != "" && in.TotalMarge > 0 {
+		tx, dErr := g.DepositWallet(ctx, in.CoopActorID, in.TotalMarge)
+		if dErr != nil {
+			return "", dErr
+		}
+		lastTx = tx
+	}
+	for _, ln := range in.Lines {
+		tx, cErr := g.ConfirmBatchReceipt(ctx, ln.BatchID, in.PayerID)
+		if cErr != nil {
+			return lastTx, cErr
+		}
+		lastTx = tx
+	}
+	return lastTx, nil
+}
+
 func (g *GatewayClient) GetWalletBalance(ctx context.Context, actorID string) (float64, error) {
 	data, err := g.contract.EvaluateTransaction("GetWalletBalance", actorID)
 	if err != nil {

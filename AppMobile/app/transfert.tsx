@@ -16,6 +16,7 @@ import { useRouter, Stack, useLocalSearchParams, Redirect } from 'expo-router';
 import { useLots } from '@/hooks/use-storage';
 import { useAuth } from '@/hooks/use-auth';
 import { actorsApi, batchApi, ActorInfo, getApiError, isNetworkError } from '@/services/api';
+import { enqueueTransfer } from '@/lib/offline-queue';
 
 /** Alignés sur les IDs seed SQL si l’API est hors ligne */
 const FALLBACK_ACTORS: ActorInfo[] = [
@@ -28,7 +29,7 @@ export default function TransfertScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { lots, updateLot } = useLots();
-  const { initialized, isAuthenticated } = useAuth();
+  const { initialized, isAuthenticated, user } = useAuth();
 
   const [actors, setActors] = useState<ActorInfo[]>(FALLBACK_ACTORS);
   const [loadingActors, setLoadingActors] = useState(false);
@@ -113,9 +114,17 @@ export default function TransfertScreen() {
       setLoading(false);
 
       if (isNetworkError(e)) {
+        if (user?.id && !foundLot.id.startsWith('local_')) {
+          await enqueueTransfer({
+            batch_id: foundLot.id,
+            to_actor_id: toActorId,
+            commentaire: commentaire.trim() || undefined,
+            actor_id: user.id,
+          });
+        }
         Alert.alert(
           'Transfert enregistré hors-ligne',
-          `Le transfert de "${foundLot.title}" vers "${actorName}" sera synchronisé sur Hyperledger Fabric à la reconnexion.`,
+          `Le transfert de "${foundLot.title}" vers "${actorName}" sera synchronisé à la reconnexion.`,
           [{ text: 'OK', onPress: () => router.back() }]
         );
       } else {

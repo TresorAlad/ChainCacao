@@ -2,6 +2,7 @@ package fabric
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -38,6 +39,9 @@ type Client interface {
 	// PayGroupedListWithDebit debite le payeur puis distribue les paiements (operation atomique cote ledger demo).
 	PayGroupedListWithDebit(ctx context.Context, listID, actorID string, totalAmount float64) (txHash string, err error)
 	SetCooperativeMargin(ctx context.Context, orgID string, margin float64, actorID string) (txHash string, err error)
+	GetCooperativeMargin(ctx context.Context, orgID string) (float64, error)
+	// ExecutePayment debite le payeur (total brut) et credite vendeurs (net) + coop (marge).
+	ExecutePayment(ctx context.Context, in PaymentCreditInput) (txHash string, err error)
 	GetWalletBalance(ctx context.Context, actorID string) (float64, error)
 	DepositWallet(ctx context.Context, actorID string, amount float64) (txHash string, err error)
 	WithdrawWallet(ctx context.Context, actorID string, amount float64) (txHash string, err error)
@@ -380,53 +384,158 @@ func (c *InMemoryClient) ConfirmPhysicalReceipt(_ context.Context, batchID, acto
 	return txHash, batch, nil
 }
 
-func (c *InMemoryClient) ConfirmBatchReceipt(_ context.Context, batchID, actorID string) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (c *InMemoryClient) ConfirmBatchReceipt(ctx context.Context, batchID, actorID string) (string, error) {
+	c.mu.RLock()
 	batch, exists := c.batches[batchID]
+	price := c.prices[batchID]
+	orgID := defaultCooperativeOrgID
+	margePct := c.getMarginLocked(orgID)
+	c.mu.RUnlock()
 	if !exists {
 		return "", errors.New("batch introuvable")
 	}
-	if batch.Statut == "en_transit" {
-		return "", errors.New("reception physique non confirmee: le destinataire doit confirmer la reception du lot avant paiement")
-	}
-	if batch.Statut == "paye" {
-		return "", errors.New("lot deja paye")
-	}
-	
-	now := time.Now().UTC().Format(time.RFC3339)
-	batch.Statut = "paye"
-	batch.Timestamp = now
-	c.batches[batchID] = batch
-	c.payments[batchID] = "paye"
-
-	price := c.prices[batchID]
 	if price <= 0 {
-		price = 1500 // Prix par defaut si non defini
+		price = 1500
 	}
-	amount := price * batch.Quantite
-	// Debiter l'acheteur avant de crediter l'agriculteur (mode demo).
-	if c.wallets[actorID] < amount {
+	brut, marge, net := brutMargeNet(price, batch.Quantite, margePct)
+	seller := batch.Proprietaire
+	if s, ok := c.sellers[batchID]; ok && s != "" {
+		seller = s
+	}
+	coopID := defaultCoopActorID
+	return c.ExecutePayment(ctx, PaymentCreditInput{
+		PayerID:     actorID,
+		CoopActorID: coopID,
+		TotalBrut:   brut,
+		TotalMarge:  marge,
+		Lines: []PaymentCreditLine{{
+			BatchID: batchID, SellerID: seller, Brut: brut, Marge: marge, Net: net,
+		}},
+		EventType: "paiement",
+	})
+}
+
+const defaultCooperativeOrgID = "CooperativeMSP"
+const defaultCoopActorID = "actor-coop-001"
+
+func brutMargeNet(prixParKg, qty, margePct float64) (brut, marge, net float64) {
+	brut = prixParKg * qty
+	if margePct <= 0 {
+		return brut, 0, brut
+	}
+	marge = brut * (margePct / 100)
+	return brut, marge, brut - marge
+}
+
+func (c *InMemoryClient) getMarginLocked(orgID string) float64 {
+	if m, ok := c.margins[orgID]; ok {
+		return m
+	}
+	return 0
+}
+
+func (c *InMemoryClient) GetCooperativeMargin(_ context.Context, orgID string) (float64, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.getMarginLocked(orgID), nil
+}
+
+func (c *InMemoryClient) ExecutePayment(_ context.Context, in PaymentCreditInput) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if in.PayerID == "" || len(in.Lines) == 0 {
+		return "", errors.New("paiement invalide")
+	}
+	if in.TotalBrut <= 0 {
+		var tb, tm float64
+		for _, ln := range in.Lines {
+			tb += ln.Brut
+			tm += ln.Marge
+		}
+		in.TotalBrut = tb
+		if in.TotalMarge == 0 {
+			in.TotalMarge = tm
+		}
+	}
+	if c.wallets[in.PayerID] < in.TotalBrut {
 		return "", errors.New("solde insuffisant")
 	}
-	c.wallets[actorID] -= amount
-
-	seller, ok := c.sellers[batchID]
-	if !ok || seller == "" {
-		seller = batch.Proprietaire // pas de transfert : createur = vendeur
+	c.wallets[in.PayerID] -= in.TotalBrut
+	for _, ln := range in.Lines {
+		seller := ln.SellerID
+		if seller == "" {
+			if b, ok := c.batches[ln.BatchID]; ok {
+				seller = b.Proprietaire
+			}
+		}
+		if ln.Net > 0 && seller != "" {
+			c.wallets[seller] += ln.Net
+		}
 	}
-	c.wallets[seller] += amount
-
+	if in.CoopActorID != "" && in.TotalMarge > 0 {
+		c.wallets[in.CoopActorID] += in.TotalMarge
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
 	txHash := newTxHash()
-	c.history[batchID] = append(c.history[batchID], models.BatchHistoryEvent{
-		BatchID:      batchID,
-		Type:         "paiement",
-		ActorID:      actorID,
-		TxHash:       txHash,
-		CreatedAtISO: now,
-		Payload:      batch,
-	})
+	evtType := in.EventType
+	if evtType == "" {
+		evtType = "paiement"
+	}
+	for _, ln := range in.Lines {
+		b, ok := c.batches[ln.BatchID]
+		if !ok {
+			c.wallets[in.PayerID] += in.TotalBrut
+			return "", fmt.Errorf("lot introuvable: %s", ln.BatchID)
+		}
+		if b.Statut == "en_transit" {
+			c.refundPaymentLocked(in)
+			return "", fmt.Errorf("lot %s en transit: reception non confirmee", ln.BatchID)
+		}
+		if b.Statut == "paye" {
+			c.refundPaymentLocked(in)
+			return "", fmt.Errorf("lot %s deja paye", ln.BatchID)
+		}
+		b.Statut = "paye"
+		b.Timestamp = now
+		c.batches[ln.BatchID] = b
+		c.payments[ln.BatchID] = "paye"
+		pct := marginPctFromAmounts(ln.Brut, ln.Marge)
+		c.history[ln.BatchID] = append(c.history[ln.BatchID], models.BatchHistoryEvent{
+			BatchID:      ln.BatchID,
+			Type:         evtType,
+			ActorID:      in.PayerID,
+			TxHash:       txHash,
+			CreatedAtISO: now,
+			Commentaire:  fmt.Sprintf(`{"montant_brut":%.2f,"marge_fcfa":%.2f,"marge_pct":%.2f,"montant_net":%.2f}`, ln.Brut, ln.Marge, pct, ln.Net),
+			Payload:      b,
+		})
+	}
 	return txHash, nil
+}
+
+func marginPctFromAmounts(brut, marge float64) float64 {
+	if brut <= 0 || marge <= 0 {
+		return 0
+	}
+	return (marge / brut) * 100
+}
+
+func (c *InMemoryClient) refundPaymentLocked(in PaymentCreditInput) {
+	c.wallets[in.PayerID] += in.TotalBrut
+	for _, ln := range in.Lines {
+		seller := ln.SellerID
+		if seller == "" {
+			if b, ok := c.batches[ln.BatchID]; ok {
+				seller = b.Proprietaire
+			}
+		}
+		if ln.Net > 0 && seller != "" {
+			c.wallets[seller] -= ln.Net
+		}
+	}
+	if in.CoopActorID != "" && in.TotalMarge > 0 {
+		c.wallets[in.CoopActorID] -= in.TotalMarge
+	}
 }
 
 func (c *InMemoryClient) GetPaymentStatus(_ context.Context, batchID string) (map[string]any, error) {
@@ -436,7 +545,24 @@ func (c *InMemoryClient) GetPaymentStatus(_ context.Context, batchID string) (ma
 	if !exists {
 		status = "en_attente"
 	}
-	return map[string]any{"batch_id": batchID, "status": status}, nil
+	out := map[string]any{"batch_id": batchID, "status": status}
+	for i := len(c.history[batchID]) - 1; i >= 0; i-- {
+		ev := c.history[batchID][i]
+		if ev.Type != "paiement" && ev.Type != "paiement_liste" {
+			continue
+		}
+		out["tx_hash"] = ev.TxHash
+		if ev.Commentaire != "" {
+			var parsed map[string]any
+			if json.Unmarshal([]byte(ev.Commentaire), &parsed) == nil {
+				for k, v := range parsed {
+					out[k] = v
+				}
+			}
+		}
+		break
+	}
+	return out, nil
 }
 
 func (c *InMemoryClient) CreateGroupedList(_ context.Context, listID string, batchIDs []string, actorID string) (string, error) {
@@ -446,65 +572,60 @@ func (c *InMemoryClient) CreateGroupedList(_ context.Context, listID string, bat
 	return newTxHash(), nil
 }
 
-func (c *InMemoryClient) PayGroupedList(_ context.Context, listID, actorID string) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.payGroupedListLocked(listID, actorID, 0, false)
+func (c *InMemoryClient) PayGroupedList(ctx context.Context, listID, actorID string) (string, error) {
+	return c.PayGroupedListWithDebit(ctx, listID, actorID, 0)
 }
 
-func (c *InMemoryClient) PayGroupedListWithDebit(_ context.Context, listID, actorID string, totalAmount float64) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.payGroupedListLocked(listID, actorID, totalAmount, true)
-}
-
-func (c *InMemoryClient) payGroupedListLocked(listID, actorID string, debitAmount float64, withDebit bool) (string, error) {
+func (c *InMemoryClient) PayGroupedListWithDebit(ctx context.Context, listID, actorID string, totalAmount float64) (string, error) {
+	_ = totalAmount
+	c.mu.RLock()
 	batchIDs, exists := c.groupedLists[listID]
+	c.mu.RUnlock()
 	if !exists {
 		return "", errors.New("liste introuvable")
 	}
-	if withDebit {
-		if c.wallets[actorID] < debitAmount {
-			return "", errors.New("solde insuffisant")
-		}
-		c.wallets[actorID] -= debitAmount
-	}
-	now := time.Now().UTC().Format(time.RFC3339)
-	txHash := newTxHash()
+	orgID := defaultCooperativeOrgID
+	margePct, _ := c.GetCooperativeMargin(ctx, orgID)
+	var lines []PaymentCreditLine
+	var totalBrut, totalMarge float64
+	c.mu.RLock()
 	for _, batchID := range batchIDs {
 		b, ok := c.batches[batchID]
 		if !ok {
+			c.mu.RUnlock()
 			return "", fmt.Errorf("lot introuvable: %s", batchID)
 		}
-		if b.Statut == "en_transit" {
-			if withDebit {
-				c.wallets[actorID] += debitAmount
-			}
-			return "", fmt.Errorf("lot %s en transit: reception non confirmee", batchID)
-		}
-		b.Statut = "paye"
-		b.Timestamp = now
-		c.batches[batchID] = b
-		c.payments[batchID] = "paye"
 		price := c.prices[batchID]
 		if price <= 0 {
 			price = 1500
 		}
-		seller, ok := c.sellers[batchID]
-		if !ok || seller == "" {
-			seller = b.Proprietaire
+		brut, marge, net := brutMargeNet(price, b.Quantite, margePct)
+		seller := b.Proprietaire
+		if s, ok := c.sellers[batchID]; ok && s != "" {
+			seller = s
 		}
-		c.wallets[seller] += price * b.Quantite
-		c.history[batchID] = append(c.history[batchID], models.BatchHistoryEvent{
-			BatchID:      batchID,
-			Type:         "paiement_liste",
-			ActorID:      actorID,
-			TxHash:       txHash,
-			CreatedAtISO: now,
-			Payload:      b,
+		lines = append(lines, PaymentCreditLine{
+			BatchID: batchID, SellerID: seller, Brut: brut, Marge: marge, Net: net,
 		})
+		totalBrut += brut
+		totalMarge += marge
 	}
-	return txHash, nil
+	c.mu.RUnlock()
+	return c.ExecutePayment(ctx, PaymentCreditInput{
+		PayerID:     actorID,
+		CoopActorID: defaultCoopActorID,
+		TotalBrut:   totalBrut,
+		TotalMarge:  totalMarge,
+		Lines:       lines,
+		EventType:   "paiement_liste",
+		ListID:      listID,
+	})
+}
+
+func (c *InMemoryClient) payGroupedListLocked(listID, actorID string, debitAmount float64, withDebit bool) (string, error) {
+	_ = debitAmount
+	_ = withDebit
+	return "", errors.New("utiliser PayGroupedListWithDebit avec ExecutePayment")
 }
 
 func (c *InMemoryClient) SetCooperativeMargin(_ context.Context, orgID string, margin float64, actorID string) (string, error) {

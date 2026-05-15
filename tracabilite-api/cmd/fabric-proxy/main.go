@@ -327,6 +327,38 @@ func main() {
 			c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": tx})
 		})
 
+		v1.GET("/cooperative/margin", func(c *gin.Context) {
+			orgID := c.Query("org_id")
+			if orgID == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "org_id requis"})
+				return
+			}
+			ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+			defer cancel()
+			m, err := fc.GetCooperativeMargin(ctx, orgID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"org_id": orgID, "margin": m})
+		})
+
+		v1.POST("/payment/execute", func(c *gin.Context) {
+			var req fabric.PaymentCreditInput
+			if err := c.ShouldBindJSON(&req); err != nil || req.PayerID == "" || len(req.Lines) == 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "payload paiement invalide"})
+				return
+			}
+			ctx, cancel := context.WithTimeout(c.Request.Context(), 25*time.Second)
+			defer cancel()
+			tx, err := fc.ExecutePayment(ctx, req)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": tx})
+		})
+
 		v1.GET("/wallet/:actorID", func(c *gin.Context) {
 			aid := c.Param("actorID")
 			ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)

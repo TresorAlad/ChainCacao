@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { RoleLayout } from '@/components/RoleLayout'
@@ -18,6 +18,8 @@ import {
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import { LocationMap } from '@/components/maps/LocationMapDynamic'
+import { markersFromActors, markersFromLots, type MapMarker } from '@/lib/geo-utils'
 
 interface LotWithHistory { lot: Batch; history: BatchHistoryEvent[] }
 
@@ -62,6 +64,16 @@ export default function CooperativeDashboardPage() {
       .finally(() => setLotsLoading(false))
   }, [isAuthenticated])
 
+  const agriculteurs = useMemo(() => actors.filter((a) => a.role === 'agriculteur'), [actors])
+
+  const collectMapMarkers = useMemo<MapMarker[]>(() => {
+    const lotMarkers = markersFromLots(myLots)
+    const farmerMarkers = markersFromActors(agriculteurs, { idPrefix: 'agri' })
+    return [...farmerMarkers, ...lotMarkers]
+  }, [myLots, agriculteurs])
+
+  const geoLotCount = useMemo(() => markersFromLots(myLots).length, [myLots])
+
   if (loading || fetching) {
     return (
       <div style={{ backgroundColor: theme.surface, minHeight: '100vh' }} className="flex items-center justify-center">
@@ -93,8 +105,6 @@ export default function CooperativeDashboardPage() {
   const fmt = (d?: string) => { try { return d ? new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—' } catch { return d || '—' } }
 
   if (!isAuthenticated || user?.role !== 'cooperative') return null
-
-  const agriculteurs = actors.filter(a => a.role === 'agriculteur')
 
   return (
     <RoleLayout role="cooperative">
@@ -326,16 +336,8 @@ export default function CooperativeDashboardPage() {
             </div>
           </div>
           <div className="h-[400px] relative">
-            <div
-              className="w-full h-full bg-gradient-to-br from-[#E8F5E9] via-[#C8E6C9] to-[#A5D6A7] flex items-center justify-center"
-              role="img"
-              aria-label="Carte des zones de collecte"
-            >
-              <p className="text-sm font-bold text-[#33691E] px-6 text-center">
-                Cartographie des zones de collecte — données GPS des lots synchronisés
-              </p>
-            </div>
-            <div className="absolute inset-0 p-8 flex items-start justify-end">
+            <LocationMap height="400px" markers={collectMapMarkers} className="h-full" />
+            <div className="absolute inset-0 p-8 flex items-start justify-end pointer-events-none">
               <div className="bg-white/80 backdrop-blur-md p-6 rounded-[1.5rem] shadow-xl border border-white/50 w-64">
                 <h4 className="text-sm font-black text-[var(--color-primary)] mb-3 uppercase tracking-widest">Réseau ChainCacao</h4>
                 <div className="space-y-2 text-xs font-bold">
@@ -346,6 +348,10 @@ export default function CooperativeDashboardPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-500">Agriculteurs</span>
                     <span className="text-[var(--color-primary)]">{agriculteurs.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Lots GPS</span>
+                    <span className="text-[var(--color-primary)]">{geoLotCount}</span>
                   </div>
                 </div>
               </div>

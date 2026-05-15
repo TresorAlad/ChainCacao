@@ -32,6 +32,9 @@ type CreateBatchInput struct {
 	DateRecolte   string  `json:"date_recolte"`
 	PhotoURL      string  `json:"photo_url"`
 	Notes         string  `json:"notes"`
+	PayloadHash   string  `json:"payload_hash,omitempty"`
+	Signature     string  `json:"signature,omitempty"`
+	SignerPubKey  string  `json:"signer_pubkey,omitempty"`
 }
 
 type TransferBatchInput struct {
@@ -178,10 +181,20 @@ func (s *Service) GetBatchPricePerKg(ctx context.Context, batchID string) (float
 	return s.fabricClient.GetBatchPrice(ctx, batchID)
 }
 
-func (s *Service) ConfirmPhysicalReceipt(ctx context.Context, batchID, actorID string) (string, models.Batch, error) {
-	txHash, updated, err := s.fabricClient.ConfirmPhysicalReceipt(ctx, strings.TrimSpace(batchID), actorID)
+func (s *Service) ConfirmPhysicalReceipt(ctx context.Context, batchID, actorID string, poidsConstate float64) (string, models.Batch, error) {
+	batchID = strings.TrimSpace(batchID)
+	txHash, updated, err := s.fabricClient.ConfirmPhysicalReceipt(ctx, batchID, actorID)
 	if err != nil {
 		return "", models.Batch{}, err
+	}
+	if poidsConstate > 0 {
+		wTx, wUpdated, wErr := s.fabricClient.UpdateBatchWeight(
+			ctx, batchID, actorID, poidsConstate, "poids constate a la reception",
+		)
+		if wErr == nil {
+			txHash = wTx
+			updated = wUpdated
+		}
 	}
 	updated = s.enrichOwnerOrg(ctx, updated)
 	return txHash, updated, nil
@@ -273,37 +286,6 @@ func (s *Service) GetMyLots(ctx context.Context, actorID string) ([]models.Batch
 	return s.enrichBatchesOrg(ctx, batches), nil
 }
 
-func (s *Service) PayGroupedListAtomic(ctx context.Context, listID, actorID string, prixParKg float64, batchIDs []string) (string, float64, error) {
-	if prixParKg <= 0 {
-		return "", 0, errors.New("prix_par_kg invalide")
-	}
-	var total float64
-	for _, bid := range batchIDs {
-		lot, err := s.fabricClient.GetBatch(ctx, bid)
-		if err != nil {
-			return "", 0, fmt.Errorf("lot introuvable: %s", bid)
-		}
-		if strings.EqualFold(strings.TrimSpace(lot.Statut), "en_transit") {
-			return "", 0, fmt.Errorf("lot %s encore en transit", bid)
-		}
-		total += prixParKg * lot.Quantite
-		if _, err := s.fabricClient.SetBatchPrice(ctx, bid, actorID, prixParKg); err != nil {
-			return "", 0, err
-		}
-	}
-	bal, err := s.fabricClient.GetWalletBalance(ctx, actorID)
-	if err != nil {
-		return "", 0, err
-	}
-	if bal < total {
-		return "", 0, errors.New("solde insuffisant")
-	}
-	txHash, err := s.fabricClient.PayGroupedListWithDebit(ctx, listID, actorID, total)
-	if err != nil {
-		return "", 0, err
-	}
-	return txHash, total, nil
-}
 
 func (s *Service) GetStats(ctx context.Context) map[string]any {
 	return s.fabricClient.GetStats(ctx)

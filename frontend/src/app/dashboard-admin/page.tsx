@@ -125,12 +125,12 @@ export default function AdminDashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <button className="px-6 py-2.5 bg-white border border-[var(--color-border)] rounded-xl text-sm font-bold text-[var(--color-muted)] hover:bg-gray-50 transition-colors">
-              Paramètres Système
-            </button>
-            <Link href="/actors" className="flex items-center gap-2 px-6 py-2.5 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all">
+            <Link href="/admin" className="px-6 py-2.5 bg-white border border-[var(--color-border)] rounded-xl text-sm font-bold text-[var(--color-muted)] hover:bg-gray-50 transition-colors">
+              Administration
+            </Link>
+            <Link href="/admin/utilisateurs" className="flex items-center gap-2 px-6 py-2.5 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all">
               <UsersIcon className="w-5 h-5" />
-              Gérer les Acteurs
+              Utilisateurs
             </Link>
           </div>
         </header>
@@ -204,7 +204,9 @@ export default function AdminDashboardPage() {
         <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)]">
           <div className="flex justify-between items-center mb-8">
             <h3 className="text-2xl font-black text-[var(--color-primary)]">Flux de Transferts Récents</h3>
-            <button className="text-sm font-bold text-[#33691E] hover:underline">Voir l'explorateur blockchain</button>
+            <Link href="/blockchain" className="text-sm font-bold text-[#33691E] hover:underline">
+              Voir l&apos;explorateur blockchain
+            </Link>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">

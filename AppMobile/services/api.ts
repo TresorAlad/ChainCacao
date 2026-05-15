@@ -287,6 +287,26 @@ export const batchApi = {
 
   verify: (id: string) =>
     api.get<VerifyBatchResponse>(`/api/v1/verify/${encodeURIComponent(id)}`),
+
+  /** Upload photo sur un lot déjà créé (sync 2G — étape 2). */
+  uploadPhoto: (lotId: string, imageUri: string) => {
+    const form = new FormData();
+    const lower = imageUri.toLowerCase();
+    const ext = lower.endsWith('.png') ? 'png' : 'jpg';
+    const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+    form.append('file', { uri: imageUri, name: `lot_${lotId}.${ext}`, type: mime } as any);
+    return api.post<{ success?: boolean; secure_url?: string }>(
+      `/api/v1/lot/${encodeURIComponent(lotId)}/photo`,
+      form,
+      {
+        timeout: 120000,
+        transformRequest: (data, headers) => {
+          delete (headers as Record<string, unknown>)['Content-Type'];
+          return data as string;
+        },
+      }
+    );
+  },
 };
 
 // ─── ACTORS ───────────────────────────────────────────────────────────────────
@@ -325,6 +345,9 @@ export interface SyncBatchInput {
   date_recolte: string;
   photo_url?: string;
   notes?: string;
+  payload_hash?: string;
+  signature?: string;
+  signer_pubkey?: string;
 }
 
 export interface SyncResultItem {
@@ -417,10 +440,15 @@ export interface ConfirmerLotResponse {
   tx_hash?: string;
   message?: string;
   montant_total?: number;
+  montant_brut?: number;
+  marge_pct?: number;
+  marge_fcfa?: number;
+  montant_net?: number;
 }
 
 export interface ConfirmerReceptionPayload {
   pin: string;
+  poids_constate?: number;
 }
 
 export interface ConfirmerReceptionResponse {
@@ -429,6 +457,84 @@ export interface ConfirmerReceptionResponse {
   message?: string;
   lot?: BatchResponse;
 }
+
+export interface PaymentLine {
+  lot_id: string;
+  poids_kg?: number;
+  montant_brut?: number;
+  marge_fcfa?: number;
+  montant_net?: number;
+  seller_id?: string;
+}
+
+export interface PaymentPreviewSummary {
+  prix_par_kg?: number;
+  marge_pct?: number;
+  marge_fcfa?: number;
+  montant_brut?: number;
+  montant_net?: number;
+  montant_net_agriculteurs?: number;
+  montant_total_debite?: number;
+  nb_agriculteurs?: number;
+  poids_total_kg?: number;
+  lots?: PaymentLine[];
+}
+
+export interface CooperativeMarginResponse {
+  success?: boolean;
+  org_id?: string;
+  margin?: number;
+  margin_pct?: number;
+}
+
+export const marginApi = {
+  getForCoop: () => api.get<CooperativeMarginResponse>('/api/v1/cooperative/marge'),
+};
+
+export const groupedListApi = {
+  create: (list_id: string, batch_ids: string[]) =>
+    api.post<{ success?: boolean; list_id?: string; tx_hash?: string }>('/api/v1/liste-groupee', {
+      list_id,
+      batch_ids,
+    }),
+  preview: (listId: string, prix_par_kg: number) =>
+    api.post<PaymentPreviewSummary & { success?: boolean; list_id?: string }>(
+      `/api/v1/liste-groupee/${encodeURIComponent(listId)}/preview`,
+      { prix_par_kg }
+    ),
+  pay: (listId: string, payload: { pin: string; prix_par_kg: number }) =>
+    api.post<PaymentPreviewSummary & { success?: boolean; tx_hash?: string; message?: string }>(
+      `/api/v1/liste-groupee/${encodeURIComponent(listId)}/payer`,
+      payload
+    ),
+};
+
+export interface LotPaiementStatus {
+  batch_id?: string;
+  status?: string;
+  montant_net?: number;
+  marge_fcfa?: number;
+  marge_pct?: number;
+  tx_hash?: string;
+}
+
+export const lotPaymentApi = {
+  getPaiement: (lotId: string) =>
+    api.get<{ success?: boolean; paiement: LotPaiementStatus }>(
+      `/api/v1/lot/${encodeURIComponent(lotId)}/paiement`
+    ),
+  preview: (lotId: string, prix_par_kg: number) =>
+    api.get<PaymentPreviewSummary & { success?: boolean; lot_id?: string }>(
+      `/api/v1/lot/${encodeURIComponent(lotId)}/paiement-preview`,
+      { params: { prix_par_kg } }
+    ),
+  setPrix: (lotId: string, prix_par_kg: number) =>
+    api.post(`/api/v1/lot/${encodeURIComponent(lotId)}/prix`, { prix_par_kg }),
+};
+
+export const portefeuilleApi = {
+  solde: () => api.get<{ success?: boolean; balance?: number; currency?: string }>('/api/v1/portefeuille/solde'),
+};
 
 export const lotActionApi = {
   confirmer: (lotId: string, payload: ConfirmerLotPayload) =>

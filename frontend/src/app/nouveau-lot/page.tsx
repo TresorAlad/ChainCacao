@@ -6,11 +6,13 @@ import { useAuth } from '@/contexts/AuthContext'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import { getErrorMessage } from '@/lib/error-utils'
+import { reverseGeocodeWeb } from '@/lib/geocode'
 import { LocationMap } from '@/components/maps/LocationMapDynamic'
+import { RoleGate } from '@/components/RoleGate'
 
 export default function NouveauLotPage() {
   const router = useRouter()
-  const { isAuthenticated, loading } = useAuth()
+  const { isAuthenticated, loading, user } = useAuth()
 
   const [formData, setFormData] = useState({
     culture: '',
@@ -86,6 +88,7 @@ export default function NouveauLotPage() {
   if (!isAuthenticated) return null
 
   return (
+    <RoleGate role={user?.role} path="/nouveau-lot">
     <div className="page-container py-6 sm:py-8">
       <header className="page-header">
         <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-primary)]">
@@ -156,13 +159,16 @@ export default function NouveauLotPage() {
                 interactive
                 latitude={parseFloat(formData.latitude) || undefined}
                 longitude={parseFloat(formData.longitude) || undefined}
-                onPositionChange={(lat, lng) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    latitude: lat.toFixed(6),
-                    longitude: lng.toFixed(6),
-                  }))
-                }
+                onPositionChange={(lat, lng) => {
+                  void reverseGeocodeWeb(lat, lng).then((adresse) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      latitude: lat.toFixed(6),
+                      longitude: lng.toFixed(6),
+                      lieu: adresse || prev.lieu,
+                    }))
+                  })
+                }}
               />
               <div className="grid grid-cols-2 gap-4 mt-3">
                 <input
@@ -290,5 +296,6 @@ export default function NouveauLotPage() {
         </div>
       </div>
     </div>
+    </RoleGate>
   )
 }

@@ -119,6 +119,23 @@ export default function ExportateurDashboard() {
               </View>
             </View>
 
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => router.push('/(exportateur)/scanner' as any)}
+              >
+                <MaterialCommunityIcons name="qrcode-scan" size={22} color="white" />
+                <Text style={styles.actionBtnText}>Scanner QR</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnAlt]}
+                onPress={() => router.push('/(exportateur)/paiement-liste' as any)}
+              >
+                <MaterialCommunityIcons name="format-list-checks" size={22} color="#1B5E20" />
+                <Text style={[styles.actionBtnText, { color: '#1B5E20' }]}>Liste groupée</Text>
+              </TouchableOpacity>
+            </View>
+
             {/* SUIVI DES EXPÉDITIONS */}
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Suivi des Expéditions</Text>
@@ -219,6 +236,20 @@ const styles = StyleSheet.create({
   statIconBg: { width: 35, height: 35, backgroundColor: '#E8F5E9', borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   statValue: { fontSize: 18, fontFamily: 'Montserrat-Bold', color: '#333' },
   statLabel: { fontSize: 10, color: '#777', fontFamily: 'Montserrat-Regular' },
+
+  actionRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#1B5E20',
+    paddingVertical: 14,
+    borderRadius: 16,
+  },
+  actionBtnAlt: { backgroundColor: '#E8F5E9' },
+  actionBtnText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
 
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   sectionTitle: { fontSize: 18, fontFamily: 'Montserrat-Bold', color: '#333' },

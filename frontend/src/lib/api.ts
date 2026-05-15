@@ -90,4 +90,17 @@ export interface ActorDTO {
   email?: string
   org_id: string
   role: string
+  suspended?: boolean
+  gps_location?: string
+  field_surface?: string
+  org_name?: string
+}
+
+export interface AdminIncident {
+  id: string
+  type: string
+  payload?: Record<string, unknown>
+  status: string
+  error?: string
+  created_at: string
 }

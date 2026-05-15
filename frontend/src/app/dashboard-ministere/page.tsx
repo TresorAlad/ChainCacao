@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { RoleLayout } from '@/components/RoleLayout'
 import { getRoleTheme } from '@/lib/role-themes'
-import api, { type Batch, type BatchHistoryEvent } from '@/lib/api'
+import api, { type ActorDTO, type Batch, type BatchHistoryEvent } from '@/lib/api'
+import { LocationMap } from '@/components/maps/LocationMapDynamic'
+import { coordsFromLot, markersFromActors, type MapMarker } from '@/lib/geo-utils'
 import type { DashboardStats } from '@/lib/dashboard-stats'
 import {
   GlobeAmericasIcon,
@@ -30,6 +32,7 @@ export default function MinistereDashboardPage() {
   const [auditLot, setAuditLot] = useState<Batch | null>(null)
   const [auditHistory, setAuditHistory] = useState<BatchHistoryEvent[]>([])
   const [searching, setSearching] = useState(false)
+  const [actors, setActors] = useState<ActorDTO[]>([])
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace('/login')
@@ -41,11 +44,13 @@ export default function MinistereDashboardPage() {
     Promise.all([
       api.get<{ success: boolean; stats: DashboardStats }>('/dashboard/stats').catch(() => ({ data: { stats: {} } })),
       api.get<{ success: boolean; alerts: Record<string, unknown> }>('/dashboard/alerts-count').catch(() => null),
+      api.get<{ success: boolean; actors: ActorDTO[] }>('/actors').catch(() => ({ data: { actors: [] } })),
     ])
-      .then(([statsRes, alertsRes]) => {
+      .then(([statsRes, alertsRes, actorsRes]) => {
         setStats(statsRes.data.stats || {})
         const alerts = alertsRes?.data?.alerts as { total?: number; count?: number } | undefined
         setAlertsCount(alerts?.total ?? alerts?.count ?? null)
+        setActors(actorsRes.data.actors || [])
       })
       .finally(() => setStatsLoading(false))
   }, [isAuthenticated, user])
@@ -72,6 +77,24 @@ export default function MinistereDashboardPage() {
       setSearching(false)
     }
   }
+
+  const mapMarkers = useMemo<MapMarker[]>(() => {
+    const fromActors = markersFromActors(actors, { idPrefix: 'actor' })
+    const auditCoords = auditLot ? coordsFromLot(auditLot.latitude, auditLot.longitude) : null
+    if (auditCoords && auditLot) {
+      return [
+        ...fromActors,
+        {
+          ...auditCoords,
+          id: `audit-${auditLot.id}`,
+          label: `Audit : ${auditLot.id}`,
+        },
+      ]
+    }
+    return fromActors
+  }, [actors, auditLot])
+
+  const gpsActorCount = useMemo(() => markersFromActors(actors).length, [actors])
 
   if (loading) {
     return (
@@ -166,13 +189,13 @@ export default function MinistereDashboardPage() {
               <MapIcon className="w-5 h-5 text-[#33691E]" />
               <h3 className="text-xl font-black text-[var(--color-primary)]">Cartographie nationale</h3>
             </div>
-            <div className="h-[280px] relative bg-gradient-to-br from-[#E8F5E9] to-[#C8E6C9] flex items-center justify-center">
-              <p className="text-sm font-bold text-[#33691E] text-center px-6">
-                Carte interactive MapLibre — intégration à venir.
-                <br />
-                <span className="text-xs font-medium opacity-70">Tonnes tracées par région · lots actifs</span>
-              </p>
-            </div>
+            <LocationMap height="280px" markers={mapMarkers} />
+            <p className="px-6 py-3 text-xs text-[var(--color-muted)] border-t border-[var(--color-border)]">
+              {gpsActorCount > 0
+                ? `${gpsActorCount} acteur(s) géolocalisé(s) sur la carte nationale`
+                : 'Aucun acteur avec GPS enregistré — les coordonnées sont saisies à l’inscription'}
+              {auditLot ? ' · Lot audité affiché si GPS disponible' : ''}
+            </p>
           </div>
         </div>
 
@@ -210,6 +233,14 @@ export default function MinistereDashboardPage() {
                   Voir le détail complet →
                 </Link>
               </div>
+              {coordsFromLot(auditLot.latitude, auditLot.longitude) && (
+                <LocationMap
+                  className="border border-[var(--color-border)] rounded-2xl overflow-hidden"
+                  height="220px"
+                  latitude={auditLot.latitude}
+                  longitude={auditLot.longitude}
+                />
+              )}
               {auditHistory.length > 0 && (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {auditHistory.map((ev, i) => (

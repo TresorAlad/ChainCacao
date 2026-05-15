@@ -3,28 +3,17 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  HomeIcon,
-  CubeIcon,
-  TruckIcon,
-  ChartBarIcon,
-  QrCodeIcon,
   Cog6ToothIcon,
   ArrowLeftOnRectangleIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  UsersIcon,
-  ArrowPathIcon,
-  ArrowUpTrayIcon,
   PlusIcon,
   XMarkIcon,
-  BuildingLibraryIcon,
-  RectangleStackIcon,
-  WalletIcon,
-  BanknotesIcon,
 } from '@heroicons/react/24/outline'
 import { BrandLogo } from '@/components/BrandLogo'
 import { useAuth } from '@/contexts/AuthContext'
 import { getRoleBasedRedirect } from '@/lib/role-utils'
+import { canCreateLot, getNavSectionsForRole, isAdminRole } from '@/lib/role-nav'
 import {
   useSidebarLayout,
   useResponsiveShell,
@@ -40,53 +29,31 @@ export default function Sidebar() {
   const { isLg } = useResponsiveShell()
 
   const homeHref = getRoleBasedRedirect(user?.role)
+  const { admin: adminNav, ops: opsNav } = getNavSectionsForRole(user?.role)
+  const showNewLot = canCreateLot(user?.role)
 
-  const allNavItems = [
-    {
-      icon: HomeIcon,
-      label: 'Accueil',
-      href: homeHref,
-      roles: ['admin', 'agriculteur', 'cooperative', 'exportateur', 'transformateur', 'ministere'],
-    },
-    {
-      icon: BuildingLibraryIcon,
-      label: 'Supervision',
-      href: '/dashboard-ministere',
-      roles: ['ministere', 'admin'],
-    },
-    { icon: CubeIcon, label: 'Mes Lots', href: '/lots', roles: ['agriculteur', 'cooperative', 'admin'] },
-    {
-      icon: RectangleStackIcon,
-      label: 'Liste groupée',
-      href: '/liste-groupee',
-      roles: ['cooperative', 'admin'],
-    },
-    {
-      icon: BanknotesIcon,
-      label: 'Paiement lot',
-      href: '/paiement-lot',
-      roles: ['transformateur', 'exportateur', 'admin'],
-    },
-    { icon: ArrowUpTrayIcon, label: 'Export', href: '/export', roles: ['exportateur', 'admin'] },
-    {
-      icon: TruckIcon,
-      label: 'Transferts',
-      href: '/transfer',
-      roles: ['agriculteur', 'cooperative', 'exportateur', 'transformateur', 'admin'],
-    },
-    { icon: ChartBarIcon, label: 'Transactions', href: '/transactions', roles: ['admin', 'exportateur'] },
-    { icon: QrCodeIcon, label: 'Blockchain', href: '/blockchain', roles: ['admin', 'ministere'] },
-    { icon: UsersIcon, label: 'Acteurs', href: '/actors', roles: ['admin', 'cooperative', 'ministere'] },
-    { icon: ArrowPathIcon, label: 'Sync', href: '/sync', roles: ['admin', 'agriculteur'] },
-    {
-      icon: WalletIcon,
-      label: 'Portefeuille',
-      href: '/portefeuille',
-      roles: ['cooperative', 'transformateur', 'exportateur', 'ministere', 'admin'],
-    },
-  ]
-
-  const navItems = allNavItems.filter((item) => !user?.role || item.roles.includes(user.role))
+  const renderNavLink = (item: (typeof opsNav)[number]) => {
+    const isActive =
+      pathname === item.href ||
+      (item.href !== '/' &&
+        item.href !== '/admin' &&
+        pathname.startsWith(`${item.href}/`))
+    return (
+      <Link
+        key={item.id}
+        href={item.href}
+        onClick={() => !isLg && closeMobile()}
+        className={`flex items-center gap-4 rounded-2xl px-4 py-3.5 transition-all group ${
+          isActive
+            ? 'bg-[#1B3A0F] text-white shadow-xl shadow-[#1B3A0F]/20'
+            : 'text-gray-400 hover:bg-gray-50 hover:text-[var(--color-primary)]'
+        } ${collapsed && isLg ? 'justify-center px-2' : ''}`}
+      >
+        <item.icon className={`h-6 w-6 shrink-0 transition-transform group-hover:scale-110 ${isActive ? 'text-white' : ''}`} />
+        {(!collapsed || !isLg) && <span className="text-sm font-bold">{item.label}</span>}
+      </Link>
+    )
+  }
 
   const handleLogout = () => {
     logout()
@@ -94,8 +61,6 @@ export default function Sidebar() {
   }
 
   const desktopWidthPx = collapsed ? SIDEBAR_COLLAPSED_PX : SIDEBAR_EXPANDED_PX
-  const showNewLot =
-    user?.role === 'agriculteur' || user?.role === 'cooperative' || user?.role === 'admin'
 
   return (
     <aside
@@ -162,24 +127,22 @@ export default function Sidebar() {
             <p className="mb-4 ml-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">Menu</p>
           )}
           <div className="space-y-1">
-            {navItems.map((item) => {
-              const isActive = pathname === item.href
-              return (
-                <Link
-                  key={item.href + item.label}
-                  href={item.href}
-                  onClick={() => !isLg && closeMobile()}
-                  className={`flex items-center gap-4 rounded-2xl px-4 py-3.5 transition-all group ${
-                    isActive
-                      ? 'bg-[#1B3A0F] text-white shadow-xl shadow-[#1B3A0F]/20'
-                      : 'text-gray-400 hover:bg-gray-50 hover:text-[var(--color-primary)]'
-                  } ${collapsed && isLg ? 'justify-center px-2' : ''}`}
-                >
-                  <item.icon className={`h-6 w-6 shrink-0 transition-transform group-hover:scale-110 ${isActive ? 'text-white' : ''}`} />
-                  {(!collapsed || !isLg) && <span className="text-sm font-bold">{item.label}</span>}
-                </Link>
-              )
-            })}
+            {isAdminRole(user?.role) && adminNav.length > 0 && (
+              <>
+                {(!collapsed || !isLg) && (
+                  <p className="mb-2 ml-2 text-[10px] font-black uppercase tracking-[0.2em] text-[#33691E]">
+                    Administration
+                  </p>
+                )}
+                {adminNav.map(renderNavLink)}
+                {opsNav.length > 0 && (!collapsed || !isLg) && (
+                  <p className="mt-4 mb-2 ml-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">
+                    Opérations
+                  </p>
+                )}
+              </>
+            )}
+            {opsNav.map(renderNavLink)}
           </div>
         </div>
 

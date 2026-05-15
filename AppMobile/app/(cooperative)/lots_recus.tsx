@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -12,30 +12,54 @@ import {
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { DeviceEventEmitter } from 'react-native';
 
-import { myLotsApi, getApiError, type BatchResponse } from '@/services/api';
+import { myLotsApi, getApiError, isNetworkError, type BatchResponse } from '@/services/api';
 import { isEnTransit, mapStatut } from '@/utils/lot-status';
+import { listPendingCoopReceptions, type PendingCoopReception } from '@/lib/offline-queue';
+import { readCoopLotsCache, writeCoopLotsCache } from '@/lib/coop-cache-repo';
+import { OFFLINE_QUEUE_UPDATED_EVENT } from '@/lib/storage-keys';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function LotsRecusScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [lots, setLots] = useState<BatchResponse[]>([]);
+  const [pending, setPending] = useState<PendingCoopReception[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [offlineMode, setOfflineMode] = useState(false);
+
+  const loadPending = useCallback(async () => {
+    const list = await listPendingCoopReceptions(user?.id);
+    setPending(list);
+  }, [user?.id]);
 
   const load = useCallback(async () => {
     setError(null);
+    await loadPending();
     try {
       const { data } = await myLotsApi.list();
-      setLots(data.lots ?? []);
+      const list = data.lots ?? [];
+      setLots(list);
+      setOfflineMode(false);
+      await writeCoopLotsCache(user?.id, list);
     } catch (e) {
-      setError(getApiError(e));
-      setLots([]);
+      if (isNetworkError(e)) {
+        const cached = await readCoopLotsCache(user?.id);
+        setLots(cached);
+        setOfflineMode(true);
+        setError(cached.length === 0 ? 'Hors ligne — aucun cache local.' : null);
+      } else {
+        setError(getApiError(e));
+        setLots([]);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [loadPending]);
 
   useFocusEffect(
     useCallback(() => {
@@ -44,8 +68,16 @@ export default function LotsRecusScreen() {
     }, [load])
   );
 
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(OFFLINE_QUEUE_UPDATED_EVENT, () => {
+      void loadPending();
+    });
+    return () => sub.remove();
+  }, [loadPending]);
+
   const enTransit = lots.filter((b) => isEnTransit(b.statut));
   const autres = lots.filter((b) => !isEnTransit(b.statut));
+  const pendingIds = new Set(pending.map((p) => p.lot_id));
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -60,6 +92,20 @@ export default function LotsRecusScreen() {
       </View>
 
       <View style={styles.body}>
+        {offlineMode ? (
+          <View style={styles.offlineBanner}>
+            <MaterialCommunityIcons name="cloud-off-outline" size={18} color="#E65100" />
+            <Text style={styles.offlineBannerText}>Mode hors ligne — données en cache</Text>
+          </View>
+        ) : null}
+        {pending.length > 0 ? (
+          <View style={styles.queueBanner}>
+            <MaterialCommunityIcons name="clock-outline" size={18} color="#1565C0" />
+            <Text style={styles.queueBannerText}>
+              {pending.length} confirmation(s) en attente de synchronisation
+            </Text>
+          </View>
+        ) : null}
         {error ? <Text style={styles.err}>{error}</Text> : null}
         {loading ? (
           <ActivityIndicator size="large" color="#2E7D32" style={{ marginTop: 40 }} />
@@ -96,6 +142,7 @@ export default function LotsRecusScreen() {
             renderItem={({ item }) => {
               const id = item.id ?? '';
               const poids = item.quantite != null ? `${item.quantite} kg` : '—';
+              const queued = pendingIds.has(id);
               return (
                 <TouchableOpacity
                   style={styles.card}
@@ -113,10 +160,17 @@ export default function LotsRecusScreen() {
                     <Text style={styles.detailText}>
                       {item.culture ?? 'Cacao'} · {poids} · {item.lieu ?? '—'}
                     </Text>
-                    <View style={[styles.badgeTransit, { backgroundColor: mapStatut(item.statut).color }]}>
-                      <Text style={[styles.badgeTransitText, { color: mapStatut(item.statut).textColor }]}>
-                        {mapStatut(item.statut).label.toUpperCase()}
-                      </Text>
+                    <View style={styles.badgeRow}>
+                      <View style={[styles.badgeTransit, { backgroundColor: mapStatut(item.statut).color }]}>
+                        <Text style={[styles.badgeTransitText, { color: mapStatut(item.statut).textColor }]}>
+                          {mapStatut(item.statut).label.toUpperCase()}
+                        </Text>
+                      </View>
+                      {queued ? (
+                        <View style={styles.badgeQueue}>
+                          <Text style={styles.badgeQueueText}>SYNC EN ATTENTE</Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
                   <MaterialCommunityIcons name="chevron-right" size={24} color="#CCC" />
@@ -141,6 +195,28 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: 'white', fontSize: 18, fontFamily: 'Montserrat-Bold' },
   body: { flex: 1, backgroundColor: '#F8F9FA', borderTopLeftRadius: 30, borderTopRightRadius: 30 },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFF3E0',
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 10,
+  },
+  offlineBannerText: { color: '#E65100', fontSize: 13, flex: 1 },
+  queueBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#E3F2FD',
+    marginHorizontal: 16,
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 10,
+  },
+  queueBannerText: { color: '#1565C0', fontSize: 13, flex: 1 },
   err: { color: '#C62828', padding: 16, fontSize: 14 },
   intro: { fontSize: 14, color: '#444', lineHeight: 20 },
   subIntro: { fontSize: 12, color: '#888', marginTop: 8 },
@@ -156,15 +232,22 @@ const styles = StyleSheet.create({
   cardInfo: { flex: 1 },
   lotName: { fontSize: 14, fontFamily: 'Montserrat-Bold', color: '#333' },
   detailText: { fontSize: 13, color: '#666', marginTop: 4 },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   badgeTransit: {
     alignSelf: 'flex-start',
-    marginTop: 8,
     backgroundColor: '#FFF3E0',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
   },
   badgeTransitText: { fontSize: 11, fontWeight: '800', color: '#E65100' },
+  badgeQueue: {
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  badgeQueueText: { fontSize: 11, fontWeight: '800', color: '#1565C0' },
   empty: { alignItems: 'center', paddingTop: 48, paddingHorizontal: 16 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: '#555', marginTop: 12 },
   emptyText: { fontSize: 14, color: '#888', textAlign: 'center', marginTop: 8, lineHeight: 20 },

@@ -1,156 +1,238 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  TextInput, 
-  FlatList, 
-  Platform 
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  FlatList,
+  Platform,
+  Alert,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  myLotsApi,
+  groupedListApi,
+  qrcodeApi,
+  getApiError,
+  getApiBaseUrl,
+  type BatchResponse,
+} from '@/services/api';
 
-interface Lot {
+function generateListId() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const r = Math.floor(Math.random() * 10000)
+    .toString()
+    .padStart(4, '0');
+  return `LIST-${y}${m}${day}-${r}`;
+}
+
+interface LotRow {
   id: string;
   title: string;
   poids: number;
   date: string;
 }
 
+function toRow(b: BatchResponse): LotRow {
+  const id = b.id ?? '';
+  let date = '—';
+  if (b.timestamp) {
+    const d = new Date(b.timestamp);
+    if (!Number.isNaN(d.getTime())) date = d.toLocaleDateString('fr-FR');
+  }
+  return {
+    id,
+    title: `${b.culture ?? 'Cacao'}${b.variete ? ` · ${b.variete}` : ''}`,
+    poids: b.quantite ?? 0,
+    date,
+  };
+}
+
 export default function GenerationListeScreen() {
   const router = useRouter();
   const brandGreen = '#2E7D32';
 
-  const [lots, setLots] = useState<Lot[]>([
-    { id: '1', title: 'Lot Cacao - Zone A', poids: 250, date: '12/05/2026' },
-    { id: '2', title: 'Lot Cacao - Zone B', poids: 400, date: '11/05/2026' },
-    { id: '3', title: 'Lot Cacao - Zone A', poids: 150, date: '10/05/2026' },
-    { id: '4', title: 'Récolte Nord', poids: 500, date: '09/05/2026' },
-  ]);
-
+  const [lots, setLots] = useState<LotRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [search, setSearch] = useState('');
+  const [lastListId, setLastListId] = useState<string | null>(null);
+  const [qrBase64, setQrBase64] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const { data } = await myLotsApi.list();
+        const rows = (data.lots ?? []).map(toRow).filter((r) => r.id);
+        setLots(rows);
+      } catch (e) {
+        Alert.alert('Erreur', getApiError(e));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   const toggleSelect = (id: string) => {
-    setSelectedIds(prev => 
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
 
-  // LOGIQUE DE RECHERCHE RÉELLE
-  const filteredLots = lots.filter(l => 
-    l.title.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredLots = lots.filter((l) => l.title.toLowerCase().includes(search.toLowerCase()) || l.id.toLowerCase().includes(search.toLowerCase()));
 
-  const selectedLotsData = lots.filter(l => selectedIds.includes(l.id));
+  const selectedLotsData = lots.filter((l) => selectedIds.includes(l.id));
   const poidsTotal = selectedLotsData.reduce((acc, curr) => acc + curr.poids, 0);
+
+  const createList = async () => {
+    if (selectedIds.length < 2) {
+      Alert.alert('Sélection', 'Choisissez au moins 2 lots.');
+      return;
+    }
+    const listId = generateListId();
+    setCreating(true);
+    try {
+      await groupedListApi.create(listId, selectedIds);
+      setLastListId(listId);
+      setSelectedIds([]);
+      try {
+        const qr = await qrcodeApi.getJson(listId);
+        setQrBase64(qr.data.qrcode_png_base64 ?? null);
+      } catch {
+        setQrBase64(null);
+      }
+      Alert.alert('Succès', `Liste ${listId} créée sur la blockchain.`);
+    } catch (e) {
+      Alert.alert('Erreur', getApiError(e));
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* HEADER : Couleur unie, pas de dégradé */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
           <MaterialCommunityIcons name="arrow-left" size={26} color="white" />
         </TouchableOpacity>
-        
         <Text style={styles.headerTitle}>Liste groupée</Text>
-        
-        <View style={styles.headerBtn} /> 
+        <View style={styles.headerBtn} />
       </View>
 
       <View style={styles.body}>
-        {/* Barre de recherche fonctionnelle */}
+        {lastListId && (
+          <View style={styles.successBox}>
+            <Text style={styles.successTitle}>Liste créée</Text>
+            <Text style={styles.successId}>{lastListId}</Text>
+            {qrBase64 ? (
+              <Image
+                source={{ uri: `data:image/png;base64,${qrBase64}` }}
+                style={styles.qr}
+                resizeMode="contain"
+              />
+            ) : (
+              <Text style={styles.qrHint}>{getApiBaseUrl()}/qrcode/{lastListId}</Text>
+            )}
+          </View>
+        )}
+
         <View style={styles.searchBar}>
           <MaterialCommunityIcons name="magnify" size={20} color="#999" style={styles.searchIcon} />
-          <TextInput 
+          <TextInput
             style={styles.searchInput}
-            placeholder="Rechercher un lot (ex: Zone A)..."
+            placeholder="Rechercher un lot…"
             value={search}
             onChangeText={setSearch}
             placeholderTextColor="#999"
           />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <MaterialCommunityIcons name="close-circle" size={20} color="#CCC" />
-            </TouchableOpacity>
-          )}
         </View>
 
-        <FlatList
-          data={filteredLots}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <MaterialCommunityIcons name="clipboard-search-outline" size={80} color="#CCC" />
-              <Text style={styles.emptyText}>Aucun lot trouvé.</Text>
-            </View>
-          }
-          renderItem={({ item }) => {
-            const isSelected = selectedIds.includes(item.id);
-            return (
-              <TouchableOpacity 
-                style={[styles.card, isSelected && styles.cardSelected]} 
-                onPress={() => toggleSelect(item.id)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.cardInfo}>
-                  <Text style={styles.cardTitle}>{item.title}</Text>
-                  <Text style={styles.cardSub}>{item.date} • {item.poids} kg</Text>
-                </View>
-                <MaterialCommunityIcons 
-                  name={isSelected ? "checkbox-marked-circle" : "checkbox-blank-circle-outline"} 
-                  size={26} 
-                  color={isSelected ? brandGreen : "#CCC"} 
-                />
-              </TouchableOpacity>
-            );
-          }}
-        />
+        {loading ? (
+          <ActivityIndicator size="large" color={brandGreen} style={{ marginTop: 40 }} />
+        ) : (
+          <FlatList
+            data={filteredLots}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>Aucun lot reçu.</Text>
+              </View>
+            }
+            renderItem={({ item }) => {
+              const isSelected = selectedIds.includes(item.id);
+              return (
+                <TouchableOpacity
+                  style={[styles.card, isSelected && styles.cardSelected]}
+                  onPress={() => toggleSelect(item.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.cardInfo}>
+                    <Text style={styles.cardTitle}>{item.title}</Text>
+                    <Text style={styles.cardSub}>
+                      {item.id} · {item.date} · {item.poids} kg
+                    </Text>
+                  </View>
+                  <MaterialCommunityIcons
+                    name={isSelected ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
+                    size={26}
+                    color={isSelected ? brandGreen : '#CCC'}
+                  />
+                </TouchableOpacity>
+              );
+            }}
+          />
+        )}
       </View>
 
-      {/* FRAME DU BAS : Bouton générer au milieu */}
       {selectedIds.length > 0 && (
         <View style={styles.selectionFrame}>
           <View style={styles.frameLeft}>
             <Text style={styles.frameText}>{selectedIds.length} lot(s)</Text>
             <Text style={styles.framePoids}>{poidsTotal} kg</Text>
           </View>
-
           <View style={styles.frameCenter}>
-            <TouchableOpacity 
-              style={styles.generateBtn}
-              onPress={() => console.log("Génération...", selectedIds)}
-            >
-              <MaterialCommunityIcons name="check-all" size={22} color="white" />
-              <Text style={styles.generateBtnText}>Générer</Text>
+            <TouchableOpacity style={styles.generateBtn} onPress={createList} disabled={creating}>
+              {creating ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <>
+                  <MaterialCommunityIcons name="check-all" size={22} color="white" />
+                  <Text style={styles.generateBtnText}>Générer</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
-
-         
         </View>
       )}
 
-      {/* NAVIGATION BASSE */}
       <View style={styles.bottomTab}>
         <TabItem icon="home-variant" label="Dashboard" onPress={() => router.push('/(cooperative)/accueil' as any)} />
-        <TabItem icon="camera" label="Scanner" onPress={() => router.push('/scanner')} />
+        <TabItem icon="camera" label="Scanner" onPress={() => router.push('/(cooperative)/scanner' as any)} />
         <TabItem icon="package-variant-closed" label="Lots" active color={brandGreen} />
-        <TabItem icon="chart-timeline-variant" label="Historique" />
+        <TabItem icon="chart-timeline-variant" label="Historique" onPress={() => router.push('/historique' as any)} />
         <TabItem icon="account" label="Profil" onPress={() => router.push('/(cooperative)/profil' as any)} />
       </View>
     </SafeAreaView>
   );
 }
 
-const TabItem = ({ icon, label, active = false, color = "#666", onPress }: any) => (
+const TabItem = ({ icon, label, active = false, color = '#666', onPress }: any) => (
   <TouchableOpacity style={styles.tabItem} onPress={onPress}>
-    <MaterialCommunityIcons name={icon} size={26} color={active ? color : "#666"} />
-    <Text style={[styles.tabLabel, { color: active ? color : "#666", fontWeight: active ? 'bold' : 'normal' }]}>
+    <MaterialCommunityIcons name={icon} size={26} color={active ? color : '#666'} />
+    <Text style={[styles.tabLabel, { color: active ? color : '#666', fontWeight: active ? 'bold' : 'normal' }]}>
       {label}
     </Text>
   </TouchableOpacity>
@@ -158,27 +240,34 @@ const TabItem = ({ icon, label, active = false, color = "#666", onPress }: any) 
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#2E7D32' },
-  header: { 
-    height: 60, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: 20 
+  header: {
+    height: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
   },
-  headerTitle: { 
-    color: 'white', 
-    fontSize: 18, 
-    fontWeight: 'bold',
-    textAlign: 'center'
-  },
+  headerTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', textAlign: 'center' },
   headerBtn: { width: 40, alignItems: 'center' },
-  body: { 
-    flex: 1, 
-    backgroundColor: '#F8F9FA', 
-    borderTopLeftRadius: 30, 
-    borderTopRightRadius: 30, 
-    paddingTop: 10 
+  body: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingTop: 10,
   },
+  successBox: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: '#E8F5E9',
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  successTitle: { fontWeight: 'bold', color: '#2E7D32' },
+  successId: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 12, marginTop: 4 },
+  qr: { width: 160, height: 160, marginTop: 8 },
+  qrHint: { fontSize: 10, color: '#666', marginTop: 8, textAlign: 'center' },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -189,33 +278,23 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     height: 50,
     elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
   searchIcon: { marginRight: 10 },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#333',
-  },
+  searchInput: { flex: 1, fontSize: 15, color: '#333' },
   listContent: { paddingHorizontal: 20, paddingBottom: 150 },
-  card: { 
-    backgroundColor: 'white', 
-    borderRadius: 15, 
-    padding: 15, 
-    marginBottom: 12, 
-    flexDirection: 'row', 
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    elevation: 1
+    elevation: 1,
   },
   cardSelected: { borderColor: '#2E7D32', borderWidth: 1.5, backgroundColor: '#F1F8E9' },
   cardInfo: { flex: 1 },
   cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#333' },
-  cardSub: { fontSize: 13, color: '#666', marginTop: 4 },
-  
-  // Styles du Frame de sélection (Optimisé pour centrer le bouton)
+  cardSub: { fontSize: 12, color: '#666', marginTop: 4 },
   selectionFrame: {
     position: 'absolute',
     bottom: 90,
@@ -228,37 +307,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10
   },
   frameLeft: { flex: 1, justifyContent: 'center' },
   frameCenter: { flex: 2, alignItems: 'center', justifyContent: 'center' },
-  frameRight: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
   frameText: { fontSize: 11, color: '#666' },
   framePoids: { fontSize: 16, fontWeight: 'bold', color: '#2E7D32' },
-  generateBtn: { 
-    backgroundColor: '#2E7D32', 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: 20, 
-    paddingVertical: 12, 
+  generateBtn: {
+    backgroundColor: '#2E7D32',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     borderRadius: 15,
   },
   generateBtnText: { color: 'white', marginLeft: 8, fontSize: 14, fontWeight: 'bold' },
-
   emptyContainer: { alignItems: 'center', marginTop: 80 },
   emptyText: { fontSize: 16, color: '#999', marginTop: 10 },
-  
-  bottomTab: { 
-    height: 75, 
-    backgroundColor: 'white', 
-    flexDirection: 'row', 
-    borderTopWidth: 1, 
-    borderTopColor: '#EEE', 
-    paddingBottom: Platform.OS === 'ios' ? 15 : 0 
-  }, 
+  bottomTab: {
+    height: 75,
+    backgroundColor: 'white',
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#EEE',
+    paddingBottom: Platform.OS === 'ios' ? 15 : 0,
+  },
   tabItem: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  tabLabel: { fontSize: 10, marginTop: 4 }
+  tabLabel: { fontSize: 10, marginTop: 4 },
 });

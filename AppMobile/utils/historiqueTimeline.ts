@@ -60,8 +60,30 @@ export function parseTimelineEvents(events: BatchTimelineEvent[]): TimelineDispl
 
     let detail = `${p.culture ?? '—'} · ${p.quantite ?? '—'} kg · ${p.lieu ?? '—'}`;
     if (p.statut) detail += ` · statut: ${p.statut}`;
-    if (e.commentaire) detail += ` · ${e.commentaire}`;
-    if (type === 'paiement') detail += ' · Paiement enregistré sur la chaîne';
+    if (type === 'paiement' && e.commentaire) {
+      try {
+        const pay = JSON.parse(e.commentaire) as {
+          montant_brut?: number;
+          marge_fcfa?: number;
+          marge_pct?: number;
+          montant_net?: number;
+        };
+        if (pay.montant_brut != null) {
+          detail += ` · Brut ${Math.round(pay.montant_brut).toLocaleString('fr-FR')} FCFA`;
+          detail += ` · Marge ${pay.marge_pct ?? 0} % (−${Math.round(pay.marge_fcfa ?? 0).toLocaleString('fr-FR')} FCFA)`;
+          detail += ` · Net ${Math.round(pay.montant_net ?? 0).toLocaleString('fr-FR')} FCFA`;
+        } else {
+          detail += ` · ${e.commentaire}`;
+        }
+      } catch {
+        detail += ` · ${e.commentaire}`;
+      }
+    } else if (e.commentaire) {
+      detail += ` · ${e.commentaire}`;
+    }
+    if (type === 'paiement' && !e.commentaire?.includes('montant_brut')) {
+      detail += ' · Paiement enregistré sur la chaîne';
+    }
 
     return {
       type,

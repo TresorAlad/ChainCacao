@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { CubeIcon, PlusIcon, QrCodeIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import api, { type Batch } from '@/lib/api'
+import { canCreateLot } from '@/lib/role-nav'
 
 function statusLabel(statut?: string): { label: string; cls: string } {
   switch ((statut || '').toUpperCase()) {
@@ -62,7 +63,7 @@ export default function LotsPage() {
 
   useEffect(() => {
     if (!isAuthenticated || !user?.role) return
-    if (!['agriculteur', 'cooperative', 'admin'].includes(user.role)) return
+    if (!['agriculteur', 'cooperative', 'transformateur', 'exportateur', 'admin'].includes(user.role)) return
     setFetching(true)
     api
       .get<{ success: boolean; lots: Batch[] }>('/actors/me/lots')
@@ -90,15 +91,17 @@ export default function LotsPage() {
             Inventaire complet et traçabilité des récoltes de cacao.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push('/nouveau-lot')}
-            className="flex items-center gap-2 px-6 py-2.5 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all"
-          >
-            <PlusIcon className="w-5 h-5" />
-            Nouveau Lot
-          </button>
-        </div>
+        {canCreateLot(user?.role) ? (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push('/nouveau-lot')}
+              className="flex items-center gap-2 px-6 py-2.5 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all"
+            >
+              <PlusIcon className="w-5 h-5" />
+              Nouveau Lot
+            </button>
+          </div>
+        ) : null}
       </header>
 
       {/* Recherche par ID */}

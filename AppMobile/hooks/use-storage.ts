@@ -1,10 +1,15 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useState, useEffect, useCallback } from 'react';
 import { DeviceEventEmitter } from 'react-native';
 import { useAuth } from '@/hooks/use-auth';
-import { LOTS_STORAGE_KEY, LOTS_UPDATED_EVENT } from '@/lib/storage-keys';
+import { LOTS_UPDATED_EVENT } from '@/lib/storage-keys';
+import {
+  deleteLotForActor,
+  listLotsForActor,
+  patchLotForActor,
+  replaceLotsForActor,
+} from '@/lib/offline-lots-repo';
 
-export { LOTS_STORAGE_KEY, LOTS_UPDATED_EVENT } from '@/lib/storage-keys';
+export { LOTS_UPDATED_EVENT } from '@/lib/storage-keys';
 
 export interface Lot {
   id: string;
@@ -14,68 +19,32 @@ export interface Lot {
   poids: string;
   acheteur?: string;
   destination?: string;
+  /** Nom de parcelle saisi par l’utilisateur (CDC). */
+  parcelle?: string;
   typeCacao?: string;
-  synced: boolean; // true = confirmé blockchain, false = en attente de sync
+  synced: boolean;
+  /** Phase sync CDC : données texte puis photo (mode 2G). */
+  syncPhase?: 'pending' | 'data_synced' | 'photo_pending' | 'complete';
+  chainStatut?: string;
   /** Copie locale (documentDirectory) pour sync hors ligne après prise de vue. */
   photoUri?: string;
-  /** @deprecated Ancien flux JSON ; non utilisé pour la création multipart. */
   latitude?: number;
   longitude?: number;
+  /** Intégrité ECDSA (CDC §14). */
+  signature?: string;
+  payload_hash?: string;
+  signer_pubkey?: string;
 }
 
-type LotsByActor = Record<string, Lot[]>;
-
-function parseStoredLots(
-  raw: string | null,
-  actorId: string | undefined
-): { list: Lot[]; migratedMap: LotsByActor | null } {
-  if (!raw || !actorId) return { list: [], migratedMap: null };
-  try {
-    const p = JSON.parse(raw) as unknown;
-    if (Array.isArray(p)) {
-      const migratedMap: LotsByActor = { [actorId]: p as Lot[] };
-      return { list: p as Lot[], migratedMap };
-    }
-    if (p && typeof p === 'object' && !Array.isArray(p)) {
-      const map = p as LotsByActor;
-      const row = map[actorId];
-      return { list: Array.isArray(row) ? row : [], migratedMap: null };
-    }
-  } catch {
-    /* ignore */
-  }
-  return { list: [], migratedMap: null };
-}
-
-/** Lecture disque pour la sync (USER_KEY + token déjà présents). */
+/** Lecture disque SQLite pour la sync. */
 export async function readLotsListForActor(actorId: string | undefined): Promise<Lot[]> {
   if (!actorId) return [];
-  const raw = await AsyncStorage.getItem(LOTS_STORAGE_KEY);
-  const { list, migratedMap } = parseStoredLots(raw, actorId);
-  if (migratedMap) {
-    await AsyncStorage.setItem(LOTS_STORAGE_KEY, JSON.stringify(migratedMap));
-  }
-  return list;
+  return listLotsForActor(actorId);
 }
 
 export async function writeLotsListForActor(actorId: string | undefined, lots: Lot[]): Promise<void> {
   if (!actorId) return;
-  const raw = await AsyncStorage.getItem(LOTS_STORAGE_KEY);
-  let map: LotsByActor = {};
-  if (raw) {
-    try {
-      const p = JSON.parse(raw) as unknown;
-      if (Array.isArray(p)) {
-        map = {};
-      } else if (p && typeof p === 'object' && !Array.isArray(p)) {
-        map = { ...(p as LotsByActor) };
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-  map[actorId] = lots;
-  await AsyncStorage.setItem(LOTS_STORAGE_KEY, JSON.stringify(map));
+  await replaceLotsForActor(actorId, lots);
 }
 
 export function useLots() {
@@ -92,11 +61,7 @@ export function useLots() {
         setLots([]);
         return;
       }
-      const raw = await AsyncStorage.getItem(LOTS_STORAGE_KEY);
-      const { list, migratedMap } = parseStoredLots(raw, actorId);
-      if (migratedMap) {
-        await AsyncStorage.setItem(LOTS_STORAGE_KEY, JSON.stringify(migratedMap));
-      }
+      const list = await listLotsForActor(actorId);
       setLots(list);
     } catch (e) {
       console.error('Erreur lecture lots:', e);
@@ -109,9 +74,9 @@ export function useLots() {
     async (lot: Lot) => {
       if (!actorId) return;
       try {
-        const existing = await readLotsListForActor(actorId);
+        const existing = await listLotsForActor(actorId);
         const updated = [lot, ...existing.filter((l) => l.id !== lot.id)];
-        await writeLotsListForActor(actorId, updated);
+        await replaceLotsForActor(actorId, updated);
         setLots(updated);
       } catch (e) {
         console.error('Erreur sauvegarde lot:', e);
@@ -124,9 +89,8 @@ export function useLots() {
     async (id: string, changes: Partial<Lot>) => {
       if (!actorId) return;
       try {
-        const existing = await readLotsListForActor(actorId);
-        const updated = existing.map((l) => (l.id === id ? { ...l, ...changes } : l));
-        await writeLotsListForActor(actorId, updated);
+        await patchLotForActor(actorId, id, changes);
+        const updated = await listLotsForActor(actorId);
         setLots(updated);
       } catch (e) {
         console.error('Erreur mise à jour lot:', e);
@@ -139,9 +103,8 @@ export function useLots() {
     async (id: string) => {
       if (!actorId) return;
       try {
-        const existing = await readLotsListForActor(actorId);
-        const updated = existing.filter((l) => l.id !== id);
-        await writeLotsListForActor(actorId, updated);
+        await deleteLotForActor(actorId, id);
+        const updated = await listLotsForActor(actorId);
         setLots(updated);
       } catch (e) {
         console.error('Erreur suppression lot:', e);

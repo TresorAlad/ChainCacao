@@ -13,7 +13,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
-import { myLotsApi, getApiError } from '@/services/api';
+import { myLotsApi, marginApi, getApiError } from '@/services/api';
 
 export default function MainDashboard() {
   const router = useRouter();
@@ -21,7 +21,7 @@ export default function MainDashboard() {
   const [lotsRecus, setLotsRecus] = useState(0);
   const [lotsEnTransit, setLotsEnTransit] = useState(0);
   const [poidsTotal, setPoidsTotal] = useState(0);
-  const [margeEstimee, setMargeEstimee] = useState(0);
+  const [margePct, setMargePct] = useState<number | null>(null);
 
   // CHARGEMENT DES POLICES
   useEffect(() => {
@@ -51,7 +51,13 @@ export default function MainDashboard() {
         setLotsEnTransit(transit);
         const kg = lots.reduce((s, b) => s + (b.quantite ?? 0), 0);
         setPoidsTotal(Math.round(kg));
-        setMargeEstimee(Math.round(kg * 150));
+        try {
+          const m = await marginApi.getForCoop();
+          const pct = m.data.margin_pct ?? m.data.margin ?? 0;
+          setMargePct(pct);
+        } catch {
+          setMargePct(null);
+        }
       } catch (e) {
         console.warn(getApiError(e));
       }
@@ -110,10 +116,19 @@ export default function MainDashboard() {
                </View>
 
                <View style={styles.whiteCard}>
-                  <Text style={styles.smallLabel}>Marge estimée</Text>
+                  <Text style={styles.smallLabel}>Marge officielle</Text>
                   <Text style={styles.statText}>
-                    <Text style={styles.greenValue}>{margeEstimee.toLocaleString('fr-FR')}</Text> FCFA
+                    {margePct != null ? (
+                      <Text style={styles.greenValue}>{margePct} %</Text>
+                    ) : (
+                      <Text style={styles.greenValue}>—</Text>
+                    )}
                   </Text>
+                  {margePct != null && (
+                    <Text style={{ fontSize: 10, color: '#888', marginTop: 4 }}>
+                      Appliquée auto. à chaque paiement
+                    </Text>
+                  )}
                </View>
             </View>
 

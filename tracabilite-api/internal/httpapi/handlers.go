@@ -577,6 +577,10 @@ func (h *Handler) SyncOfflineLots(c *gin.Context) {
 				continue
 			}
 		}
+		if err := batch.VerifySyncIntegrity(item, actorID); err != nil {
+			results = append(results, syncResult{Index: i, ClientLotID: item.ClientLotID, Error: err.Error()})
+			continue
+		}
 		txHash, created, err := h.batch.Create(c.Request.Context(), item, actorID, orgID)
 		if err != nil {
 			results = append(results, syncResult{Index: i, ClientLotID: item.ClientLotID, Error: err.Error()})
@@ -883,8 +887,7 @@ func (h *Handler) ConfirmerLot(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "aucun prix defini pour ce lot: fixez un prix avant confirmation"})
 		return
 	}
-	total := price * lot.Quantite
-	txHash, err := h.batch.ConfirmBatchReceipt(c.Request.Context(), batchID, actorID)
+	txHash, summary, err := h.batch.ConfirmBatchReceiptWithSummary(c.Request.Context(), batchID, actorID, price)
 	if err != nil {
 		if h.inc != nil {
 			_, _ = h.inc.Create(c.Request.Context(), "confirm_lot", map[string]any{"lot_id": batchID, "actor_id": actorID}, err.Error())
@@ -892,13 +895,23 @@ func (h *Handler) ConfirmerLot(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	h.sendPaymentNotifications(c, batchID, lot, actorID, total)
-	c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": txHash, "message": "lot confirme et paiement initie", "montant_total": total})
+	h.sendPaymentNotifications(c, batchID, lot, actorID, summary.MontantNetAgriculteurs)
+	c.JSON(http.StatusOK, gin.H{
+		"success":        true,
+		"tx_hash":        txHash,
+		"message":        "lot confirme et paiement initie",
+		"montant_total":  summary.MontantTotalDebite,
+		"montant_brut":   summary.MontantBrut,
+		"marge_pct":      summary.MargePct,
+		"marge_fcfa":     summary.MargeFCFA,
+		"montant_net":    summary.MontantNetAgriculteurs,
+	})
 }
 
 func (h *Handler) ConfirmerReceptionLot(c *gin.Context) {
 	var req struct {
-		PIN string `json:"pin" binding:"required"`
+		PIN           string   `json:"pin" binding:"required"`
+		PoidsConstate *float64 `json:"poids_constate"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload invalide"})
@@ -911,7 +924,11 @@ func (h *Handler) ConfirmerReceptionLot(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "PIN invalide"})
 		return
 	}
-	txHash, updated, err := h.batch.ConfirmPhysicalReceipt(c.Request.Context(), batchID, actorID)
+	poids := 0.0
+	if req.PoidsConstate != nil && *req.PoidsConstate > 0 {
+		poids = *req.PoidsConstate
+	}
+	txHash, updated, err := h.batch.ConfirmPhysicalReceipt(c.Request.Context(), batchID, actorID, poids)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -974,34 +991,29 @@ func (h *Handler) PreviewListeGroupee(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
-
-	type lotLine struct {
-		LotID      string  `json:"lot_id"`
-		PoidsKg    float64 `json:"poids_kg"`
-		Montant    float64 `json:"montant"`
+	coop, err := h.batch.ResolveCooperativeForList(c.Request.Context(), l)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
-	lines := make([]lotLine, 0, len(l.BatchIDs))
-	var total float64
-	for _, bid := range l.BatchIDs {
-		lot, err := h.batch.GetBatch(c.Request.Context(), bid)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "lot introuvable dans liste: " + bid})
-			return
-		}
-		if strings.EqualFold(strings.TrimSpace(lot.Statut), "en_transit") {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "lot " + bid + " encore en transit: reception non confirmee par le destinataire"})
-			return
-		}
-		m := req.PrixParKg * lot.Quantite
-		total += m
-		lines = append(lines, lotLine{LotID: bid, PoidsKg: lot.Quantite, Montant: m})
+	summary, err := h.batch.PreviewGroupedListPayment(c.Request.Context(), l.BatchIDs, req.PrixParKg, coop.OrgID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"list_id": listID,
-		"prix_par_kg": req.PrixParKg,
-		"lots": lines,
-		"montant_total": total,
+		"success":                    true,
+		"list_id":                    listID,
+		"prix_par_kg":                summary.PrixParKg,
+		"marge_pct":                  summary.MargePct,
+		"marge_fcfa":                 summary.MargeFCFA,
+		"montant_brut":               summary.MontantBrut,
+		"montant_net_agriculteurs":   summary.MontantNetAgriculteurs,
+		"montant_total_debite":       summary.MontantTotalDebite,
+		"montant_total":              summary.MontantTotalDebite,
+		"nb_agriculteurs":            summary.NbAgriculteurs,
+		"poids_total_kg":             summary.PoidsTotalKg,
+		"lots":                       summary.Lines,
 	})
 }
 
@@ -1032,7 +1044,7 @@ func (h *Handler) PayerListeGroupee(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
-	txHash, total, err := h.batch.PayGroupedListAtomic(c.Request.Context(), listID, actorID, req.PrixParKg, l.BatchIDs)
+	txHash, summary, err := h.batch.PayGroupedListAtomic(c.Request.Context(), l, actorID, req.PrixParKg)
 	if err != nil {
 		if h.inc != nil {
 			_, _ = h.inc.Create(c.Request.Context(), "pay_grouped_list", map[string]any{"list_id": listID, "actor_id": actorID}, err.Error())
@@ -1041,7 +1053,17 @@ func (h *Handler) PayerListeGroupee(c *gin.Context) {
 		return
 	}
 	h.sendGroupedPaymentNotifications(c, l.BatchIDs, actorID, req.PrixParKg)
-	c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": txHash, "message": "paiement de la liste effectue", "montant_total": total})
+	c.JSON(http.StatusOK, gin.H{
+		"success":                  true,
+		"tx_hash":                  txHash,
+		"message":                  "paiement de la liste effectue",
+		"montant_total":            summary.MontantTotalDebite,
+		"montant_brut":             summary.MontantBrut,
+		"marge_pct":                summary.MargePct,
+		"marge_fcfa":               summary.MargeFCFA,
+		"montant_net_agriculteurs": summary.MontantNetAgriculteurs,
+		"lots":                     summary.Lines,
+	})
 }
 
 func (h *Handler) GetPortefeuilleSolde(c *gin.Context) {
@@ -1127,6 +1149,69 @@ func (h *Handler) SetMargeCooperative(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": txHash, "message": "marge configuree"})
+}
+
+func (h *Handler) GetMargeCooperativeAdmin(c *gin.Context) {
+	orgID := strings.TrimSpace(c.Query("org_id"))
+	if orgID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "org_id requis"})
+		return
+	}
+	margin, err := h.batch.GetCooperativeMargin(c.Request.Context(), orgID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "org_id": orgID, "margin": margin, "margin_pct": margin})
+}
+
+func (h *Handler) GetMargeCooperativeMe(c *gin.Context) {
+	actorID := c.GetString(auth.ContextActorID)
+	actor, err := h.actors.FindByID(c.Request.Context(), actorID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "acteur introuvable"})
+		return
+	}
+	orgID := actor.OrgID
+	if orgID == "" {
+		orgID = "CooperativeMSP"
+	}
+	margin, err := h.batch.GetCooperativeMargin(c.Request.Context(), orgID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "org_id": orgID, "margin": margin, "margin_pct": margin})
+}
+
+func (h *Handler) LotPaiementPreview(c *gin.Context) {
+	batchID := c.Param("id")
+	prixStr := c.Query("prix_par_kg")
+	if prixStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "prix_par_kg requis"})
+		return
+	}
+	var prix float64
+	if _, err := fmt.Sscanf(prixStr, "%f", &prix); err != nil || prix <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "prix_par_kg invalide"})
+		return
+	}
+	summary, err := h.batch.PreviewLotPayment(c.Request.Context(), batchID, prix)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success":                  true,
+		"lot_id":                   batchID,
+		"prix_par_kg":              summary.PrixParKg,
+		"marge_pct":                summary.MargePct,
+		"marge_fcfa":               summary.MargeFCFA,
+		"montant_brut":             summary.MontantBrut,
+		"montant_net":              summary.MontantNetAgriculteurs,
+		"montant_total_debite":     summary.MontantTotalDebite,
+		"lots":                     summary.Lines,
+	})
 }
 
 // ---- ADMINISTRATION SYSTEME (CDC) ----

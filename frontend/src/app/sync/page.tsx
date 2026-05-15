@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { CloudArrowUpIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { getErrorMessage } from '@/lib/error-utils'
+import { RoleGate } from '@/components/RoleGate'
 
 interface SyncResult {
   index: number
@@ -17,7 +18,7 @@ interface SyncResult {
 
 export default function SyncPage() {
   const router = useRouter()
-  const { isAuthenticated, loading } = useAuth()
+  const { isAuthenticated, loading, user } = useAuth()
   const [jsonInput, setJsonInput] = useState('')
   const [results, setResults] = useState<SyncResult[]>([])
   const [isSyncing, setIsSyncing] = useState(false)
@@ -62,6 +63,7 @@ export default function SyncPage() {
   if (!isAuthenticated) return null
 
   return (
+    <RoleGate role={user?.role} path="/sync">
     <div className="w-full py-6 sm:py-8">
       {/* Header Section */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
@@ -146,5 +148,6 @@ export default function SyncPage() {
         </div>
       </div>
     </div>
+    </RoleGate>
   )
 }

@@ -80,6 +80,8 @@ module.exports = {
     },
     plugins: [
       withCleartextPlugin,
+      'expo-secure-store',
+      'expo-sqlite',
       'expo-router',
       [
         'expo-notifications',

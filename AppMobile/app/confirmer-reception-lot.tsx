@@ -15,8 +15,11 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { batchApi, getApiError, lotActionApi, type BatchResponse } from '@/services/api';
+import * as Network from 'expo-network';
+import { batchApi, getApiError, lotActionApi, type BatchResponse, isNetworkError } from '@/services/api';
 import { isEnTransit, mapStatut } from '@/utils/lot-status';
+import { enqueueCoopReception } from '@/lib/offline-queue';
+import { useAuth } from '@/hooks/use-auth';
 
 function firstParam(v: string | string[] | undefined): string {
   if (v === undefined || v === null) return '';
@@ -27,6 +30,7 @@ function firstParam(v: string | string[] | undefined): string {
 export default function ConfirmerReceptionLotScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { user } = useAuth();
   const brandGreen = '#2E7D32';
 
   const lotId = firstParam(params.lotId as string | string[] | undefined);
@@ -83,12 +87,52 @@ export default function ConfirmerReceptionLotScreen() {
     }
     setSubmitting(true);
     try {
-      await lotActionApi.confirmerReception(lotId, { pin: pin.trim() });
+      const net = await Network.getNetworkStateAsync();
+      const online = !!(net.isConnected && net.isInternetReachable);
+      if (!online) {
+        if (!user?.id) {
+          Alert.alert('Connexion', 'Session invalide.');
+          return;
+        }
+        const poids = parseFloat(poidsReception.replace(',', '.'));
+        await enqueueCoopReception({
+          lot_id: lotId,
+          pin: pin.trim(),
+          poids_constate: poids > 0 ? poids : undefined,
+          actor_id: user.id,
+        });
+        Alert.alert(
+          'Réception en file d’attente',
+          'Hors ligne : la confirmation sera envoyée automatiquement dès que le réseau sera disponible.',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+        return;
+      }
+      const poids = parseFloat(poidsReception.replace(',', '.'));
+      await lotActionApi.confirmerReception(lotId, {
+        pin: pin.trim(),
+        poids_constate: poids > 0 ? poids : undefined,
+      });
       Alert.alert('Réception confirmée', 'Le lot est enregistré comme reçu. L’historique du lot inclura cet événement.', [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (e) {
-      Alert.alert('Échec', getApiError(e));
+      if (isNetworkError(e) && user?.id) {
+        const poids = parseFloat(poidsReception.replace(',', '.'));
+        await enqueueCoopReception({
+          lot_id: lotId,
+          pin: pin.trim(),
+          poids_constate: poids > 0 ? poids : undefined,
+          actor_id: user.id,
+        });
+        Alert.alert(
+          'Réception en file d’attente',
+          'La confirmation sera synchronisée à la reconnexion.',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } else {
+        Alert.alert('Échec', getApiError(e));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -155,8 +199,13 @@ export default function ConfirmerReceptionLotScreen() {
                   <View style={styles.infoRow}>
                     <MaterialCommunityIcons name="map-marker" size={20} color={brandGreen} />
                     <View style={styles.infoTextGroup}>
-                      <Text style={styles.infoLabel}>Lieu</Text>
+                      <Text style={styles.infoLabel}>Adresse (GPS)</Text>
                       <Text style={styles.infoValue}>{lot.lieu ?? '—'}</Text>
+                      {lot.latitude != null && lot.longitude != null ? (
+                        <Text style={styles.gpsHint}>
+                          {lot.latitude}, {lot.longitude}
+                        </Text>
+                      ) : null}
                     </View>
                   </View>
                   <View style={styles.infoRow}>
@@ -255,6 +304,7 @@ const styles = StyleSheet.create({
   infoTextGroup: { marginLeft: 15, flex: 1 },
   infoLabel: { fontSize: 11, color: '#888', fontFamily: 'Montserrat-Regular' },
   infoValue: { fontSize: 15, color: '#333', fontFamily: 'Montserrat-Bold' },
+  gpsHint: { fontSize: 12, color: '#888', marginTop: 4 },
   receptionSection: { marginBottom: 24 },
   inputFrame: {
     backgroundColor: 'white',

@@ -25,6 +25,9 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLots, type Lot } from '@/hooks/use-storage';
 import { useAuth } from '@/hooks/use-auth';
 import { batchApi, getApiError, isNetworkError } from '@/services/api';
+import { signLotPayload } from '@/lib/lot-crypto';
+import { reverseGeocodeCoords } from '@/lib/geocode';
+import type { LotSignPayload } from '@/lib/lot-payload';
 
 function frDateToIso(fr: string): string {
   const parts = fr.split('/');
@@ -158,10 +161,21 @@ export default function NouveauLot() {
         /* l’API peut encore accepter le lot si l’EXIF contient le GPS */
       }
 
+      if (lat == null || lon == null) {
+        Alert.alert(
+          'Position requise',
+          'Activez la localisation ou reprenez une photo avec GPS dans les métadonnées EXIF.'
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
+      const adresseLieu = await reverseGeocodeCoords(lat, lon);
+
       const fields = {
         culture,
         quantite: qty,
-        lieu: parcelle,
+        lieu: adresseLieu,
         date_recolte: dateIso,
         notes: variete,
         variete,
@@ -171,18 +185,38 @@ export default function NouveauLot() {
         longitude: lon,
       };
 
+      const signBase: LotSignPayload = {
+        client_lot_id: localId,
+        culture,
+        variete,
+        quantite: qty,
+        lieu: adresseLieu,
+        latitude: lat,
+        longitude: lon,
+        parcelle,
+        date_recolte: dateIso,
+        notes: variete,
+        actor_id: user.id,
+      };
+      const { signature, payload_hash, signer_pubkey } = await signLotPayload(signBase);
+
       const lotRow: Lot = {
         id: localId,
         title: `${typeProduit} — ${parcelle}`,
         status: 'En cours',
         date: dateRecolte,
         poids,
-        destination: parcelle,
+        destination: adresseLieu,
+        parcelle,
         typeCacao: variete,
         synced: false,
+        syncPhase: 'pending',
         photoUri: storedPhoto,
         latitude: lat,
         longitude: lon,
+        signature,
+        payload_hash,
+        signer_pubkey,
       };
 
       if (isConnected) {
@@ -198,7 +232,11 @@ export default function NouveauLot() {
             status: 'Terminé',
           });
           Alert.alert('Succès', 'Lot enregistré sur la blockchain.', [
-            { text: 'OK', onPress: () => router.replace('/(agriculteur)/meslots' as any) },
+            {
+              text: 'Voir le QR',
+              onPress: () =>
+                router.replace(`/(agriculteur)/qr-lot?lotId=${encodeURIComponent(serverId)}` as any),
+            },
           ]);
           return;
         } catch (e) {
@@ -212,8 +250,15 @@ export default function NouveauLot() {
       await saveLot(lotRow);
       Alert.alert(
         'Mode hors-ligne',
-        'Lot enregistré localement avec la photo. Il sera envoyé automatiquement dès que le réseau sera disponible.',
-        [{ text: 'OK', onPress: () => router.replace('/(agriculteur)/meslots' as any) }]
+        'Lot signé (ECDSA) et enregistré localement. QR disponible ; synchronisation automatique à la reconnexion.',
+        [
+          {
+            text: 'Voir le QR',
+            onPress: () =>
+              router.replace(`/(agriculteur)/qr-lot?lotId=${encodeURIComponent(localId)}` as any),
+          },
+          { text: 'Mes lots', onPress: () => router.replace('/(agriculteur)/meslots' as any) },
+        ]
       );
     } catch (error) {
       Alert.alert('Erreur', 'Impossible de sauvegarder le lot.');

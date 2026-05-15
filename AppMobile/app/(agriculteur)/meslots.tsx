@@ -19,7 +19,7 @@ import * as Network from 'expo-network';
 import { useAuth } from '@/hooks/use-auth';
 import { readLotsListForActor, type Lot } from '@/hooks/use-storage';
 import { myLotsApi, type BatchResponse, getApiError } from '@/services/api';
-import { mapLocalSyncStatus, mapStatut } from '@/utils/lot-status';
+import { mapCdcLotDisplay, mapStatut } from '@/utils/lot-status';
 
 type DisplayLot = {
   id: string;
@@ -27,28 +27,42 @@ type DisplayLot = {
   poids: string;
   date: string;
   statut: string;
+  statutColor: string;
+  statutTextColor: string;
+  cdcColor: 'red' | 'orange' | 'green' | 'blue' | 'grey';
   isSynced: boolean;
 };
 
 function mapServerLot(b: BatchResponse): DisplayLot {
-  const mapped = mapStatut(b.statut);
+  const cdc = mapCdcLotDisplay({ synced: true, chainStatut: b.statut });
   return {
     id: b.id,
     nom: `${b.culture ?? 'Lot'} — ${b.lieu ?? ''}`.trim(),
     poids: String(b.quantite ?? 0),
     date: b.date_recolte ?? b.timestamp ?? '',
-    statut: mapped.label,
+    statut: cdc.label,
+    statutColor: cdc.color,
+    statutTextColor: cdc.textColor,
+    cdcColor: b.statut === 'paye' || b.statut === 'transfere' ? 'green' : 'orange',
     isSynced: true,
   };
 }
 
 function mapLocalLot(l: Lot): DisplayLot {
+  const cdc = mapCdcLotDisplay({
+    synced: l.synced,
+    chainStatut: l.chainStatut,
+    localStatus: l.status,
+  });
   return {
     id: l.id,
     nom: l.title,
     poids: l.poids,
     date: l.date,
-    statut: mapLocalSyncStatus(l.synced, l.status),
+    statut: l.syncPhase === 'photo_pending' ? 'Photo en attente' : cdc.label,
+    statutColor: cdc.color,
+    statutTextColor: cdc.textColor,
+    cdcColor: !l.synced ? 'red' : l.syncPhase === 'photo_pending' ? 'orange' : 'orange',
     isSynced: l.synced,
   };
 }
@@ -117,16 +131,25 @@ export default function MesLots() {
       style={styles.lotCard}
       activeOpacity={0.8}
       onPress={() => router.push(`/(agriculteur)/qr-lot?lotId=${encodeURIComponent(item.id)}` as any)}
+      onLongPress={() =>
+        router.push(`/(agriculteur)/paiement-lot?lotId=${encodeURIComponent(item.id)}` as any)
+      }
     >
       <View style={styles.lotMainInfo}>
         <View style={styles.syncIndicator}>
           <MaterialCommunityIcons
-            name={item.isSynced ? 'cloud-check' : 'cloud-sync-outline'}
+            name={
+              item.cdcColor === 'green'
+                ? 'cloud-check'
+                : item.cdcColor === 'red'
+                  ? 'cloud-off-outline'
+                  : 'cloud-sync-outline'
+            }
             size={14}
-            color={item.isSynced ? '#4CAF50' : '#FF9800'}
+            color={item.statutTextColor}
           />
-          <Text style={[styles.syncText, { color: item.isSynced ? '#4CAF50' : '#FF9800' }]}>
-            {item.isSynced ? 'Synchronisé' : 'Attente de réseau'}
+          <Text style={[styles.syncText, { color: item.statutTextColor }]}>
+            {item.isSynced ? 'Synchronisé' : 'En attente de sync'}
           </Text>
         </View>
 
@@ -138,38 +161,8 @@ export default function MesLots() {
 
           <View style={styles.rightInfo}>
             <Text style={styles.weightText}>{item.poids} Kg</Text>
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor:
-                    item.statut === 'Synchronisé' || item.statut === 'Payé' || item.statut === 'Reçu'
-                      ? '#E8F5E9'
-                      : item.statut === 'En attente' || item.statut === 'En transit'
-                        ? '#FFF3E0'
-                        : item.statut === 'Problème'
-                          ? '#FFEBEE'
-                          : '#E3F2FD',
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusText,
-                  {
-                    color:
-                      item.statut === 'Synchronisé' || item.statut === 'Payé' || item.statut === 'Reçu'
-                        ? '#2E7D32'
-                        : item.statut === 'En attente' || item.statut === 'En transit'
-                          ? '#EF6C00'
-                          : item.statut === 'Problème'
-                            ? '#C62828'
-                            : '#1976D2',
-                  },
-                ]}
-              >
-                {item.statut}
-              </Text>
+            <View style={[styles.statusBadge, { backgroundColor: item.statutColor }]}>
+              <Text style={[styles.statusText, { color: item.statutTextColor }]}>{item.statut}</Text>
             </View>
           </View>
         </View>

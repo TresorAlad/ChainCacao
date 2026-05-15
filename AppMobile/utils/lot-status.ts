@@ -45,6 +45,52 @@ export function isPaye(statut?: string | null): boolean {
   return String(statut ?? '').toLowerCase() === 'paye';
 }
 
+export type CdcLotColor = 'red' | 'orange' | 'green' | 'blue' | 'grey';
+
+/**
+ * Codage couleur CDC §6.4 :
+ * - rouge : local non synchronisé
+ * - orange : synchronisé, pas encore transféré / payé
+ * - vert : transféré ou payé
+ */
+export function getCdcLotColor(opts: {
+  synced: boolean;
+  chainStatut?: string | null;
+  localStatus?: string;
+}): CdcLotColor {
+  if (!opts.synced) return 'red';
+  const s = String(opts.chainStatut ?? '').toLowerCase();
+  if (s === 'paye' || s === 'exporte' || s === 'transfere') return 'green';
+  if (s === 'recu' || s === 'en_transit') return 'orange';
+  if (opts.localStatus === 'Problème') return 'grey';
+  if (opts.synced && !s) return 'orange';
+  return 'orange';
+}
+
+const CDC_COLORS: Record<CdcLotColor, LotStatusDisplay> = {
+  red: { label: 'Non synchronisé', color: '#FFEBEE', textColor: '#C62828' },
+  orange: { label: 'Synchronisé', color: '#FFF3E0', textColor: '#EF6C00' },
+  green: { label: 'Transféré / payé', color: '#E8F5E9', textColor: '#2E7D32' },
+  blue: { label: 'En cours', color: '#E3F2FD', textColor: '#1565C0' },
+  grey: { label: 'Problème', color: '#ECEFF1', textColor: '#616161' },
+};
+
+export function mapCdcLotDisplay(opts: {
+  synced: boolean;
+  chainStatut?: string | null;
+  localStatus?: string;
+}): LotStatusDisplay {
+  const c = getCdcLotColor(opts);
+  const base = CDC_COLORS[c];
+  const s = String(opts.chainStatut ?? '').toLowerCase();
+  if (c === 'green' && s === 'paye') return { ...base, label: 'Payé' };
+  if (c === 'green' && s === 'transfere') return { ...base, label: 'Transféré' };
+  if (c === 'orange' && s === 'en_transit') return { ...base, label: 'En transit' };
+  if (c === 'orange' && s === 'recu') return { ...base, label: 'Reçu' };
+  if (!opts.synced) return { ...base, label: 'En attente de sync' };
+  return base;
+}
+
 /** Statut local (sync hors-ligne) → libellé affiché. */
 export function mapLocalSyncStatus(synced: boolean, status?: string): string {
   if (!synced) return 'En attente';

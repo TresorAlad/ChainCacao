@@ -29,3 +29,46 @@ export function coordsFromLot(lat?: number | null, lng?: number | null): LatLng 
 }
 
 export type MapMarker = LatLng & { label?: string; id?: string }
+
+export type ActorWithGps = {
+  id: string
+  nom: string
+  role?: string
+  gps_location?: string
+}
+
+export function markersFromActors(
+  actors: ActorWithGps[],
+  options?: { roleFilter?: string; idPrefix?: string }
+): MapMarker[] {
+  const markers: MapMarker[] = []
+  for (const actor of actors) {
+    if (options?.roleFilter && actor.role !== options.roleFilter) continue
+    const raw = actor.gps_location?.trim()
+    if (!raw) continue
+    const c = parseGpsString(raw)
+    if (!c) continue
+    markers.push({
+      ...c,
+      id: options?.idPrefix ? `${options.idPrefix}-${actor.id}` : actor.id,
+      label: `${actor.nom}${actor.role ? ` (${actor.role})` : ''}`,
+    })
+  }
+  return markers
+}
+
+export function markersFromLots(
+  lots: Array<{ id: string; culture?: string; latitude?: number | null; longitude?: number | null }>
+): MapMarker[] {
+  const markers: MapMarker[] = []
+  for (const lot of lots) {
+    const c = coordsFromLot(lot.latitude, lot.longitude)
+    if (!c) continue
+    markers.push({
+      ...c,
+      id: `lot-${lot.id}`,
+      label: `${lot.id}${lot.culture ? ` — ${lot.culture}` : ''}`,
+    })
+  }
+  return markers
+}

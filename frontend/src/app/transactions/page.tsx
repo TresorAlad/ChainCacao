@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { ArrowDownTrayIcon, ArrowsRightLeftIcon } from '@heroicons/react/24/outline'
 import api from '@/lib/api'
+import { RoleGate } from '@/components/RoleGate'
 
 interface TransferRow {
   id?: string
@@ -78,6 +79,7 @@ export default function TransactionsPage() {
   if (!isAuthenticated) return null
 
   return (
+    <RoleGate role={user?.role} path="/transactions">
     <div className="w-full py-6 sm:py-8">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
         <div>
@@ -170,5 +172,6 @@ export default function TransactionsPage() {
         )}
       </div>
     </div>
+    </RoleGate>
   )
 }

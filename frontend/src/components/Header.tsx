@@ -19,6 +19,7 @@ const LABELS: Record<string, string> = {
   lots: 'Mes lots',
   transfer: 'Transferts',
   'paiement-lot': 'Paiement lot',
+  'paiement-liste': 'Payer liste groupée',
   transactions: 'Transactions',
   blockchain: 'Blockchain',
   actors: 'Acteurs',

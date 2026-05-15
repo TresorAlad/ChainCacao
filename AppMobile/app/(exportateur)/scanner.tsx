@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 
 import { batchApi, getApiError, isNetworkError } from '@/services/api';
-import { extractLotIdFromScanPayload } from '@/utils/lotQr';
+import { extractLotIdFromScanPayload, isGroupedListId } from '@/utils/lotQr';
 
 export default function ScannerScreen() {
   const router = useRouter();
@@ -40,16 +40,26 @@ export default function ScannerScreen() {
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
     if (scanned) return;
     setScanned(true);
-    const lotId = extractLotIdFromScanPayload(data);
-    if (!lotId) {
-      Alert.alert('Scan', 'Impossible de lire un identifiant de lot.', [
+    const scannedId = extractLotIdFromScanPayload(data);
+    if (!scannedId) {
+      Alert.alert('Scan', 'Impossible de lire un identifiant.', [
         { text: 'OK', onPress: () => setScanned(false) },
       ]);
       return;
     }
+    if (isGroupedListId(scannedId)) {
+      router.push({
+        pathname: '/(exportateur)/paiement-liste',
+        params: { listId: scannedId },
+      } as any);
+      return;
+    }
     try {
-      await batchApi.verify(lotId);
-      router.push({ pathname: '/historique', params: { lotId } } as any);
+      await batchApi.verify(scannedId);
+      router.push({
+        pathname: '/(exportateur)/paiement',
+        params: { lotId: scannedId },
+      } as any);
     } catch (e) {
       const msg = isNetworkError(e)
         ? 'Réseau indisponible. Réessayez plus tard.'
