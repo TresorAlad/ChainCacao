@@ -9,16 +9,19 @@ import {
   ActivityIndicator,
   ImageBackground,
   RefreshControl,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
-import * as Network from 'expo-network';
+import NetInfo from '@react-native-community/netinfo';
 
 import { useAuth } from '@/hooks/use-auth';
 import { readLotsListForActor, type Lot } from '@/hooks/use-storage';
+import { runPendingSync } from '@/hooks/use-sync';
 import { myLotsApi, type BatchResponse, getApiError } from '@/services/api';
+import { LOTS_UPDATED_EVENT } from '@/lib/storage-keys';
 import { mapCdcLotDisplay, mapStatut } from '@/utils/lot-status';
 
 type DisplayLot = {
@@ -59,7 +62,7 @@ function mapLocalLot(l: Lot): DisplayLot {
     nom: l.title,
     poids: l.poids,
     date: l.date,
-    statut: l.syncPhase === 'photo_pending' ? 'Photo en attente' : cdc.label,
+    statut: l.syncPhase === 'photo_pending' ? 'Photo en attente réseau' : cdc.label,
     statutColor: cdc.color,
     statutTextColor: cdc.textColor,
     cdcColor: !l.synced ? 'red' : l.syncPhase === 'photo_pending' ? 'orange' : 'orange',
@@ -72,14 +75,16 @@ export default function MesLots() {
   const { user } = useAuth();
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [lots, setLots] = useState<DisplayLot[]>([]);
+  const pendingCount = lots.filter((l) => !l.isSynced).length;
 
   const loadData = useCallback(async () => {
     setRefreshing(true);
     try {
-      const state = await Network.getNetworkStateAsync();
-      const connected = !!(state.isConnected && state.isInternetReachable);
+      const state = await NetInfo.fetch();
+      const connected = state.isConnected === true && state.isInternetReachable !== false;
       setIsOffline(!connected);
 
       const local = await readLotsListForActor(user?.id);
@@ -122,6 +127,23 @@ export default function MesLots() {
     init();
   }, [loadData]);
 
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(LOTS_UPDATED_EVENT, () => {
+      void loadData();
+    });
+    return () => sub.remove();
+  }, [loadData]);
+
+  const handleRetrySync = async () => {
+    setSyncing(true);
+    try {
+      await runPendingSync();
+      await loadData();
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const handleNavigation = (path: string) => {
     router.replace(path as any);
   };
@@ -149,7 +171,7 @@ export default function MesLots() {
             color={item.statutTextColor}
           />
           <Text style={[styles.syncText, { color: item.statutTextColor }]}>
-            {item.isSynced ? 'Synchronisé' : 'En attente de sync'}
+            {item.isSynced ? 'Synchronisé' : 'En attente réseau'}
           </Text>
         </View>
 
@@ -201,6 +223,30 @@ export default function MesLots() {
         </ImageBackground>
 
         <View style={styles.body}>
+          {pendingCount > 0 ? (
+            <View style={styles.pendingBanner}>
+              <MaterialCommunityIcons name="cloud-sync" size={22} color="#E65100" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pendingTitle}>
+                  {pendingCount} lot{pendingCount > 1 ? 's' : ''} en attente réseau
+                </Text>
+                <Text style={styles.pendingSub}>
+                  Enregistrés sur l’appareil — envoi automatique quand l’API répond.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.syncBtn}
+                onPress={() => void handleRetrySync()}
+                disabled={syncing || isOffline}
+              >
+                {syncing ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.syncBtnText}>Synchroniser</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : null}
           <FlatList
             data={lots}
             keyExtractor={(item) => item.id}
@@ -260,6 +306,29 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
   heroSubtitle: { color: 'rgba(255,255,255,0.9)', fontSize: 12, fontFamily: 'Montserrat-Regular' },
   body: { flex: 1, backgroundColor: '#F5F5F5', borderTopLeftRadius: 25, borderTopRightRadius: 25, marginTop: -25 },
+  pendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 14,
+    backgroundColor: '#FFF3E0',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FFE0B2',
+  },
+  pendingTitle: { fontFamily: 'Montserrat-Bold', fontSize: 14, color: '#E65100' },
+  pendingSub: { fontFamily: 'Montserrat-Regular', fontSize: 11, color: '#BF360C', marginTop: 2 },
+  syncBtn: {
+    backgroundColor: '#2E7D32',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 96,
+    alignItems: 'center',
+  },
+  syncBtnText: { color: '#fff', fontFamily: 'Montserrat-Bold', fontSize: 11 },
   listContent: { padding: 20, paddingBottom: 100 },
   lotCard: {
     backgroundColor: 'white',

@@ -11,13 +11,14 @@ import {
   Alert,
   Modal,
   Image,
+  Platform,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
 import { Picker } from '@react-native-picker/picker';
-import * as Network from 'expo-network';
+import NetInfo from '@react-native-community/netinfo';
 import * as Location from 'expo-location';
 import { Paths, File, Directory } from 'expo-file-system';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -28,6 +29,11 @@ import { batchApi, getApiError, isNetworkError } from '@/services/api';
 import { signLotPayload } from '@/lib/lot-crypto';
 import { reverseGeocodeCoords } from '@/lib/geocode';
 import type { LotSignPayload } from '@/lib/lot-payload';
+import { runPendingSync } from '@/hooks/use-sync';
+import {
+  FORM_PLACEHOLDER_COLOR,
+  FORM_TEXT_COLOR,
+} from '@/constants/form-styles';
 
 function frDateToIso(fr: string): string {
   const parts = fr.split('/');
@@ -43,6 +49,8 @@ export default function NouveauLot() {
   const { saveLot } = useLots();
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitHint, setSubmitHint] = useState<string | null>(null);
+  const [pendingBanner, setPendingBanner] = useState<string | null>(null);
 
   const [typeProduit, setTypeProduit] = useState<'Cacao' | 'Café'>('Cacao');
   const [variete, setVariete] = useState('');
@@ -118,9 +126,11 @@ export default function NouveauLot() {
     }
 
     setIsSubmitting(true);
+    setSubmitHint(null);
+    setPendingBanner(null);
     try {
-      const network = await Network.getNetworkStateAsync();
-      const isConnected = !!(network.isConnected && network.isInternetReachable);
+      const network = await NetInfo.fetch();
+      const isConnected = network.isConnected === true && network.isInternetReachable !== false;
 
       const localId = `local_${Date.now()}`;
       const culture = typeProduit === 'Cacao' ? 'Cacao' : 'Cafe';
@@ -208,6 +218,8 @@ export default function NouveauLot() {
         poids,
         destination: adresseLieu,
         parcelle,
+        culture,
+        variete,
         typeCacao: variete,
         synced: false,
         syncPhase: 'pending',
@@ -220,6 +232,7 @@ export default function NouveauLot() {
       };
 
       if (isConnected) {
+        setSubmitHint('Envoi au serveur en cours… (photo + GPS, jusqu’à 1 min)');
         try {
           const { data } = await batchApi.createWithPhoto(storedPhoto, fields);
           const serverId = data.batch?.id ?? localId;
@@ -244,13 +257,20 @@ export default function NouveauLot() {
             Alert.alert('Erreur API', getApiError(e));
             return;
           }
+          setSubmitHint('Serveur injoignable — enregistrement local…');
         }
+      } else {
+        setSubmitHint('Hors ligne — enregistrement sur l’appareil…');
       }
 
       await saveLot(lotRow);
+      setPendingBanner(
+        'Lot enregistré sur cet appareil · en attente réseau pour la blockchain. Consultez « Mes lots » (badge orange).'
+      );
+      void runPendingSync();
       Alert.alert(
-        'Mode hors-ligne',
-        'Lot signé (ECDSA) et enregistré localement. QR disponible ; synchronisation automatique à la reconnexion.',
+        'En attente réseau',
+        'Lot signé et sauvegardé localement. Il sera envoyé automatiquement dès que l’API sera joignable. Vous pouvez déjà afficher le QR code.',
         [
           {
             text: 'Voir le QR',
@@ -264,6 +284,7 @@ export default function NouveauLot() {
       Alert.alert('Erreur', 'Impossible de sauvegarder le lot.');
     } finally {
       setIsSubmitting(false);
+      setSubmitHint(null);
     }
   };
 
@@ -367,13 +388,30 @@ export default function NouveauLot() {
               </TouchableOpacity>
             </View>
 
+            {pendingBanner ? (
+              <View style={styles.pendingBanner}>
+                <MaterialCommunityIcons name="cloud-sync-outline" size={22} color="#E65100" />
+                <Text style={styles.pendingBannerText}>{pendingBanner}</Text>
+              </View>
+            ) : null}
+
             <View style={styles.form}>
               <Text style={styles.inputLabel}>Variété de {typeProduit}</Text>
-              <View style={styles.inputFrame}>
-                <Picker selectedValue={variete} onValueChange={(v) => setVariete(v)} style={styles.picker}>
-                  <Picker.Item label="Sélectionner..." value="" color="#AAA" />
+              {variete ? (
+                <Text style={styles.pickerValue}>{variete}</Text>
+              ) : null}
+              <View style={styles.pickerFrame}>
+                <Picker
+                  selectedValue={variete}
+                  onValueChange={(v) => setVariete(v)}
+                  style={styles.picker}
+                  dropdownIconColor={FORM_TEXT_COLOR}
+                  mode={Platform.OS === 'android' ? 'dropdown' : 'dialog'}
+                  itemStyle={styles.pickerItemIOS}
+                >
+                  <Picker.Item label="Sélectionner une variété…" value="" color={FORM_PLACEHOLDER_COLOR} />
                   {(typeProduit === 'Cacao' ? varietesCacao : varietesCafe).map((v) => (
-                    <Picker.Item key={v} label={v} value={v} />
+                    <Picker.Item key={v} label={v} value={v} color={FORM_TEXT_COLOR} />
                   ))}
                 </Picker>
               </View>
@@ -400,6 +438,13 @@ export default function NouveauLot() {
                   onChangeText={setParcelle}
                 />
               </View>
+
+              {submitHint ? (
+                <View style={styles.submitHintBox}>
+                  <ActivityIndicator size="small" color="#2E7D32" />
+                  <Text style={styles.submitHintText}>{submitHint}</Text>
+                </View>
+              ) : null}
 
               <TouchableOpacity
                 style={[styles.validerBtn, isSubmitting && { opacity: 0.7 }]}
@@ -507,9 +552,67 @@ const styles = StyleSheet.create({
     height: 50,
     paddingHorizontal: 12,
   },
+  pickerFrame: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    marginBottom: 4,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    minHeight: Platform.OS === 'ios' ? 52 : 48,
+  },
+  pickerValue: {
+    fontFamily: 'Montserrat-Bold',
+    fontSize: 15,
+    color: FORM_TEXT_COLOR,
+    marginBottom: 6,
+  },
+  picker: {
+    width: '100%',
+    color: FORM_TEXT_COLOR,
+    ...(Platform.OS === 'android' ? { height: 48 } : {}),
+  },
+  pickerItemIOS: {
+    fontSize: 16,
+    color: FORM_TEXT_COLOR,
+    fontFamily: 'Montserrat-Regular',
+  },
+  pendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#FFF3E0',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#FFE0B2',
+  },
+  pendingBannerText: {
+    flex: 1,
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 13,
+    color: '#E65100',
+    lineHeight: 20,
+  },
+  submitHintBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#E8F5E9',
+    borderRadius: 10,
+  },
+  submitHintText: {
+    flex: 1,
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 13,
+    color: '#1B5E20',
+  },
   iconInput: { marginRight: 10 },
-  textInput: { flex: 1, fontFamily: 'Montserrat-Regular', fontSize: 15 },
-  picker: { flex: 1, marginLeft: -10 },
+  textInput: { flex: 1, fontFamily: 'Montserrat-Regular', fontSize: 15, color: FORM_TEXT_COLOR },
   validerBtn: {
     backgroundColor: '#2E7D32',
     flexDirection: 'row',

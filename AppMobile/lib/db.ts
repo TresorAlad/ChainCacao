@@ -72,10 +72,18 @@ CREATE TABLE IF NOT EXISTS coop_lots_cache (
 
 async function initSchema(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(SCHEMA_SQL);
-  try {
-    await db.execAsync('ALTER TABLE pending_coop_receptions ADD COLUMN poids_constate REAL');
-  } catch {
-    /* colonne déjà présente */
+  const alters = [
+    'ALTER TABLE pending_coop_receptions ADD COLUMN poids_constate REAL',
+    'ALTER TABLE local_lots ADD COLUMN parcelle TEXT',
+    'ALTER TABLE local_lots ADD COLUMN culture TEXT',
+    'ALTER TABLE local_lots ADD COLUMN variete TEXT',
+  ];
+  for (const sql of alters) {
+    try {
+      await db.execAsync(sql);
+    } catch {
+      /* colonne déjà présente */
+    }
   }
 }
 

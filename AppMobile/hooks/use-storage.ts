@@ -21,6 +21,11 @@ export interface Lot {
   destination?: string;
   /** Nom de parcelle saisi par l’utilisateur (CDC). */
   parcelle?: string;
+  /** Culture : Cacao ou Cafe. */
+  culture?: string;
+  /** Variété (Amelonado, Arabica, …). */
+  variete?: string;
+  /** @deprecated Utiliser variete — conservé pour lots déjà enregistrés. */
   typeCacao?: string;
   synced: boolean;
   /** Phase sync CDC : données texte puis photo (mode 2G). */

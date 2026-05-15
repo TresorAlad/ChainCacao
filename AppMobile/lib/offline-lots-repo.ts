@@ -16,6 +16,8 @@ type LotRow = {
   acheteur: string | null;
   destination: string | null;
   parcelle: string | null;
+  culture: string | null;
+  variete: string | null;
   type_cacao: string | null;
   synced: number;
   sync_phase: string | null;
@@ -38,7 +40,9 @@ function rowToLot(row: LotRow): Lot {
     acheteur: row.acheteur ?? undefined,
     destination: row.destination ?? undefined,
     parcelle: row.parcelle ?? undefined,
-    typeCacao: row.type_cacao ?? undefined,
+    culture: row.culture ?? undefined,
+    variete: row.variete ?? row.type_cacao ?? undefined,
+    typeCacao: row.variete ?? row.type_cacao ?? undefined,
     synced: row.synced === 1,
     syncPhase: (row.sync_phase as Lot['syncPhase']) ?? undefined,
     chainStatut: row.chain_statut ?? undefined,
@@ -53,10 +57,10 @@ function rowToLot(row: LotRow): Lot {
 
 const INSERT_LOT_SQL = `
 INSERT OR REPLACE INTO local_lots (
-  id, actor_id, title, status, date, poids, acheteur, destination, parcelle, type_cacao,
+  id, actor_id, title, status, date, poids, acheteur, destination, parcelle, culture, variete, type_cacao,
   synced, sync_phase, chain_statut, photo_uri, latitude, longitude,
   signature, payload_hash, signer_pubkey, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 async function insertLot(db: SQLiteDatabase, actorId: string, lot: Lot, now: string): Promise<void> {
@@ -70,7 +74,9 @@ async function insertLot(db: SQLiteDatabase, actorId: string, lot: Lot, now: str
     lot.acheteur ?? null,
     lot.destination ?? null,
     lot.parcelle ?? null,
-    lot.typeCacao ?? null,
+    lot.culture ?? null,
+    lot.variete ?? lot.typeCacao ?? null,
+    lot.variete ?? lot.typeCacao ?? null,
     lot.synced ? 1 : 0,
     lot.syncPhase ?? null,
     lot.chainStatut ?? null,

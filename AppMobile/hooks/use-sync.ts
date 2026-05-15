@@ -45,6 +45,19 @@ function convertDateToISO(frDate: string): string {
   return new Date().toISOString().split('T')[0];
 }
 
+function resolveLotCulture(lot: Lot): string {
+  const c = (lot.culture || '').trim();
+  if (c) return c === 'Café' ? 'Cafe' : c;
+  const t = (lot.title || '').toLowerCase();
+  if (t.startsWith('café') || t.startsWith('cafe')) return 'Cafe';
+  return 'Cacao';
+}
+
+function resolveLotVariete(lot: Lot): string | undefined {
+  const v = (lot.variete || lot.typeCacao || '').trim();
+  return v || undefined;
+}
+
 function lotToSignPayload(lot: Lot, actorId: string): LotSignPayload | null {
   const lat = lot.latitude;
   const lon = lot.longitude;
@@ -52,17 +65,18 @@ function lotToSignPayload(lot: Lot, actorId: string): LotSignPayload | null {
   const lieu = (lot.destination || '').trim();
   if (!lieu) return null;
   const parcelleName = (lot.parcelle || lot.destination || '').trim();
+  const variete = resolveLotVariete(lot);
   return {
     client_lot_id: lot.id,
-    culture: (lot.typeCacao || '').trim() || 'Cacao',
-    variete: lot.typeCacao,
+    culture: resolveLotCulture(lot),
+    variete,
     quantite: parseFloat(String(lot.poids).replace(',', '.')) || 0,
     lieu,
     latitude: lat,
     longitude: lon,
     parcelle: parcelleName || undefined,
     date_recolte: convertDateToISO(lot.date),
-    notes: lot.title !== lot.typeCacao ? lot.title : undefined,
+    notes: variete,
     actor_id: actorId,
   };
 }
@@ -255,14 +269,19 @@ async function syncPendingLots(): Promise<void> {
   }
 }
 
+/** Lance la synchro des lots / file d’attente si le réseau est disponible. */
+export async function runPendingSync(): Promise<void> {
+  const state = await NetInfo.fetch();
+  if (state.isConnected) {
+    await syncPendingLots();
+  }
+}
+
 export function useSync() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const triggerSync = useCallback(async () => {
-    const state = await NetInfo.fetch();
-    if (state.isConnected) {
-      await syncPendingLots();
-    }
+    await runPendingSync();
   }, []);
 
   useEffect(() => {

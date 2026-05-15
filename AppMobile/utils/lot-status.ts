@@ -87,13 +87,13 @@ export function mapCdcLotDisplay(opts: {
   if (c === 'green' && s === 'transfere') return { ...base, label: 'Transféré' };
   if (c === 'orange' && s === 'en_transit') return { ...base, label: 'En transit' };
   if (c === 'orange' && s === 'recu') return { ...base, label: 'Reçu' };
-  if (!opts.synced) return { ...base, label: 'En attente de sync' };
+  if (!opts.synced) return { ...base, label: 'En attente réseau' };
   return base;
 }
 
 /** Statut local (sync hors-ligne) → libellé affiché. */
 export function mapLocalSyncStatus(synced: boolean, status?: string): string {
-  if (!synced) return 'En attente';
+  if (!synced) return 'En attente réseau';
   if (status === 'Problème') return 'Problème';
   if (status === 'En cours') return 'En cours';
   return 'Synchronisé';
