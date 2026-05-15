@@ -10,7 +10,7 @@ import {
   Alert,
   TextInput,
 } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
@@ -23,6 +23,7 @@ const INITIAL_DATA = [
 ];
 
 export default function Portefeuille() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [solde, setSolde] = useState(0);
@@ -261,7 +262,7 @@ export default function Portefeuille() {
           </View>
         </View>
 
-        <View style={styles.bottomTab}>
+        <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
           <TabItem icon="home-outline" label="Accueil" onPress={() => navigateTo('/(agriculteur)/accueil')} />
           <TabItem icon="archive-outline" label="Mes Lots" onPress={() => navigateTo('/(agriculteur)/meslots')} />
           <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => navigateTo('/(agriculteur)/nouveaulot')} />

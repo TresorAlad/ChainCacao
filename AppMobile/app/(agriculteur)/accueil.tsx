@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router'; 
 import * as Font from 'expo-font';
@@ -21,6 +21,7 @@ import { myLotsApi, getApiError } from '@/services/api';
 const { width } = Dimensions.get('window');
 
 export default function AccueilAgriculteur() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<'Semaine' | 'Mois'>('Semaine'); 
@@ -178,7 +179,7 @@ export default function AccueilAgriculteur() {
         </View>
 
         {/* NAVIGATION BASSE */}
-        <View style={styles.bottomTab}>
+        <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
           <TabItem icon="home" label="Accueil" active onPress={() => {}} />
           <TabItem icon="archive-outline" label="Mes Lots" onPress={() => handleNavigation('/(agriculteur)/meslots')} />
           <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => handleNavigation('/(agriculteur)/nouveaulot')} />

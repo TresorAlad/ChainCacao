@@ -9,13 +9,14 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
 import { myLotsApi, marginApi, getApiError } from '@/services/api';
 
 export default function MainDashboard() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [lotsRecus, setLotsRecus] = useState(0);
@@ -155,7 +156,7 @@ export default function MainDashboard() {
         </View>
 
         {/* BARRE DE NAVIGATION BASSE (CORRIGÉE) */}
-        <View style={styles.bottomTab}>
+        <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
           <TabItem 
             icon="home-variant" 
             label="Dashboard" 
@@ -175,7 +176,7 @@ export default function MainDashboard() {
           <TabItem 
             icon="chart-timeline-variant" 
             label="Historique" 
-            onPress={() => router.push('/historique' as any)} 
+            onPress={() => router.push('/(cooperative)/historique' as any)} 
           />
           <TabItem 
             icon="account" 

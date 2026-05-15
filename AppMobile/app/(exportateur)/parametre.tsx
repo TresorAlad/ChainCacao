@@ -1,3 +1,4 @@
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useState } from 'react';
 import { 
   View, Text, StyleSheet, ScrollView, 
@@ -8,13 +9,20 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/use-auth';
 
 export default function SettingsScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   
   // États pour les switchs
   const [isNotifEnabled, setIsNotifEnabled] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isBiometricEnabled, setIsBiometricEnabled] = useState(true);
+
+  // Dynamic user data
+  const userInitials = user?.name ? user.name.substring(0, 2).toUpperCase() : 'CC';
+  const userName = user?.name || 'Utilisateur';
+  const userRole = user?.role || 'Rôle non défini';
+  const userLocation = user?.gps_location || 'Localisation non définie';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -31,14 +39,13 @@ export default function SettingsScreen() {
           <Text style={styles.headerTitle}>Paramètres</Text>
         </View>
 
-        {/* SECTION PROFIL RAPIDE */}
         <View style={styles.profileCard}>
           <View style={styles.avatarContainer}>
-            <Text style={styles.avatarText}>AD</Text>
+            <Text style={styles.avatarText}>{userInitials}</Text>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.userName}>Abalo Dossè</Text>
-            <Text style={styles.userRole}>Exportateur Agréé • Lomé, Togo</Text>
+            <Text style={styles.userName}>{userName}</Text>
+            <Text style={styles.userRole}>{userRole} • {userLocation}</Text>
           </View>
           <TouchableOpacity style={styles.editBtn}>
             <MaterialCommunityIcons name="pencil-outline" size={20} color="#1B5E20" />
@@ -109,12 +116,12 @@ export default function SettingsScreen() {
       </ScrollView>
 
       {/* TA BOTTOM TAB HARMONISÉE */}
-      <View style={styles.bottomTab}>
+      <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
         <TabItem icon="home-variant" label="Accueil" onPress={() => router.push('/(exportateur)/accueil')} />
         <TabItem icon="wallet" label="Portefeuille" onPress={() => router.push('/(exportateur)/portefeuille' as any)} />
         <TabItem icon="qrcode-scan" label="Scanner" onPress={() => router.push('/(exportateur)/scanner')} />
         <TabItem icon="package-variant-closed" label="Stock" onPress={() => router.push('/(exportateur)/stock')} />
-        <TabItem icon="file-document-outline" label="Rapport" onPress={() => router.push('/(exportateur)/rapport')} />
+        <TabItem icon="history" label="Historique" onPress={() => router.push('/(exportateur)/historique')} />
       </View>
     </SafeAreaView>
   );

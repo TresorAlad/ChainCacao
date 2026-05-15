@@ -11,7 +11,7 @@ import {
   RefreshControl,
   DeviceEventEmitter,
 } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
@@ -47,6 +47,7 @@ function mapServerLot(b: BatchResponse): DisplayLot {
 }
 
 export default function MesLots() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
   const [fontsLoaded, setFontsLoaded] = useState(false);
@@ -189,7 +190,7 @@ export default function MesLots() {
           />
         </View>
 
-        <View style={styles.bottomTab}>
+        <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
           <TabItem icon="home-outline" label="Accueil" onPress={() => handleNavigation('/(agriculteur)/accueil')} />
           <TabItem icon="archive" label="Mes Lots" active onPress={() => {}} />
           <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => handleNavigation('/(agriculteur)/nouveaulot')} />

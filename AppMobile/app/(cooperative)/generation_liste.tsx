@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   myLotsApi,
   groupedListApi,
@@ -57,6 +57,7 @@ function toRow(b: BatchResponse): LotRow {
 }
 
 export default function GenerationListeScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const brandGreen = '#2E7D32';
 
@@ -218,7 +219,7 @@ export default function GenerationListeScreen() {
         </View>
       )}
 
-      <View style={styles.bottomTab}>
+      <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
         <TabItem icon="home-variant" label="Dashboard" onPress={() => router.push('/(cooperative)/accueil' as any)} />
         <TabItem icon="camera" label="Scanner" onPress={() => router.push('/(cooperative)/scanner' as any)} />
         <TabItem icon="package-variant-closed" label="Lots" active color={brandGreen} />

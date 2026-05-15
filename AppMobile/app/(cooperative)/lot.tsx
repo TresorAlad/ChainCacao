@@ -12,7 +12,7 @@ import {
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router'; 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -27,6 +27,7 @@ interface Production {
 }
 
 export default function ProductionScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams(); 
   const brandGreen = '#2E7D32';
@@ -128,7 +129,7 @@ export default function ProductionScreen() {
       </View>
 
       {/* NAVIGATION BASSE */}
-      <View style={styles.bottomTab}>
+      <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
         <TabItem 
           icon="home-variant" 
           label="Dashboard" 

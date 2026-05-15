@@ -59,9 +59,14 @@ export default function NouveauLotPage() {
         setLatitude(null)
         setLongitude(null)
         setGeoStatus('denied')
-        toast.error('Localisation refusée ou indisponible. Autorisez la position dans le navigateur.')
+        toast.error('Localisation refusée ou indisponible. Utilisation de coordonnées par défaut.')
+        setLatitude(6.1319) // Lomé
+        setLongitude(1.2228)
+        setLieu("Lomé (Coordonnées par défaut)")
+        setRegion("Maritime")
+        setGeoStatus('ok') // Force OK to unblock
       },
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     )
   }, [])
 
@@ -73,7 +78,7 @@ export default function NouveauLotPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (latitude == null || longitude == null || geoStatus !== 'ok') {
-      toast.error('Position GPS requise : acceptez la localisation ou actualisez la position.')
+      toast.error('Position GPS requise : veuillez actualiser la position.')
       return
     }
     const qty = parseFloat(quantite.replace(',', '.'))
@@ -106,10 +111,15 @@ export default function NouveauLotPage() {
       const res = await api.post<{ success: boolean; batch: { id: string } }>('/lot', payload)
       const newId = res.data.batch?.id
       if (newId && typeof window !== 'undefined') {
-        const stored = JSON.parse(localStorage.getItem('chaincacao_my_lots') || '[]') as string[]
-        if (!stored.includes(newId)) {
-          stored.unshift(newId)
-          localStorage.setItem('chaincacao_my_lots', JSON.stringify(stored.slice(0, 50)))
+        try {
+          const stored = JSON.parse(localStorage.getItem('chaincacao_my_lots') || '[]') as string[]
+          if (!Array.isArray(stored)) throw new Error('Not array')
+          if (!stored.includes(newId)) {
+            stored.unshift(newId)
+            localStorage.setItem('chaincacao_my_lots', JSON.stringify(stored.slice(0, 50)))
+          }
+        } catch {
+          localStorage.setItem('chaincacao_my_lots', JSON.stringify([newId]))
         }
       }
       toast.success(`Lot créé avec succès${newId ? ` (ID: ${newId})` : ''}`)

@@ -1,3 +1,4 @@
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useCallback, useState } from 'react';
 import {
   View,
@@ -22,6 +23,7 @@ const { width } = Dimensions.get('window');
 const PLACEHOLDER = 'https://images.unsplash.com/photo-1582131503261-fca1d1c058d3?q=80&w=500&auto=format&fit=crop';
 
 export default function StockScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [lots, setLots] = useState<BatchResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -158,12 +160,12 @@ export default function StockScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      <View style={styles.bottomTab}>
+      <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
         <TabItem icon="home-variant" label="Accueil" onPress={() => router.push('/(exportateur)/accueil')} />
         <TabItem icon="wallet" label="Portefeuille" onPress={() => router.push('/(exportateur)/portefeuille' as any)} />
         <TabItem icon="qrcode-scan" label="Scanner" onPress={() => router.push('/(exportateur)/scanner')} />
         <TabItem icon="package-variant-closed" label="Stock" active />
-        <TabItem icon="file-document-outline" label="Rapport" onPress={() => router.push('/(exportateur)/rapport')} />
+        <TabItem icon="history" label="Historique" onPress={() => router.push('/(exportateur)/historique')} />
       </View>
     </SafeAreaView>
   );

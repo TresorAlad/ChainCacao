@@ -1,5 +1,6 @@
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, StatusBar, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, StatusBar, Alert } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
@@ -8,6 +9,7 @@ import { batchApi, getApiError, isNetworkError } from '@/services/api';
 import { extractLotIdFromScanPayload, isGroupedListId } from '@/utils/lotQr';
 
 export default function ScannerScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
   const [torch, setTorch] = useState(false);
@@ -111,7 +113,7 @@ export default function ScannerScreen() {
           </View>
 
           {/* LA BOTTOM TAB MÉMORISÉE (Structure à 5 onglets) */}
-          <View style={styles.bottomTab}>
+          <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
             <TabItem 
               icon="home-variant" 
               label="Accueil" 
@@ -132,11 +134,7 @@ export default function ScannerScreen() {
               label="Stock" 
               onPress={() => router.push('/(exportateur)/stock')} 
             />
-            <TabItem 
-              icon="file-document-outline" 
-              label="Rapport" 
-              onPress={() => router.push('/(exportateur)/rapport')} 
-            />
+            <TabItem icon="history" label="Historique" onPress={() => router.push('/(exportateur)/historique')} />
           </View>
         </SafeAreaView>
       </CameraView>

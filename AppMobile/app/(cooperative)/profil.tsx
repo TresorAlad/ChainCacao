@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Font from 'expo-font';
+import { useAuth } from '@/hooks/use-auth';
 
 const { width } = Dimensions.get('window');
 
@@ -12,11 +13,10 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [fontsLoaded, setFontsLoaded] = useState(false);
 
-  const userData = {
-    nom: "Koffi Mensah",
-    role: "Coopérative Admin",
-    solde: "450.000",
-  };
+  const { user, logout } = useAuth();
+  
+  const userNom = user?.name || "Coopérative Admin";
+  const userSolde = "—"; // Le solde peut venir d'une API de portefeuille si la coopérative en a un
 
   // CHARGEMENT DES POLICES (Chemin corrigé pour dossier de groupe)
   useEffect(() => {
@@ -58,8 +58,8 @@ export default function ProfileScreen() {
 
             <View style={styles.walletHeader}>
                <View>
-                 <Text style={styles.walletLabel}>Solde disponible</Text>
-                 <Text style={styles.walletValue}>{userData.solde} <Text style={styles.currency}>FCFA</Text></Text>
+                 <Text style={styles.walletLabel}>{userNom}</Text>
+                 <Text style={styles.walletValue}>{userSolde} <Text style={styles.currency}>FCFA</Text></Text>
                </View>
                <MaterialCommunityIcons name="shield-check" size={24} color="white" />
             </View>
@@ -113,7 +113,10 @@ export default function ProfileScreen() {
             icon="logout" 
             label="Déconnexion" 
             isDestructive 
-            onPress={() => router.replace('/')} 
+            onPress={async () => {
+              await logout();
+              router.replace('/');
+            }} 
           />
         </View>
 

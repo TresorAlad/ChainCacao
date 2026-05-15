@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -22,7 +22,7 @@ import {
 import toast from 'react-hot-toast'
 import { filterAnnuaireActors } from '@/lib/actors-utils'
 
-export default function MinistereDashboardPage() {
+function MinistereDashboardContent() {
   const { isAuthenticated, loading, user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -305,5 +305,13 @@ export default function MinistereDashboardPage() {
         </div>
       </div>
     </RoleLayout>
+  )
+}
+
+export default function MinistereDashboardPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center">Chargement...</div>}>
+      <MinistereDashboardContent />
+    </Suspense>
   )
 }

@@ -11,7 +11,7 @@ import {
   TextInput,
   RefreshControl,
 } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
@@ -24,6 +24,7 @@ function fmt(n: number) {
 }
 
 export default function PortefeuilleExportateurScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
   const isTransformateur = (user?.role ?? '').toLowerCase().includes('transform');
@@ -244,12 +245,12 @@ export default function PortefeuilleExportateurScreen() {
         </View>
 
         {/* BOTTOM NAVIGATION */}
-        <View style={styles.bottomTab}>
+        <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
           <TabItem icon="home-variant" label="Accueil" onPress={() => router.replace('/(exportateur)/accueil')} />
           <TabItem icon="wallet" label="Portefeuille" active />
           <TabItem icon="qrcode-scan" label="Scanner" onPress={() => router.push('/(exportateur)/scanner')} />
           <TabItem icon="package-variant-closed" label="Stock" onPress={() => router.push('/(exportateur)/stock')} />
-          <TabItem icon="file-document-outline" label="Rapport" onPress={() => router.push('/(exportateur)/rapport')} />
+          <TabItem icon="history" label="Historique" onPress={() => router.push('/(exportateur)/historique')} />
         </View>
       </SafeAreaView>
     </SafeAreaProvider>

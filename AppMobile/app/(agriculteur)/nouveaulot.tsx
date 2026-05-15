@@ -14,7 +14,7 @@ import {
   Platform,
   Linking,
 } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
@@ -46,6 +46,7 @@ function frDateToIso(fr: string): string {
 
 
 export default function NouveauLot() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
   const { saveLot } = useLots();
@@ -173,7 +174,7 @@ export default function NouveauLot() {
       pendingDir.create({ intermediates: true, idempotent: true });
       const destFile = new File(pendingDir, `${localId}.jpg`);
       const srcFile = new File(photoUri);
-      srcFile.copy(destFile);
+      await srcFile.copy(destFile);
       const storedPhoto = destFile.uri;
 
       let lat = gpsLat ?? undefined;
@@ -461,7 +462,7 @@ export default function NouveauLot() {
           </ScrollView>
         </View>
 
-        <View style={styles.bottomTab}>
+        <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
           <TabItem icon="home-outline" label="Accueil" onPress={() => router.replace('/(agriculteur)/accueil' as any)} />
           <TabItem icon="archive-outline" label="Mes Lots" onPress={() => router.replace('/(agriculteur)/meslots' as any)} />
           <TabItem icon="plus-circle" label="Nouveau" active isMain />

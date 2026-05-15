@@ -8,26 +8,23 @@ import {
   StatusBar,
   ActivityIndicator
 } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
 import { myLotsApi, portefeuilleApi, getApiError } from '@/services/api';
 
 const EXPORT_DATA = {
-  recentShipments: [
-    { id: 'S1', destination: 'Anvers, Belgique', poids: '25T', statut: 'En mer', date: '10/05/2026' },
-    { id: 'S2', destination: 'Le Havre, France', poids: '20T', statut: 'Chargement', date: '12/05/2026' },
-    { id: 'S3', destination: 'Hambourg, Allemagne', poids: '18T', statut: 'Douane', date: '13/05/2026' },
-  ],
+  recentShipments: [],
 };
 
 export default function ExportateurDashboard() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [stockTotal, setStockTotal] = useState('0');
   const [lotsExpedies, setLotsExpedies] = useState(0);
-  const [shipments, setShipments] = useState(EXPORT_DATA.recentShipments);
+  const [shipments, setShipments] = useState<any[]>(EXPORT_DATA.recentShipments);
   const [solde, setSolde] = useState<number | null>(null);
 
   useEffect(() => {
@@ -74,6 +71,8 @@ export default function ExportateurDashboard() {
       .catch(() => {});
   }, []);
 
+  const handleNavigation = (path: any) => router.push(path);
+
   if (!fontsLoaded) return (
     <View style={styles.loaderContainer}>
       <ActivityIndicator size="large" color="#1B5E20" />
@@ -92,7 +91,6 @@ export default function ExportateurDashboard() {
             <Text style={styles.welcomeText}>Bonjour,</Text>
             <Text style={styles.headerTitle}>Espace Exportateur</Text>
           </View>
-          {/* CORRECTION : Route vers la page paramètre */}
           <TouchableOpacity 
             activeOpacity={0.7}
             onPress={() => router.push('/(exportateur)/parametre')}
@@ -191,12 +189,12 @@ export default function ExportateurDashboard() {
         </View>
 
         {/* BOTTOM NAVIGATION */}
-        <View style={styles.bottomTab}>
+        <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
           <TabItem icon="home-variant" label="Accueil" active />
-          <TabItem icon="wallet" label="Portefeuille" onPress={() => router.push('/(exportateur)/portefeuille' as any)} />
-          <TabItem icon="qrcode-scan" label="Scanner" onPress={() => router.push('/(exportateur)/scanner')} />
-          <TabItem icon="package-variant-closed" label="Stock" onPress={() => router.push('/(exportateur)/stock')} />
-          <TabItem icon="file-document-outline" label="Rapport" onPress={() => router.push('/(exportateur)/rapport')} />
+          <TabItem icon="wallet" label="Portefeuille" onPress={() => handleNavigation('/(exportateur)/portefeuille')} />
+          <TabItem icon="qrcode-scan" label="Scanner" onPress={() => handleNavigation('/(exportateur)/scanner')} />
+          <TabItem icon="package-variant-closed" label="Stock" onPress={() => handleNavigation('/(exportateur)/stock')} />
+          <TabItem icon="history" label="Historique" onPress={() => handleNavigation('/(exportateur)/historique')} />
         </View>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -291,21 +289,9 @@ const styles = StyleSheet.create({
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   statusText: { color: 'white', fontSize: 10, fontFamily: 'Montserrat-Bold' },
 
-  eudrBanner: {
-    backgroundColor: '#1B5E20',
-    padding: 20,
-    borderRadius: 25,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    elevation: 4
-  },
-  eudrBannerTitle: { color: 'white', fontFamily: 'Montserrat-Bold', fontSize: 16 },
-  eudrBannerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontFamily: 'Montserrat-Regular', marginTop: 2 },
-
   bottomTab: { 
     position: 'absolute', bottom: 0, left: 0, right: 0, 
-    height: 85, backgroundColor: 'white', flexDirection: 'row', 
+    backgroundColor: 'white', flexDirection: 'row', 
     borderTopLeftRadius: 25, borderTopRightRadius: 25,
     elevation: 20
   },
