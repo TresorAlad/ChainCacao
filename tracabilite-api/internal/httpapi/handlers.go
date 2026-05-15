@@ -651,23 +651,32 @@ func (h *Handler) AlertsCount(c *gin.Context) {
 }
 
 func (h *Handler) GetActorLots(c *gin.Context) {
+	start := time.Now()
 	actorID := strings.TrimSpace(c.Param("id"))
+	callerID := c.GetString(auth.ContextActorID)
+	callerRole := c.GetString(auth.ContextRole)
 	if actorID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "identifiant acteur requis"})
 		return
 	}
 	target, err := h.actors.FindByID(c.Request.Context(), actorID)
 	if err != nil {
+		log.Printf("[GetActorLots] not_found actor_id=%s caller_id=%s caller_role=%v duration_ms=%d",
+			actorID, callerID, callerRole, time.Since(start).Milliseconds())
 		c.JSON(http.StatusNotFound, gin.H{"error": "acteur introuvable"})
 		return
 	}
 	r := strings.ToLower(strings.TrimSpace(string(target.Role)))
 	if r == string(models.RoleAdmin) || r == string(models.RoleMinistere) {
+		log.Printf("[GetActorLots] forbidden_hidden_role actor_id=%s caller_id=%s duration_ms=%d",
+			actorID, callerID, time.Since(start).Milliseconds())
 		c.JSON(http.StatusForbidden, gin.H{"error": "profil non consultable dans l'annuaire"})
 		return
 	}
 	lots, err := h.batch.GetMyLots(c.Request.Context(), actorID)
 	if err != nil {
+		log.Printf("[GetActorLots] lots_error actor_id=%s caller_id=%s err=%v duration_ms=%d",
+			actorID, callerID, err, time.Since(start).Milliseconds())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -684,6 +693,8 @@ func (h *Handler) GetActorLots(c *gin.Context) {
 		}
 		byStatus[st]++
 	}
+	log.Printf("[GetActorLots] ok actor_id=%s caller_id=%s nb_lots=%d duration_ms=%d",
+		actorID, callerID, len(lots), time.Since(start).Milliseconds())
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"actor":   target,
@@ -1333,16 +1344,19 @@ func (h *Handler) AdminCreateActor(c *gin.Context) {
 		PIN      string      `json:"pin" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("[AdminCreateActor] invalid_payload err=%v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload invalide"})
 		return
 	}
 	actor, err := h.actors.Register(c.Request.Context(), req.Nom, req.Email, req.Password, req.OrgID, req.Role)
 	if err != nil {
+		log.Printf("[AdminCreateActor] register_fail email=%s role=%s err=%v", req.Email, req.Role, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	actor, err = h.actors.SetPIN(c.Request.Context(), actor.ID, req.PIN)
 	if err != nil {
+		log.Printf("[AdminCreateActor] set_pin_fail actor_id=%s email=%s err=%v", actor.ID, req.Email, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -1351,6 +1365,7 @@ func (h *Handler) AdminCreateActor(c *gin.Context) {
 	if walletCreditErr != nil {
 		adminResp["wallet_credit_warning"] = walletCreditErr.Error()
 	}
+	log.Printf("[AdminCreateActor] ok actor_id=%s email=%s role=%s admin=%s", actor.ID, actor.Email, actor.Role, c.GetString(auth.ContextActorID))
 	c.JSON(http.StatusCreated, adminResp)
 }
 

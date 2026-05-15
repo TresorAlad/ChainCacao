@@ -71,8 +71,8 @@ api.interceptors.response.use(
   }
 );
 
-/** Contexte d’erreur : évite d’associer connexion/inscription à un « mode hors-ligne lots ». */
-export type GetApiErrorKind = 'default' | 'auth' | 'lots_offline';
+/** Contexte d’erreur : messages plus explicites pour l’auth. */
+export type GetApiErrorKind = 'default' | 'auth';
 
 // Normaliser les erreurs API
 export function getApiError(e: unknown, kind: GetApiErrorKind = 'default'): string {
@@ -99,10 +99,7 @@ export function getApiError(e: unknown, kind: GetApiErrorKind = 'default'): stri
         `Votre connexion Wi-Fi/4G fonctionne normalement.`
       );
     }
-    if (kind === 'lots_offline') {
-      return `Le serveur (${API_BASE}) n'a pas répondu. Le lot sera enregistré localement et envoyé automatiquement dès que le serveur sera disponible.`;
-    }
-    return `Impossible de joindre le serveur (${API_BASE}).`;
+    return `Impossible de joindre le serveur (${API_BASE}). Réessayez lorsque la connexion est disponible.`;
   }
   return err.message || 'Erreur inconnue';
 }
@@ -225,6 +222,7 @@ export interface BatchResponse {
   id: string;
   tx_hash?: string;
   culture?: string;
+  variete?: string;
   quantite?: number;
   lieu?: string;
   date_recolte?: string;
@@ -372,46 +370,6 @@ export const actorsApi = {
 
 export const myLotsApi = {
   list: () => api.get<MyLotsResponse>('/api/v1/actors/me/lots'),
-};
-
-// ─── SYNC OFFLINE (tableau attendu par le backend) ───────────────────────────
-
-export interface SyncBatchInput {
-  client_lot_id?: string;
-  culture: string;
-  variete?: string;
-  quantite: number;
-  lieu: string;
-  latitude: number;
-  longitude: number;
-  region?: string;
-  village?: string;
-  parcelle?: string;
-  date_recolte: string;
-  photo_url?: string;
-  notes?: string;
-  payload_hash?: string;
-  signature?: string;
-  signer_pubkey?: string;
-}
-
-export interface SyncResultItem {
-  index: number;
-  client_lot_id?: string;
-  lot_id?: string;
-  tx_hash?: string;
-  error?: string;
-}
-
-export interface SyncOfflineResponse {
-  success?: boolean;
-  results?: SyncResultItem[];
-}
-
-export const syncApi = {
-  /** POST /api/v1/sync — corps = tableau de lots à créer côté serveur */
-  pushLots: (items: SyncBatchInput[]) =>
-    api.post<SyncOfflineResponse>('/api/v1/sync', items),
 };
 
 // ─── WALLET ─────────────────────────────────────────────────────────────────

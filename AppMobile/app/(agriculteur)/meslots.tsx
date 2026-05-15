@@ -17,9 +17,7 @@ import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
 
 import { useAuth } from '@/hooks/use-auth';
-import { readLotsListForActor, type Lot } from '@/hooks/use-storage';
-import { runPendingSync } from '@/hooks/use-sync';
-import { myLotsApi, type BatchResponse, getApiError, isNetworkError } from '@/services/api';
+import { myLotsApi, type BatchResponse, getApiError } from '@/services/api';
 import { LOTS_UPDATED_EVENT } from '@/lib/storage-keys';
 import { mapCdcLotDisplay } from '@/utils/lot-status';
 
@@ -32,7 +30,6 @@ type DisplayLot = {
   statutColor: string;
   statutTextColor: string;
   cdcColor: 'red' | 'orange' | 'green' | 'blue' | 'grey';
-  isSynced: boolean;
 };
 
 function mapServerLot(b: BatchResponse): DisplayLot {
@@ -46,26 +43,6 @@ function mapServerLot(b: BatchResponse): DisplayLot {
     statutColor: cdc.color,
     statutTextColor: cdc.textColor,
     cdcColor: b.statut === 'paye' || b.statut === 'transfere' ? 'green' : 'orange',
-    isSynced: true,
-  };
-}
-
-function mapLocalLot(l: Lot): DisplayLot {
-  const cdc = mapCdcLotDisplay({
-    synced: l.synced,
-    chainStatut: l.chainStatut,
-    localStatus: l.status,
-  });
-  return {
-    id: l.id,
-    nom: l.title,
-    poids: l.poids,
-    date: l.date,
-    statut: l.syncPhase === 'photo_pending' ? 'Photo en attente réseau' : cdc.label,
-    statutColor: cdc.color,
-    statutTextColor: cdc.textColor,
-    cdcColor: !l.synced ? 'red' : l.syncPhase === 'photo_pending' ? 'orange' : 'orange',
-    isSynced: l.synced,
   };
 }
 
@@ -74,35 +51,23 @@ export default function MesLots() {
   const { user } = useAuth();
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  /** Indicateur léger uniquement si l’API liste a échoué (pas la détection NetInfo, souvent fausse). */
-  const [listApiFailed, setListApiFailed] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
   const [lots, setLots] = useState<DisplayLot[]>([]);
-  const pendingCount = lots.filter((l) => !l.isSynced).length;
 
   const loadData = useCallback(async () => {
     setRefreshing(true);
+    setListError(null);
     try {
-      const local = await readLotsListForActor(user?.id);
-      const localMapped = local.map(mapLocalLot);
-      const byId = new Map<string, DisplayLot>();
-      localMapped.forEach((l) => byId.set(l.id, l));
-
-      if (user?.id) {
-        try {
-          const { data } = await myLotsApi.list();
-          setListApiFailed(false);
-          const remote = (data.lots ?? []).map(mapServerLot);
-          remote.forEach((l) => byId.set(l.id, l));
-        } catch (e) {
-          setListApiFailed(isNetworkError(e));
-          console.warn('API mes lots:', getApiError(e, 'lots_offline'));
-        }
+      if (!user?.id) {
+        setLots([]);
+        return;
       }
-
-      setLots(Array.from(byId.values()).sort((a, b) => (a.date < b.date ? 1 : -1)));
+      const { data } = await myLotsApi.list();
+      const remote = (data.lots ?? []).map(mapServerLot);
+      setLots(remote.sort((a, b) => (a.date < b.date ? 1 : -1)));
     } catch (e) {
-      console.error('Erreur de chargement', e);
+      setListError(getApiError(e));
+      console.warn('API mes lots:', e);
     } finally {
       setRefreshing(false);
     }
@@ -132,16 +97,6 @@ export default function MesLots() {
     return () => sub.remove();
   }, [loadData]);
 
-  const handleRetrySync = async () => {
-    setSyncing(true);
-    try {
-      await runPendingSync();
-      await loadData();
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   const handleNavigation = (path: string) => {
     router.replace(path as any);
   };
@@ -158,19 +113,11 @@ export default function MesLots() {
       <View style={styles.lotMainInfo}>
         <View style={styles.syncIndicator}>
           <MaterialCommunityIcons
-            name={
-              item.cdcColor === 'green'
-                ? 'cloud-check'
-                : item.cdcColor === 'red'
-                  ? 'cloud-off-outline'
-                  : 'cloud-sync-outline'
-            }
+            name={item.cdcColor === 'green' ? 'cloud-check' : 'cloud-outline'}
             size={14}
             color={item.statutTextColor}
           />
-          <Text style={[styles.syncText, { color: item.statutTextColor }]}>
-            {item.isSynced ? 'Synchronisé' : 'En attente réseau'}
-          </Text>
+          <Text style={[styles.syncText, { color: item.statutTextColor }]}>Serveur</Text>
         </View>
 
         <View style={styles.rowBetween}>
@@ -214,39 +161,15 @@ export default function MesLots() {
               <Text style={styles.heroCount}>{lots.length} lots</Text>
             </View>
             <View style={styles.statusRow}>
-              <View style={[styles.dot, { backgroundColor: listApiFailed ? '#FFA726' : '#4CAF50' }]} />
+              <View style={[styles.dot, { backgroundColor: listError ? '#FFA726' : '#4CAF50' }]} />
               <Text style={styles.heroSubtitle}>
-                {listApiFailed ? 'Données locales — tirez pour recharger depuis le serveur' : 'Liste à jour depuis le serveur'}
+                {listError ? listError : 'Liste depuis le serveur — tirez pour actualiser'}
               </Text>
             </View>
           </View>
         </ImageBackground>
 
         <View style={styles.body}>
-          {pendingCount > 0 ? (
-            <View style={styles.pendingBanner}>
-              <MaterialCommunityIcons name="cloud-sync" size={22} color="#E65100" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.pendingTitle}>
-                  {pendingCount} lot{pendingCount > 1 ? 's' : ''} en attente réseau
-                </Text>
-                <Text style={styles.pendingSub}>
-                  Enregistrés sur l’appareil — envoi automatique quand l’API répond.
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.syncBtn}
-                onPress={() => void handleRetrySync()}
-                disabled={syncing}
-              >
-                {syncing ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.syncBtnText}>Synchroniser</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          ) : null}
           <FlatList
             data={lots}
             keyExtractor={(item) => item.id}
@@ -258,8 +181,8 @@ export default function MesLots() {
               <View style={styles.emptyContainer}>
                 <MaterialCommunityIcons name="archive-off-outline" size={60} color="#CCC" />
                 <Text style={styles.emptyText}>Aucun lot trouvé</Text>
-                {listApiFailed ? (
-                  <Text style={styles.emptySubText}>Impossible de charger la liste serveur pour l’instant. Tirez pour réessayer.</Text>
+                {listError ? (
+                  <Text style={styles.emptySubText}>Vérifiez la connexion puis tirez pour réessayer.</Text>
                 ) : null}
               </View>
             }
@@ -306,31 +229,8 @@ const styles = StyleSheet.create({
   heroCount: { color: 'white', fontSize: 18, fontFamily: 'Montserrat-Bold' },
   statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  heroSubtitle: { color: 'rgba(255,255,255,0.9)', fontSize: 12, fontFamily: 'Montserrat-Regular' },
+  heroSubtitle: { color: 'rgba(255,255,255,0.9)', fontSize: 12, fontFamily: 'Montserrat-Regular', flex: 1 },
   body: { flex: 1, backgroundColor: '#F5F5F5', borderTopLeftRadius: 25, borderTopRightRadius: 25, marginTop: -25 },
-  pendingBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 14,
-    backgroundColor: '#FFF3E0',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FFE0B2',
-  },
-  pendingTitle: { fontFamily: 'Montserrat-Bold', fontSize: 14, color: '#E65100' },
-  pendingSub: { fontFamily: 'Montserrat-Regular', fontSize: 11, color: '#BF360C', marginTop: 2 },
-  syncBtn: {
-    backgroundColor: '#2E7D32',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    minWidth: 96,
-    alignItems: 'center',
-  },
-  syncBtnText: { color: '#fff', fontFamily: 'Montserrat-Bold', fontSize: 11 },
   listContent: { padding: 20, paddingBottom: 100 },
   lotCard: {
     backgroundColor: 'white',

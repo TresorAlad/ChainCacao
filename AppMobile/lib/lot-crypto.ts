@@ -1,5 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
-import { secp256k1 } from '@noble/secp256k1';
+import * as secp256k1 from '@noble/secp256k1';
 import { sha256 } from '@noble/hashes/sha2';
 import { canonicalLotPayload, type LotSignPayload } from '@/lib/lot-payload';
 
@@ -52,7 +52,7 @@ export async function signLotPayload(payload: LotSignPayload): Promise<{
   const msgHash = sha256(new TextEncoder().encode(canonical));
   const sig = await secp256k1.signAsync(msgHash, priv);
   return {
-    signature: bytesToHex(sig),
+    signature: bytesToHex(sig.toCompactRawBytes()),
     payload_hash: bytesToHex(msgHash),
     signer_pubkey: bytesToHex(pub),
   };

@@ -8,8 +8,6 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import UpdateModal from '@/components/UpdateModal';
 import { SessionInvalidateBridge } from '@/components/session-invalidate-bridge';
-import { OfflineDbBootstrap } from '@/components/offline-db-bootstrap';
-import { SyncBootstrap } from '@/components/sync-bootstrap';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import {
@@ -63,8 +61,6 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <OfflineDbBootstrap />
-      <SyncBootstrap />
       <PushAndUpdatesBootstrap />
       <SafeAreaProvider>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

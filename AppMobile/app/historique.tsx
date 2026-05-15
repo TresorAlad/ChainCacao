@@ -17,6 +17,7 @@ import { useLots } from '@/hooks/use-storage';
 import { batchApi, isNetworkError } from '@/services/api';
 import {
   eventsFromVerifyResponse,
+  parseTimelineEvents,
   type TimelineDisplayEvent,
 } from '@/utils/historiqueTimeline';
 import type { Lot } from '@/hooks/use-storage';
@@ -52,15 +53,13 @@ export default function HistoriqueScreen() {
         l.id === rawQuery ||
         l.title.toLowerCase() === rawQuery.toLowerCase()
     );
-    const blockchainId =
-      localMatch?.synced && localMatch.id ? localMatch.id : rawQuery;
+    const blockchainId = localMatch?.id ? localMatch.id : rawQuery;
 
     setLoading(true);
     setSearched(true);
     setEvents([]);
     setFromBlockchain(false);
 
-    let loadedFromChain = false;
     let verifyNetworkError = false;
 
     // 1. API publique GET /api/v1/verify/:id → { lot, timeline, ... }
@@ -68,7 +67,6 @@ export default function HistoriqueScreen() {
       const { data } = await batchApi.verify(blockchainId);
       const timelineEvents = eventsFromVerifyResponse(data);
       if (timelineEvents && data.lot) {
-        loadedFromChain = true;
         const title =
           (data.lot.notes && String(data.lot.notes).trim()) ||
           data.lot.culture ||
@@ -83,43 +81,28 @@ export default function HistoriqueScreen() {
       verifyNetworkError = isNetworkError(e);
     }
 
-    // 2. Fallback AsyncStorage (référence utilisateur ou titre)
-    const lot =
-      localMatch ||
-      lots.find(
-        (l) =>
-          l.id === rawQuery ||
-          l.title.toLowerCase() === rawQuery.toLowerCase() ||
-          l.title.toLowerCase().includes(rawQuery.toLowerCase())
-      );
-
-    if (lot) {
-      setLotTitle(lot.title);
-      const localEvents: TimelineDisplayEvent[] = [
-        {
-          type: 'creation',
-          date: lot.date,
-          acteur: 'Producteur (appareil)',
-          detail: `${lot.poids} kg${lot.typeCacao ? ` · ${lot.typeCacao}` : ''}`,
-          txHash: undefined,
-          source: 'local',
-        },
-      ];
-      if (lot.destination && lot.destination !== 'Non définie') {
-        localEvents.push({
-          type: 'transfert',
-          date: lot.date,
-          acteur: lot.acheteur || 'Destinataire',
-          detail: `Transfert enregistré · Destination : ${lot.destination}`,
-          source: 'local',
-        });
+    // 2. Historique authentifié (lot connu côté serveur)
+    try {
+      const histRes = await batchApi.history(rawQuery);
+      const rawEvents = histRes.data.events ?? [];
+      if (rawEvents.length > 0) {
+        setLotTitle(rawQuery);
+        setFromBlockchain(true);
+        setEvents(parseTimelineEvents(rawEvents));
+        setLoading(false);
+        return;
       }
-      setEvents(localEvents);
-    } else if (verifyNetworkError && !loadedFromChain) {
+    } catch (e2) {
+      if (isNetworkError(e2)) verifyNetworkError = true;
+    }
+
+    if (verifyNetworkError) {
       Alert.alert(
-        'Réseau',
-        'Connexion indisponible et lot absent du stockage local sur cet appareil.'
+        'Connexion requise',
+        'Impossible de joindre le serveur pour afficher l’historique. Réessayez plus tard.'
       );
+    } else {
+      Alert.alert('Lot introuvable', 'Aucun historique pour cet identifiant.');
     }
 
     setLoading(false);
@@ -205,7 +188,7 @@ export default function HistoriqueScreen() {
             <View style={styles.myLotsSection}>
               <Text style={styles.myLotsTitle}>Mes lots</Text>
               <Text style={styles.myLotsSubtitle}>
-                Touchez un lot pour afficher son historique (local ou blockchain si synchronisé).
+                Touchez un lot pour afficher son historique (chaîne).
               </Text>
               {lots.map((lot) => (
                 <TouchableOpacity

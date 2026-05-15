@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -12,51 +12,32 @@ import {
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { DeviceEventEmitter } from 'react-native';
 
-import { myLotsApi, getApiError, isNetworkError, type BatchResponse } from '@/services/api';
+import { myLotsApi, getApiError, type BatchResponse } from '@/services/api';
 import { isEnTransit, mapStatut } from '@/utils/lot-status';
-import { listPendingCoopReceptions, type PendingCoopReception } from '@/lib/offline-queue';
-import { readCoopLotsCache, writeCoopLotsCache } from '@/lib/coop-cache-repo';
-import { OFFLINE_QUEUE_UPDATED_EVENT } from '@/lib/storage-keys';
-import { useAuth } from '@/hooks/use-auth';
 
 export default function LotsRecusScreen() {
   const router = useRouter();
-  const { user } = useAuth();
   const [lots, setLots] = useState<BatchResponse[]>([]);
-  const [pending, setPending] = useState<PendingCoopReception[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [offlineMode] = useState(false); // Mode offline désactivé
-
-  const loadPending = useCallback(async () => {
-    const list = await listPendingCoopReceptions(user?.id);
-    setPending(list);
-  }, [user?.id]);
 
   const load = useCallback(async () => {
     setError(null);
-    await loadPending();
     try {
-      console.log('[LotsRecus] Appel API myLotsApi.list()');
       const { data } = await myLotsApi.list();
       const list = data.lots ?? [];
-      console.log('[LotsRecus] Réponse API:', list.length, 'lots');
       setLots(list);
-      await writeCoopLotsCache(user?.id, list);
     } catch (e) {
       console.warn('[LotsRecus] Erreur API:', e);
       setError(getApiError(e));
-      // Fallback cache silencieux (sans bannière hors-ligne)
-      const cached = await readCoopLotsCache(user?.id);
-      if (cached.length > 0) setLots(cached);
+      setLots([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loadPending, user?.id]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -65,16 +46,8 @@ export default function LotsRecusScreen() {
     }, [load])
   );
 
-  useEffect(() => {
-    const sub = DeviceEventEmitter.addListener(OFFLINE_QUEUE_UPDATED_EVENT, () => {
-      void loadPending();
-    });
-    return () => sub.remove();
-  }, [loadPending]);
-
   const enTransit = lots.filter((b) => isEnTransit(b.statut));
   const autres = lots.filter((b) => !isEnTransit(b.statut));
-  const pendingIds = new Set(pending.map((p) => p.lot_id));
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -89,15 +62,6 @@ export default function LotsRecusScreen() {
       </View>
 
       <View style={styles.body}>
-
-        {pending.length > 0 ? (
-          <View style={styles.queueBanner}>
-            <MaterialCommunityIcons name="clock-outline" size={18} color="#1565C0" />
-            <Text style={styles.queueBannerText}>
-              {pending.length} confirmation(s) en attente de synchronisation
-            </Text>
-          </View>
-        ) : null}
         {error ? <Text style={styles.err}>{error}</Text> : null}
         {loading ? (
           <ActivityIndicator size="large" color="#2E7D32" style={{ marginTop: 40 }} />
@@ -134,7 +98,6 @@ export default function LotsRecusScreen() {
             renderItem={({ item }) => {
               const id = item.id ?? '';
               const poids = item.quantite != null ? `${item.quantite} kg` : '—';
-              const queued = pendingIds.has(id);
               return (
                 <TouchableOpacity
                   style={styles.card}
@@ -158,11 +121,6 @@ export default function LotsRecusScreen() {
                           {mapStatut(item.statut).label.toUpperCase()}
                         </Text>
                       </View>
-                      {queued ? (
-                        <View style={styles.badgeQueue}>
-                          <Text style={styles.badgeQueueText}>SYNC EN ATTENTE</Text>
-                        </View>
-                      ) : null}
                     </View>
                   </View>
                   <MaterialCommunityIcons name="chevron-right" size={24} color="#CCC" />
@@ -187,28 +145,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: 'white', fontSize: 18, fontFamily: 'Montserrat-Bold' },
   body: { flex: 1, backgroundColor: '#F8F9FA', borderTopLeftRadius: 30, borderTopRightRadius: 30 },
-  offlineBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FFF3E0',
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 10,
-    borderRadius: 10,
-  },
-  offlineBannerText: { color: '#E65100', fontSize: 13, flex: 1 },
-  queueBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#E3F2FD',
-    marginHorizontal: 16,
-    marginTop: 8,
-    padding: 10,
-    borderRadius: 10,
-  },
-  queueBannerText: { color: '#1565C0', fontSize: 13, flex: 1 },
   err: { color: '#C62828', padding: 16, fontSize: 14 },
   intro: { fontSize: 14, color: '#444', lineHeight: 20 },
   subIntro: { fontSize: 12, color: '#888', marginTop: 8 },
@@ -220,27 +156,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
   },
   cardInfo: { flex: 1 },
-  lotName: { fontSize: 14, fontFamily: 'Montserrat-Bold', color: '#333' },
-  detailText: { fontSize: 13, color: '#666', marginTop: 4 },
+  lotName: { fontSize: 15, fontWeight: '700', color: '#333' },
+  detailText: { fontSize: 12, color: '#777', marginTop: 4 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
-  badgeTransit: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFF3E0',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  badgeTransitText: { fontSize: 11, fontWeight: '800', color: '#E65100' },
-  badgeQueue: {
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  badgeQueueText: { fontSize: 11, fontWeight: '800', color: '#1565C0' },
-  empty: { alignItems: 'center', paddingTop: 48, paddingHorizontal: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#555', marginTop: 12 },
-  emptyText: { fontSize: 14, color: '#888', textAlign: 'center', marginTop: 8, lineHeight: 20 },
+  badgeTransit: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  badgeTransitText: { fontSize: 10, fontWeight: '800' },
+  empty: { alignItems: 'center', marginTop: 48, paddingHorizontal: 20 },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#757575', marginTop: 12 },
+  emptyText: { fontSize: 13, color: '#9E9E9E', textAlign: 'center', marginTop: 8, lineHeight: 20 },
 });

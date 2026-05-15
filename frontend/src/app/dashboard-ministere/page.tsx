@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { RoleLayout } from '@/components/RoleLayout'
 import { getRoleTheme } from '@/lib/role-themes'
@@ -25,6 +25,8 @@ import { filterAnnuaireActors } from '@/lib/actors-utils'
 export default function MinistereDashboardPage() {
   const { isAuthenticated, loading, user } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const lotFromUrlConsumed = useRef(false)
   const theme = getRoleTheme('ministere')
 
   const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -65,8 +67,8 @@ export default function MinistereDashboardPage() {
       .finally(() => setStatsLoading(false))
   }, [isAuthenticated, canAccess])
 
-  const runAudit = async () => {
-    const id = searchId.trim()
+  const runAuditWithId = useCallback(async (rawId: string) => {
+    const id = rawId.trim()
     if (!id) {
       toast.error('Saisissez un ID de lot')
       return
@@ -75,9 +77,10 @@ export default function MinistereDashboardPage() {
     setAuditLot(null)
     setAuditHistory([])
     try {
+      const enc = encodeURIComponent(id)
       const [lotRes, histRes] = await Promise.all([
-        api.get<Batch>(`/lot/${id}`),
-        api.get<{ success: boolean; events: BatchHistoryEvent[] }>(`/lot/${id}/history`),
+        api.get<Batch>(`/lot/${enc}`),
+        api.get<{ success: boolean; events: BatchHistoryEvent[] }>(`/lot/${enc}/history`),
       ])
       setAuditLot(lotRes.data as Batch)
       setAuditHistory(histRes.data.events || [])
@@ -86,7 +89,18 @@ export default function MinistereDashboardPage() {
     } finally {
       setSearching(false)
     }
-  }
+  }, [])
+
+  const runAudit = () => void runAuditWithId(searchId)
+
+  useEffect(() => {
+    if (loading || !isAuthenticated || !canAccess) return
+    const lot = searchParams.get('lot')?.trim()
+    if (!lot || lotFromUrlConsumed.current) return
+    lotFromUrlConsumed.current = true
+    setSearchId(lot)
+    void runAuditWithId(lot)
+  }, [loading, isAuthenticated, canAccess, searchParams, runAuditWithId])
 
   const mapMarkers = useMemo<MapMarker[]>(() => {
     const fromActors = markersFromActors(actors, {
@@ -246,11 +260,11 @@ export default function MinistereDashboardPage() {
               placeholder="Ex: LOT-2026-05015-00001"
               value={searchId}
               onChange={(e) => setSearchId(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && runAudit()}
+              onKeyDown={(e) => e.key === 'Enter' && void runAuditWithId(searchId)}
             />
             <button
               type="button"
-              onClick={runAudit}
+              onClick={() => void runAuditWithId(searchId)}
               disabled={searching}
               className="px-6 py-3 bg-[#33691E] text-white rounded-2xl text-sm font-black hover:brightness-110 disabled:opacity-50"
             >

@@ -24,14 +24,13 @@ import * as Location from 'expo-location';
 import { Paths, File, Directory } from 'expo-file-system';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
-import { useLots, type Lot } from '@/hooks/use-storage';
+import { useLots } from '@/hooks/use-storage';
 import { useAuth } from '@/hooks/use-auth';
-import { batchApi, getApiError, isNetworkError } from '@/services/api';
+import { batchApi, getApiError } from '@/services/api';
 // device-online retiré — l'app tente toujours l'API directement.
 import { signLotPayload } from '@/lib/lot-crypto';
 import { reverseGeocodeCoordsWithRegion } from '@/lib/geocode';
 import type { LotSignPayload } from '@/lib/lot-payload';
-import { runPendingSync } from '@/hooks/use-sync';
 import {
   FORM_PLACEHOLDER_COLOR,
   FORM_TEXT_COLOR,
@@ -53,7 +52,6 @@ export default function NouveauLot() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitHint, setSubmitHint] = useState<string | null>(null);
-  const [pendingBanner, setPendingBanner] = useState<string | null>(null);
 
   const [typeProduit, setTypeProduit] = useState<'Cacao' | 'Café'>('Cacao');
   const [variete, setVariete] = useState('');
@@ -165,7 +163,6 @@ export default function NouveauLot() {
 
     setIsSubmitting(true);
     setSubmitHint(null);
-    setPendingBanner(null);
     try {
       const localId = `local_${Date.now()}`;
       const culture = typeProduit === 'Cacao' ? 'Cacao' : 'Cafe';
@@ -243,41 +240,14 @@ export default function NouveauLot() {
         notes: variete,
         actor_id: user.id,
       };
-      const { signature, payload_hash, signer_pubkey } = await signLotPayload(signBase);
-
-      const lotTitle = `${typeProduit} — ${variete}`;
-      const lotRow: Lot = {
-        id: localId,
-        title: lotTitle,
-        status: 'En cours',
-        date: dateRecolte,
-        poids,
-        destination: adresseLieu,
-        culture,
-        variete,
-        typeCacao: variete,
-        synced: false,
-        syncPhase: 'pending',
-        photoUri: storedPhoto,
-        latitude: lat,
-        longitude: lon,
-        signature,
-        payload_hash,
-        signer_pubkey,
-      };
+      await signLotPayload(signBase);
 
       setSubmitHint('Envoi au serveur en cours…');
       try {
         const { data } = await batchApi.createWithPhoto(storedPhoto, fields);
         const serverId = data.batch?.id ?? localId;
         await destFile.delete();
-        await saveLot({
-          ...lotRow,
-          id: serverId,
-          photoUri: undefined,
-          synced: true,
-          status: 'Terminé',
-        });
+        await saveLot();
         Alert.alert('Succès', 'Lot enregistré sur la blockchain.', [
           {
             text: 'Voir le QR',
@@ -287,32 +257,9 @@ export default function NouveauLot() {
         ]);
         return;
       } catch (e) {
-        if (!isNetworkError(e)) {
-          // Erreur métier du serveur — ne pas sauvegarder localement.
-          Alert.alert('Erreur serveur', getApiError(e, 'lots_offline'));
-          return;
-        }
-        // Serveur injoignable → sauvegarde locale + sync auto.
-        setSubmitHint('Serveur non disponible — enregistrement local…');
+        Alert.alert('Erreur', getApiError(e));
+        return;
       }
-
-      await saveLot(lotRow);
-      setPendingBanner(
-        'Lot enregistré sur cet appareil. Il sera envoyé à la blockchain automatiquement dès que le serveur sera disponible.'
-      );
-      void runPendingSync();
-      Alert.alert(
-        'Enregistré localement',
-        `Le lot a été sauvegardé sur cet appareil.\nIl sera envoyé automatiquement à la blockchain dès que le serveur sera disponible.`,
-        [
-          {
-            text: 'Voir le QR',
-            onPress: () =>
-              router.replace(`/(agriculteur)/qr-lot?lotId=${encodeURIComponent(localId)}` as any),
-          },
-          { text: 'Mes lots', onPress: () => router.replace('/(agriculteur)/meslots' as any) },
-        ]
-      );
     } catch (error) {
       Alert.alert('Erreur', 'Impossible de sauvegarder le lot.');
     } finally {
@@ -454,13 +401,6 @@ export default function NouveauLot() {
                 <Text style={[styles.typeLabel, typeProduit === 'Café' && styles.typeLabelActive]}>Café</Text>
               </TouchableOpacity>
             </View>
-
-            {pendingBanner ? (
-              <View style={styles.pendingBanner}>
-                <MaterialCommunityIcons name="cloud-sync-outline" size={22} color="#E65100" />
-                <Text style={styles.pendingBannerText}>{pendingBanner}</Text>
-              </View>
-            ) : null}
 
 
             <View style={styles.form}>
@@ -672,24 +612,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: FORM_TEXT_COLOR,
     fontFamily: 'Montserrat-Regular',
-  },
-  pendingBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: '#FFF3E0',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#FFE0B2',
-  },
-  pendingBannerText: {
-    flex: 1,
-    fontFamily: 'Montserrat-Regular',
-    fontSize: 13,
-    color: '#E65100',
-    lineHeight: 20,
   },
   diagBox: {
     marginBottom: 12,

@@ -8,6 +8,7 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -16,22 +17,15 @@ import { useRouter, Stack, useLocalSearchParams, Redirect } from 'expo-router';
 import { useLots } from '@/hooks/use-storage';
 import { useAuth } from '@/hooks/use-auth';
 import { actorsApi, batchApi, ActorInfo, getApiError, isNetworkError } from '@/services/api';
-import { enqueueTransfer } from '@/lib/offline-queue';
-
-/** Alignés sur les IDs seed SQL si l’API est hors ligne */
-const FALLBACK_ACTORS: ActorInfo[] = [
-  { id: 'actor-coop-001', nom: 'Cooperative Plateaux', role: 'cooperative', org_id: 'CooperativeMSP' },
-  { id: 'actor-trans-001', nom: 'Usine Cacao Plus', role: 'transformateur', org_id: 'TransformateurMSP' },
-  { id: 'actor-dist-001', nom: 'Distrib Export SA', role: 'distributeur', org_id: 'DistributeurMSP' },
-];
+import { LOTS_UPDATED_EVENT } from '@/lib/storage-keys';
 
 export default function TransfertScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { lots, updateLot } = useLots();
+  const { lots } = useLots();
   const { initialized, isAuthenticated, user } = useAuth();
 
-  const [actors, setActors] = useState<ActorInfo[]>(FALLBACK_ACTORS);
+  const [actors, setActors] = useState<ActorInfo[]>([]);
   const [loadingActors, setLoadingActors] = useState(false);
   const [selectedLotId, setSelectedLotId] = useState((params.lotId as string) || '');
   const [selectedActorId, setSelectedActorId] = useState('');
@@ -86,8 +80,8 @@ export default function TransfertScreen() {
         const { data } = await actorsApi.list();
         const list = data?.actors ?? [];
         if (list.length > 0) setActors(list);
-      } catch (_) {
-        // Utiliser la liste statique si l'API est indisponible
+      } catch {
+        /* liste vide si API indisponible */
       } finally {
         setLoadingActors(false);
       }
@@ -120,15 +114,6 @@ export default function TransfertScreen() {
     const actorName = selectedActor.nom || selectedActor.name || selectedActor.id;
     const toActorId = selectedActor.id;
 
-    // 1. Mettre à jour localement immédiatement
-    await updateLot(foundLot.id, {
-      destination: actorName,
-      acheteur: actorName,
-      status: 'En cours',
-      synced: false,
-    });
-
-    // 2. Tenter l'appel API
     try {
       const { data } = await batchApi.transfer({
         batch_id: foundLot.id,
@@ -136,9 +121,7 @@ export default function TransfertScreen() {
         commentaire: commentaire.trim() || undefined,
       });
 
-      await updateLot(foundLot.id, { synced: true });
-
-      setLoading(false);
+      DeviceEventEmitter.emit(LOTS_UPDATED_EVENT);
       const tx = data.tx_hash || '';
       Alert.alert(
         'Transfert confirmé ✓',
@@ -146,25 +129,16 @@ export default function TransfertScreen() {
         [{ text: 'OK', onPress: () => router.back() }]
       );
     } catch (e) {
-      setLoading(false);
-
       if (isNetworkError(e)) {
-        if (user?.id && !foundLot.id.startsWith('local_')) {
-          await enqueueTransfer({
-            batch_id: foundLot.id,
-            to_actor_id: toActorId,
-            commentaire: commentaire.trim() || undefined,
-            actor_id: user.id,
-          });
-        }
         Alert.alert(
-          'Transfert enregistré hors-ligne',
-          `Le transfert de "${foundLot.title}" vers "${actorName}" sera synchronisé à la reconnexion.`,
-          [{ text: 'OK', onPress: () => router.back() }]
+          'Connexion requise',
+          'Impossible de joindre le serveur. Vérifiez le réseau et réessayez.'
         );
       } else {
-        Alert.alert('Erreur API', getApiError(e));
+        Alert.alert('Erreur', getApiError(e));
       }
+    } finally {
+      setLoading(false);
     }
   };
 

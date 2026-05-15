@@ -23,9 +23,8 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { batchApi, getApiError, lotActionApi, type BatchResponse, isNetworkError } from '@/services/api';
+import { batchApi, getApiError, lotActionApi, type BatchResponse } from '@/services/api';
 import { isEnTransit, mapStatut } from '@/utils/lot-status';
-import { enqueueCoopReception } from '@/lib/offline-queue';
 import { useAuth } from '@/hooks/use-auth';
 
 function firstParam(v: string | string[] | undefined): string {
@@ -107,23 +106,7 @@ export default function ConfirmerReceptionLotScreen() {
       ]);
     } catch (e) {
       console.warn('[ConfirmerReception] Erreur:', e);
-      if (isNetworkError(e) && user?.id) {
-        // Serveur injoignable → file d'attente locale.
-        const poids = parseFloat(poidsReception.replace(',', '.'));
-        await enqueueCoopReception({
-          lot_id: lotId,
-          pin: pin.trim(),
-          poids_constate: poids > 0 ? poids : undefined,
-          actor_id: user.id,
-        });
-        Alert.alert(
-          "Réception en file d'attente",
-          'Le serveur est injoignable. La confirmation sera synchronisée automatiquement dès que le serveur sera disponible.',
-          [{ text: 'OK', onPress: () => router.back() }]
-        );
-      } else {
-        Alert.alert('Échec', getApiError(e));
-      }
+      Alert.alert('Échec', getApiError(e));
     } finally {
       setSubmitting(false);
     }

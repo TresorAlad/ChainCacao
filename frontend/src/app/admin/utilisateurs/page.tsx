@@ -46,6 +46,7 @@ export default function AdminUtilisateursPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [createForm, setCreateForm] = useState<CreateForm>(emptyCreate)
   const [saving, setSaving] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
   const loadActors = () => {
     setFetching(true)
@@ -66,22 +67,35 @@ export default function AdminUtilisateursPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
+    setCreateError(null)
+    const pin = createForm.pin.trim()
+    if (!/^\d{4}$/.test(pin)) {
+      const msg = 'Le PIN doit comporter exactement 4 chiffres.'
+      setCreateError(msg)
+      toast.error(msg)
+      return
+    }
     setSaving(true)
     try {
+      const email = createForm.email.trim().toLowerCase()
+      const role = createForm.role
       await api.post('/admin/actors', {
         nom: createForm.nom.trim(),
-        email: createForm.email.trim().toLowerCase(),
+        email,
         password: createForm.password,
         org_id: createForm.org_id.trim(),
-        role: createForm.role,
-        pin: createForm.pin.trim(),
+        role,
+        pin,
       })
-      toast.success('Utilisateur créé')
+      toast.success(`Compte créé : ${email} — rôle « ${getRoleDisplayName(role)} »`)
       setShowCreate(false)
       setCreateForm(emptyCreate)
+      setCreateError(null)
       loadActors()
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Création impossible'))
+      const msg = getErrorMessage(err, 'Création impossible')
+      setCreateError(msg)
+      toast.error(msg)
     } finally {
       setSaving(false)
     }
@@ -149,7 +163,10 @@ export default function AdminUtilisateursPage() {
           </div>
           <button
             type="button"
-            onClick={() => setShowCreate((v) => !v)}
+            onClick={() => {
+              setShowCreate((v) => !v)
+              setCreateError(null)
+            }}
             className="flex items-center gap-2 px-5 py-2.5 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold"
           >
             <PlusIcon className="w-5 h-5" />
@@ -226,11 +243,24 @@ export default function AdminUtilisateursPage() {
                 ))}
               </select>
             </div>
+            {createError ? (
+              <div className="md:col-span-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                <p className="font-bold mb-1">Erreur</p>
+                <p className="break-words">{createError}</p>
+              </div>
+            ) : null}
             <div className="md:col-span-2 flex gap-3">
               <button type="submit" disabled={saving} className="btn btn-primary">
                 {saving ? 'Création…' : 'Créer le compte'}
               </button>
-              <button type="button" className="btn btn-outline" onClick={() => setShowCreate(false)}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => {
+                  setShowCreate(false)
+                  setCreateError(null)
+                }}
+              >
                 Annuler
               </button>
             </div>

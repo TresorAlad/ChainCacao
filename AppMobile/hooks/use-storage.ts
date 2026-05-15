@@ -2,12 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { DeviceEventEmitter } from 'react-native';
 import { useAuth } from '@/hooks/use-auth';
 import { LOTS_UPDATED_EVENT } from '@/lib/storage-keys';
-import {
-  deleteLotForActor,
-  listLotsForActor,
-  patchLotForActor,
-  replaceLotsForActor,
-} from '@/lib/offline-lots-repo';
+import { myLotsApi, type BatchResponse } from '@/services/api';
 
 export { LOTS_UPDATED_EVENT } from '@/lib/storage-keys';
 
@@ -19,37 +14,53 @@ export interface Lot {
   poids: string;
   acheteur?: string;
   destination?: string;
-  /** Nom de parcelle saisi par l’utilisateur (CDC). */
   parcelle?: string;
-  /** Culture : Cacao ou Cafe. */
   culture?: string;
-  /** Variété (Amelonado, Arabica, …). */
   variete?: string;
-  /** @deprecated Utiliser variete — conservé pour lots déjà enregistrés. */
   typeCacao?: string;
   synced: boolean;
-  /** Phase sync CDC : données texte puis photo (mode 2G). */
   syncPhase?: 'pending' | 'data_synced' | 'photo_pending' | 'complete';
   chainStatut?: string;
-  /** Copie locale (documentDirectory) pour sync hors ligne après prise de vue. */
   photoUri?: string;
   latitude?: number;
   longitude?: number;
-  /** Intégrité ECDSA (CDC §14). */
   signature?: string;
   payload_hash?: string;
   signer_pubkey?: string;
 }
 
-/** Lecture disque SQLite pour la sync. */
-export async function readLotsListForActor(actorId: string | undefined): Promise<Lot[]> {
-  if (!actorId) return [];
-  return listLotsForActor(actorId);
+export function batchResponseToLot(b: BatchResponse): Lot {
+  const culture = b.culture ?? 'Lot';
+  const lieu = b.lieu ?? '';
+  const title = `${culture} — ${lieu}`.trim() || b.id;
+  return {
+    id: b.id,
+    title,
+    status: 'Terminé',
+    date: b.date_recolte ?? b.timestamp ?? '',
+    poids: String(b.quantite ?? 0),
+    destination: lieu || undefined,
+    culture: b.culture,
+    synced: true,
+    chainStatut: b.statut,
+    syncPhase: 'complete',
+  };
 }
 
-export async function writeLotsListForActor(actorId: string | undefined, lots: Lot[]): Promise<void> {
-  if (!actorId) return;
-  await replaceLotsForActor(actorId, lots);
+/** Charge les lots depuis l’API (session requise). */
+export async function readLotsListForActor(actorId: string | undefined): Promise<Lot[]> {
+  if (!actorId) return [];
+  try {
+    const { data } = await myLotsApi.list();
+    return (data.lots ?? []).map(batchResponseToLot);
+  } catch {
+    return [];
+  }
+}
+
+/** Plus de persistance locale des lots — les données viennent du serveur. */
+export async function writeLotsListForActor(_actorId: string | undefined, _lots: Lot[]): Promise<void> {
+  /* no-op */
 }
 
 export function useLots() {
@@ -66,57 +77,34 @@ export function useLots() {
         setLots([]);
         return;
       }
-      const list = await listLotsForActor(actorId);
-      setLots(list);
+      const { data } = await myLotsApi.list();
+      setLots((data.lots ?? []).map(batchResponseToLot));
     } catch (e) {
-      console.error('Erreur lecture lots:', e);
+      console.error('Erreur chargement lots (API):', e);
+      setLots([]);
     } finally {
       setLoading(false);
     }
   }, [actorId]);
 
   const saveLot = useCallback(
-    async (lot: Lot) => {
-      if (!actorId) return;
-      try {
-        const existing = await listLotsForActor(actorId);
-        const updated = [lot, ...existing.filter((l) => l.id !== lot.id)];
-        await replaceLotsForActor(actorId, updated);
-        setLots(updated);
-      } catch (e) {
-        console.error('Erreur sauvegarde lot:', e);
-      }
+    async (_lot?: Lot) => {
+      await loadLots();
+      DeviceEventEmitter.emit(LOTS_UPDATED_EVENT);
     },
-    [actorId]
+    [loadLots]
   );
 
   const updateLot = useCallback(
     async (id: string, changes: Partial<Lot>) => {
-      if (!actorId) return;
-      try {
-        await patchLotForActor(actorId, id, changes);
-        const updated = await listLotsForActor(actorId);
-        setLots(updated);
-      } catch (e) {
-        console.error('Erreur mise à jour lot:', e);
-      }
+      setLots((prev) => prev.map((l) => (l.id === id ? { ...l, ...changes } : l)));
     },
-    [actorId]
+    []
   );
 
-  const deleteLot = useCallback(
-    async (id: string) => {
-      if (!actorId) return;
-      try {
-        await deleteLotForActor(actorId, id);
-        const updated = await listLotsForActor(actorId);
-        setLots(updated);
-      } catch (e) {
-        console.error('Erreur suppression lot:', e);
-      }
-    },
-    [actorId]
-  );
+  const deleteLot = useCallback(async () => {
+    await loadLots();
+  }, [loadLots]);
 
   useEffect(() => {
     loadLots();

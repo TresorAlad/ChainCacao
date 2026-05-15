@@ -13,6 +13,7 @@ import {
   roleDisplayLabel,
 } from '@/lib/actors-utils'
 import { isMinistereRole } from '@/lib/role-utils'
+import { getErrorMessage } from '@/lib/error-utils'
 import toast from 'react-hot-toast'
 
 type ActorStats = {
@@ -43,6 +44,7 @@ export default function ActorsPage() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [selectedLots, setSelectedLots] = useState<Batch[]>([])
   const [selectedStats, setSelectedStats] = useState<ActorStats | null>(null)
+  const [detailError, setDetailError] = useState<string | null>(null)
 
   const layoutRole = user?.role === 'admin' ? 'admin' : user?.role === 'ministere' ? 'ministere' : 'cooperative'
 
@@ -86,21 +88,29 @@ export default function ActorsPage() {
   const loadActorDetail = async (actor: ActorDTO) => {
     setSelectedId(actor.id)
     setDetailLoading(true)
+    setDetailError(null)
     setSelectedLots([])
     setSelectedStats(null)
+    const url = `/actors/${encodeURIComponent(actor.id)}/lots`
     try {
       const res = await api.get<{
         success: boolean
         lots: Batch[]
         stats?: ActorStats
-      }>(`/actors/${encodeURIComponent(actor.id)}/lots`)
+      }>(url)
       const lots = res.data.lots || []
       setSelectedLots(lots)
       const bodyStats = res.data.stats
       setSelectedStats(bodyStats != null ? bodyStats : deriveActorStatsFromLots(lots))
-    } catch {
-      toast.error('Impossible de charger les statistiques de cet acteur')
-      setSelectedId(null)
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Impossible de charger les données de cet acteur')
+      setDetailError(msg)
+      toast.error(msg)
+      if (process.env.NODE_ENV === 'development') {
+        const status =
+          err && typeof err === 'object' && 'status' in err ? (err as { status?: number }).status : undefined
+        console.warn('[actors] loadActorDetail failed', { actorId: actor.id, url, status, err })
+      }
     } finally {
       setDetailLoading(false)
     }
@@ -248,6 +258,24 @@ export default function ActorsPage() {
                 ) : detailLoading ? (
                   <div className="flex justify-center py-12">
                     <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#33691E] border-t-transparent" />
+                  </div>
+                ) : detailError ? (
+                  <div className="space-y-4">
+                    <div>
+                      <h2 className="font-black text-lg text-[var(--color-primary)]">{selectedActor.nom}</h2>
+                      <p className="text-xs font-mono text-gray-500 break-all mt-1">{selectedActor.id}</p>
+                    </div>
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                      <p className="font-bold mb-2">Chargement impossible</p>
+                      <p className="break-words">{detailError}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary w-full text-sm"
+                      onClick={() => void loadActorDetail(selectedActor)}
+                    >
+                      Réessayer
+                    </button>
                   </div>
                 ) : (
                   <div className="space-y-4">
