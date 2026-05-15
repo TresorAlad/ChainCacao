@@ -149,7 +149,7 @@ export default function ProductionScreen() {
         />
       </View>
 
-      <TouchableOpacity style={styles.fab} onPress={() => router.push('/nouveaulot' as any)}>
+      <TouchableOpacity style={styles.fab} onPress={() => router.push('/(agriculteur)/nouveaulot' as any)}>
         <MaterialCommunityIcons name="plus" size={35} color="white" />
       </TouchableOpacity>
     </SafeAreaView>

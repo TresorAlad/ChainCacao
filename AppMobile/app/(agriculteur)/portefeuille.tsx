@@ -17,6 +17,7 @@ import * as Font from 'expo-font';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { walletApi, getApiError } from '@/services/api';
+import { AG } from '@/lib/agriculteur-routes';
 
 const INITIAL_DATA = [
   { id: '1', type: 'depot', libelle: 'Solde initial', montant: 0, date: '—', heure: '—', isSynced: true },
@@ -263,11 +264,11 @@ export default function Portefeuille() {
         </View>
 
         <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
-          <TabItem icon="home-outline" label="Accueil" onPress={() => navigateTo('/accueil')} />
-          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => navigateTo('/meslots')} />
-          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => navigateTo('/nouveaulot')} />
+          <TabItem icon="home-outline" label="Accueil" onPress={() => navigateTo(AG.accueil)} />
+          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => navigateTo(AG.meslots)} />
+          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => navigateTo(AG.nouveaulot)} />
           <TabItem icon="wallet" label="Portefeuille" active />
-          <TabItem icon="account-circle-outline" label="Profil" onPress={() => navigateTo('/profil')} />
+          <TabItem icon="account-circle-outline" label="Profil" onPress={() => navigateTo(AG.profil)} />
         </View>
       </SafeAreaView>
     </SafeAreaProvider>

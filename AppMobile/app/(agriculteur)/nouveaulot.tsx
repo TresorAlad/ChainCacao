@@ -28,6 +28,7 @@ import { useLots } from '@/hooks/use-storage';
 import { useAuth } from '@/hooks/use-auth';
 import { batchApi, getApiError } from '@/services/api';
 // device-online retiré — l'app tente toujours l'API directement.
+import { AG } from '@/lib/agriculteur-routes';
 import { signLotPayload } from '@/lib/lot-crypto';
 import { reverseGeocodeCoordsWithRegion } from '@/lib/geocode';
 import type { LotSignPayload } from '@/lib/lot-payload';
@@ -463,18 +464,18 @@ export default function NouveauLot() {
         </View>
 
         <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
-          <TabItem icon="home-outline" label="Accueil" onPress={() => router.replace('/accueil' as any)} />
-          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => router.replace('/meslots' as any)} />
+          <TabItem icon="home-outline" label="Accueil" onPress={() => router.replace(AG.accueil as any)} />
+          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => router.replace(AG.meslots as any)} />
           <TabItem icon="plus-circle" label="Nouveau" active isMain />
           <TabItem
             icon="wallet-outline"
             label="Wallet"
-            onPress={() => router.replace('/portefeuille' as any)}
+            onPress={() => router.replace(AG.portefeuille as any)}
           />
           <TabItem
             icon="account-circle-outline"
             label="Profil"
-            onPress={() => router.replace('/profil' as any)}
+            onPress={() => router.replace(AG.profil as any)}
           />
         </View>
       </SafeAreaView>

@@ -33,7 +33,9 @@ async function proxy(request: NextRequest, pathSegments: string[]) {
   }
 
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 8000)
+  /** Les écritures (ex. création de lot → Fabric) peuvent dépasser quelques secondes. */
+  const proxyMs = request.method === 'GET' || request.method === 'HEAD' ? 30_000 : 120_000
+  const timeoutId = setTimeout(() => controller.abort(), proxyMs)
   init.signal = controller.signal
 
   try {

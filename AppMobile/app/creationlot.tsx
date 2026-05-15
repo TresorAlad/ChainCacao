@@ -9,7 +9,7 @@ export default function CreationLotRedirect() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/nouveaulot' as any);
+    router.replace('/(agriculteur)/nouveaulot' as any);
   }, [router]);
 
   return (

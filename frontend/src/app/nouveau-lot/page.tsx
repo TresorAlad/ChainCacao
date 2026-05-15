@@ -107,8 +107,14 @@ export default function NouveauLotPage() {
     }
 
     setIsSubmitting(true)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[nouveau-lot] POST /lot', { ...payload, notes: payload.notes ? '(présent)' : '' })
+    }
     try {
       const res = await api.post<{ success: boolean; batch: { id: string } }>('/lot', payload)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[nouveau-lot] réponse OK', res.status, res.data)
+      }
       const newId = res.data.batch?.id
       if (newId && typeof window !== 'undefined') {
         try {
@@ -125,6 +131,7 @@ export default function NouveauLotPage() {
       toast.success(`Lot créé avec succès${newId ? ` (ID: ${newId})` : ''}`)
       router.push('/dashboard-agriculteur')
     } catch (err: unknown) {
+      console.error('[nouveau-lot] échec création lot', err)
       toast.error(getErrorMessage(err, 'Erreur lors de la création du lot'))
     } finally {
       setIsSubmitting(false)

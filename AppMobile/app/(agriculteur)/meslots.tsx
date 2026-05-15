@@ -20,6 +20,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { myLotsApi, type BatchResponse, getApiError } from '@/services/api';
 import { LOTS_UPDATED_EVENT } from '@/lib/storage-keys';
 import { mapCdcLotDisplay } from '@/utils/lot-status';
+import { AG } from '@/lib/agriculteur-routes';
 
 type DisplayLot = {
   id: string;
@@ -106,10 +107,8 @@ export default function MesLots() {
     <TouchableOpacity
       style={styles.lotCard}
       activeOpacity={0.8}
-      onPress={() => router.push(`/qr-lot?lotId=${encodeURIComponent(item.id)}` as any)}
-      onLongPress={() =>
-        router.push(`/paiement-lot?lotId=${encodeURIComponent(item.id)}` as any)
-      }
+      onPress={() => router.push(AG.qrLot(item.id) as any)}
+      onLongPress={() => router.push(AG.paiementLot(item.id) as any)}
     >
       <View style={styles.lotMainInfo}>
         <View style={styles.syncIndicator}>
@@ -191,15 +190,15 @@ export default function MesLots() {
         </View>
 
         <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
-          <TabItem icon="home-outline" label="Accueil" onPress={() => handleNavigation('/accueil')} />
+          <TabItem icon="home-outline" label="Accueil" onPress={() => handleNavigation(AG.accueil)} />
           <TabItem icon="archive" label="Mes Lots" active onPress={() => {}} />
-          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => handleNavigation('/nouveaulot')} />
+          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => handleNavigation(AG.nouveaulot)} />
           <TabItem
             icon="wallet-outline"
             label="Portefeuille"
-            onPress={() => handleNavigation('/portefeuille')}
+            onPress={() => handleNavigation(AG.portefeuille)}
           />
-          <TabItem icon="account-circle-outline" label="Profil" onPress={() => handleNavigation('/profil')} />
+          <TabItem icon="account-circle-outline" label="Profil" onPress={() => handleNavigation(AG.profil)} />
         </View>
       </SafeAreaView>
     </SafeAreaProvider>

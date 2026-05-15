@@ -6,9 +6,14 @@ const api = axios.create({
   baseURL: getApiBaseUrl(),
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
+  /** Évite un spinner infini si le backend / Fabric ne répond pas (aucun timeout par défaut dans Axios). */
+  timeout: 120_000,
 })
 
 function messageFromAxiosError(err: AxiosError): string {
+  if (err.code === 'ECONNABORTED' || err.message?.toLowerCase().includes('timeout')) {
+    return 'Délai dépassé : le serveur n’a pas répondu à temps. Réessayez ou vérifiez la connexion.'
+  }
   const data = err.response?.data as Record<string, unknown> | undefined
   if (data && typeof data === 'object') {
     if (typeof data.error === 'string') return data.error
@@ -45,6 +50,7 @@ api.interceptors.response.use(
 export const publicApi = axios.create({
   baseURL: getApiBaseUrl(),
   headers: { 'Content-Type': 'application/json' },
+  timeout: 60_000,
 })
 
 export default api

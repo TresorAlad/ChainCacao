@@ -17,6 +17,7 @@ import Svg, { Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { myLotsApi, getApiError } from '@/services/api';
+import { AG } from '@/lib/agriculteur-routes';
 
 const { width } = Dimensions.get('window');
 
@@ -181,10 +182,10 @@ export default function AccueilAgriculteur() {
         {/* NAVIGATION BASSE */}
         <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
           <TabItem icon="home" label="Accueil" active onPress={() => {}} />
-          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => handleNavigation('/meslots')} />
-          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => handleNavigation('/nouveaulot')} />
-          <TabItem icon="wallet-outline" label="Portefeuille" onPress={() => handleNavigation('/portefeuille')} />
-          <TabItem icon="account-circle-outline" label="Profil" onPress={() => handleNavigation('/profil')} />
+          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => handleNavigation(AG.meslots)} />
+          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => handleNavigation(AG.nouveaulot)} />
+          <TabItem icon="wallet-outline" label="Portefeuille" onPress={() => handleNavigation(AG.portefeuille)} />
+          <TabItem icon="account-circle-outline" label="Profil" onPress={() => handleNavigation(AG.profil)} />
         </View>
       </SafeAreaView>
     </SafeAreaProvider>
