@@ -4,6 +4,7 @@ import Constants from 'expo-constants';
 
 export const TOKEN_KEY = 'chaincacao_jwt';
 export const USER_KEY = 'chaincacao_user';
+export const HAS_PIN_KEY = 'chaincacao_has_pin';
 
 type ExpoExtra = { apiUrl?: string };
 
@@ -108,10 +109,13 @@ export const authApi = {
 export interface MeResponse {
   success?: boolean;
   actor?: ActorInfo;
+  has_pin?: boolean;
 }
 
 export const meApi = {
   get: () => api.get<MeResponse>('/api/v1/me'),
+  verifyPin: (pin: string) =>
+    api.post<{ success?: boolean }>('/api/v1/auth/verify-pin', { pin }),
 };
 
 // ─── BATCH ────────────────────────────────────────────────────────────────────

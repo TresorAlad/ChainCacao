@@ -17,7 +17,7 @@ const { width, height } = Dimensions.get('window');
 
 export default function SplashScreen() {
   const router = useRouter();
-  const { initialized, isAuthenticated, user } = useAuth();
+  const { initialized, canAccessApp, needsPinUnlock, user } = useAuth();
   const [fontsLoaded, setFontsLoaded] = useState(false);
 
   useEffect(() => {
@@ -38,15 +38,18 @@ export default function SplashScreen() {
 
   useEffect(() => {
     if (!fontsLoaded || !initialized) return;
+    const delayMs = canAccessApp && user ? 400 : needsPinUnlock ? 200 : 2000;
     const timer = setTimeout(() => {
-      if (isAuthenticated && user) {
+      if (needsPinUnlock) {
+        router.replace('/pin-unlock');
+      } else if (canAccessApp && user) {
         router.replace(homePathForActor(user));
       } else {
         router.replace('/login');
       }
-    }, 2500);
+    }, delayMs);
     return () => clearTimeout(timer);
-  }, [fontsLoaded, initialized, isAuthenticated, user, router]);
+  }, [fontsLoaded, initialized, canAccessApp, needsPinUnlock, user, router]);
 
   if (!fontsLoaded) {
     return (

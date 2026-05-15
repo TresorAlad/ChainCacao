@@ -12,8 +12,13 @@
     "test": "jest",
     "eas:login": "npx --yes eas-cli@latest login",
     "eas:init": "npx --yes eas-cli@latest init",
+    "eas:env:google-production": "npx --yes eas-cli@latest env:create --environment production --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json --visibility secret",
+    "eas:env:google-preview": "npx --yes eas-cli@latest env:create --environment preview --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json --visibility secret",
     "eas:build:apk": "npx --yes eas-cli@latest build --platform android --profile preview",
-    "eas:build:aab": "npx --yes eas-cli@latest build --platform android --profile production"
+    "eas:build:production-apk": "npx --yes eas-cli@latest build --platform android --profile production-apk",
+    "eas:build:aab": "npx --yes eas-cli@latest build --platform android --profile production",
+    "eas:update:preview": "npx --yes eas-cli@latest update --channel preview --platform android --environment production --non-interactive",
+    "eas:update:production": "npx --yes eas-cli@latest update --channel production --platform android --environment production --non-interactive"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -24,7 +29,9 @@
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
+    "@types/react": "~19.2.10",
     "axios": "^1.15.2",
+    "eslint-config-expo": "~55.0.1",
     "expo": "^55.0.24",
     "expo-camera": "~55.0.18",
     "expo-constants": "~55.0.16",
@@ -46,6 +53,7 @@
     "expo-system-ui": "~55.0.18",
     "expo-updates": "~55.0.22",
     "expo-web-browser": "~55.0.16",
+    "jest-expo": "~55.0.17",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-native": "0.83.6",

@@ -13,6 +13,13 @@ import { authApi, getApiError } from '@/services/api';
 import { homePathForActor } from '@/lib/home-path';
 import { saveProfileExtrasForActor } from '@/hooks/profile-extra';
 import { useAuth } from '@/hooks/use-auth';
+import {
+  FORM_PLACEHOLDER_COLOR,
+  formInputStyle,
+  formLabelStyle,
+  formPasswordInputStyle,
+  formPasswordRowStyle,
+} from '@/constants/form-styles';
 
 const { width, height } = Dimensions.get('window');
 
@@ -39,7 +46,7 @@ export default function RegisterScreen() {
 
   // --- ÉTATS DE SÉCURITÉ ---
   const [useBiometrics, setUseBiometrics] = useState(false);
-  const [usePin, setUsePin] = useState(false);
+  const [usePin, setUsePin] = useState(true);
   const [pinCode, setPinCode] = useState('');
   const [showPin, setShowPin] = useState(false);
 
@@ -84,8 +91,8 @@ export default function RegisterScreen() {
       Alert.alert('Mot de passe', 'Les mots de passe ne correspondent pas.');
       return;
     }
-    if (usePin && pinCode.trim().length !== 4) {
-      Alert.alert('Code PIN', 'Le PIN doit contenir 4 chiffres.');
+    if (pinCode.trim().length !== 4) {
+      Alert.alert('Code PIN obligatoire', 'Choisissez un code PIN à 4 chiffres pour accéder à l\'application.');
       return;
     }
     if (!gpsLocation.trim()) {
@@ -103,7 +110,7 @@ export default function RegisterScreen() {
         gps_location: gpsLocation.trim(),
         field_surface: fieldSurface.trim(),
         org_name: orgName.trim(),
-        pin_code: usePin ? pinCode.trim() : undefined,
+        pin_code: pinCode.trim(),
       });
 
       // Auto-login : même état que le AuthProvider (token + user enrichi)
@@ -125,7 +132,7 @@ export default function RegisterScreen() {
         nom: enriched.nom,
         name: enriched.name,
       });
-      await applySessionFromSignup(data.token, enriched);
+      await applySessionFromSignup(data.token, enriched, true);
 
       Alert.alert('Compte créé ✓', 'Votre compte a été créé. Vous êtes connecté.', [
         { text: 'OK', onPress: () => router.replace(homePathForActor(enriched)) },
@@ -151,11 +158,25 @@ export default function RegisterScreen() {
               <Text style={[styles.title, { color: brandGreen }]}>Inscription</Text>
 
               <View style={styles.form}>
-                <Text style={styles.label}>Nom complet</Text>
-                <TextInput style={styles.input} placeholder="Nom & Prénom" value={name} onChangeText={setName} />
+                <Text style={formLabelStyle}>Nom complet</Text>
+                <TextInput
+                  style={formInputStyle}
+                  placeholder="Nom & Prénom"
+                  placeholderTextColor={FORM_PLACEHOLDER_COLOR}
+                  value={name}
+                  onChangeText={setName}
+                />
 
-                <Text style={styles.label}>Email</Text>
-                <TextInput style={styles.input} placeholder="votre@email.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+                <Text style={formLabelStyle}>Email</Text>
+                <TextInput
+                  style={formInputStyle}
+                  placeholder="votre@email.com"
+                  placeholderTextColor={FORM_PLACEHOLDER_COLOR}
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
 
                 <Text style={styles.label}>Votre Rôle</Text>
                 <View style={styles.pickerContainer}>
@@ -176,7 +197,13 @@ export default function RegisterScreen() {
                   ) : (
                     <>
                       <Text style={styles.label}>{getOrgLabel()}</Text>
-                      <TextInput style={styles.input} placeholder="Nom officiel" value={orgName} onChangeText={setOrgName} />
+                      <TextInput
+                        style={formInputStyle}
+                        placeholder="Nom officiel"
+                        placeholderTextColor={FORM_PLACEHOLDER_COLOR}
+                        value={orgName}
+                        onChangeText={setOrgName}
+                      />
                     </>
                   )}
 
@@ -184,11 +211,12 @@ export default function RegisterScreen() {
                     {role === 'agriculteur' ? "Localisation du champ" : "Localisation du siège"}
                   </Text>
                   <View style={styles.gpsRow}>
-                    <TextInput 
-                      style={[styles.input, { flex: 1, marginBottom: 0 }]} 
-                      placeholder="Coordonnées GPS" 
-                      value={gpsLocation} 
-                      editable={false} 
+                    <TextInput
+                      style={[formInputStyle, { flex: 1, marginBottom: 0 }]}
+                      placeholder="Coordonnées GPS"
+                      placeholderTextColor={FORM_PLACEHOLDER_COLOR}
+                      value={gpsLocation}
+                      editable={false}
                     />
                     <TouchableOpacity style={[styles.gpsButton, { backgroundColor: brandGreen }]} onPress={getLocation}>
                       <MaterialCommunityIcons name="map-marker-radius" size={24} color="white" />
@@ -197,13 +225,14 @@ export default function RegisterScreen() {
                 </View>
 
                 <Text style={styles.label}>Mot de passe</Text>
-                <View style={styles.passwordInputContainer}>
-                  <TextInput 
-                    style={styles.flexInput} 
-                    placeholder="••••••••" 
-                    value={password} 
-                    onChangeText={setPassword} 
-                    secureTextEntry={!showPassword} 
+                <View style={formPasswordRowStyle}>
+                  <TextInput
+                    style={formPasswordInputStyle}
+                    placeholder="Mot de passe (8 car. min.)"
+                    placeholderTextColor={FORM_PLACEHOLDER_COLOR}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
                   />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
                     <MaterialCommunityIcons name={showPassword ? "eye" : "eye-off"} size={22} color="#999" />
@@ -211,13 +240,14 @@ export default function RegisterScreen() {
                 </View>
 
                 <Text style={styles.label}>Confirmer le mot de passe</Text>
-                <View style={styles.passwordInputContainer}>
-                  <TextInput 
-                    style={styles.flexInput} 
-                    placeholder="••••••••" 
-                    value={confirmPassword} 
-                    onChangeText={setConfirmPassword} 
-                    secureTextEntry={!showConfirmPassword} 
+                <View style={formPasswordRowStyle}>
+                  <TextInput
+                    style={formPasswordInputStyle}
+                    placeholder="Confirmer le mot de passe"
+                    placeholderTextColor={FORM_PLACEHOLDER_COLOR}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry={!showConfirmPassword}
                   />
                   <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.eyeIcon}>
                     <MaterialCommunityIcons name={showConfirmPassword ? "eye" : "eye-off"} size={22} color="#999" />
@@ -234,30 +264,24 @@ export default function RegisterScreen() {
                     <Switch value={useBiometrics} onValueChange={toggleBiometrics} trackColor={{ false: "#D1D1D1", true: brandGreen }} />
                   </View>
 
-                  <View style={styles.switchRow}>
-                    <View style={styles.switchLabelGroup}>
-                      <MaterialCommunityIcons name="lock-question" size={24} color={brandGreen} />
-                      <Text style={styles.switchLabel}>Code PIN de l'app</Text>
-                    </View>
-                    <Switch value={usePin} onValueChange={setUsePin} trackColor={{ false: "#D1D1D1", true: brandGreen }} />
-                  </View>
-
-                  {usePin && (
-                    <View style={styles.pinInputContainer}>
-                      <TextInput 
-                        style={styles.pinInput} 
-                        placeholder="PIN à 4 chiffres" 
-                        value={pinCode} 
-                        onChangeText={setPinCode} 
-                        keyboardType="number-pad" 
-                        maxLength={4} 
-                        secureTextEntry={!showPin} 
+                  <Text style={styles.pinHelp}>
+                    Code PIN obligatoire (4 chiffres) pour ouvrir l&apos;application après chaque fermeture.
+                  </Text>
+                  <View style={styles.pinInputContainer}>
+                      <TextInput
+                        style={styles.pinInput}
+                        placeholder="0000"
+                        placeholderTextColor={FORM_PLACEHOLDER_COLOR}
+                        value={pinCode}
+                        onChangeText={(t) => setPinCode(t.replace(/\D/g, '').slice(0, 4))}
+                        keyboardType="number-pad"
+                        maxLength={4}
+                        secureTextEntry={!showPin}
                       />
                       <TouchableOpacity onPress={() => setShowPin(!showPin)} style={styles.eyeIcon}>
                         <MaterialCommunityIcons name={showPin ? "eye" : "eye-off"} size={22} color={brandGreen} />
                       </TouchableOpacity>
                     </View>
-                  )}
                 </View>
 
                 <TouchableOpacity 
@@ -302,18 +326,8 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 32, fontWeight: 'bold', marginBottom: 25 },
   form: { width: '100%' },
-  label: { fontSize: 11, color: '#666', marginBottom: 8, fontWeight: 'bold', textTransform: 'uppercase' },
-  input: { backgroundColor: '#F5F7FA', borderRadius: 12, padding: 14, marginBottom: 15, borderWidth: 1, borderColor: '#E1E8ED' },
-  passwordInputContainer: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#F5F7FA', 
-    borderRadius: 12, 
-    borderWidth: 1, 
-    borderColor: '#E1E8ED', 
-    marginBottom: 15 
-  },
-  flexInput: { flex: 1, padding: 14 },
+  label: { fontSize: 11, color: '#374151', marginBottom: 8, fontWeight: 'bold', textTransform: 'uppercase' },
+  pinHelp: { fontSize: 13, color: '#4B5563', textAlign: 'center', marginBottom: 12, lineHeight: 18 },
   pickerContainer: { backgroundColor: '#F5F7FA', borderRadius: 12, borderWidth: 1, borderColor: '#E1E8ED', marginBottom: 15 },
   picker: { height: 55, width: '100%' },
   dynamicSection: { marginBottom: 10, padding: 10, backgroundColor: '#f9f9f9', borderRadius: 15 },
@@ -325,7 +339,7 @@ const styles = StyleSheet.create({
   switchLabelGroup: { flexDirection: 'row', alignItems: 'center' },
   switchLabel: { marginLeft: 12, fontSize: 14, color: '#333' },
   pinInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: '#228B22', width: '100%' },
-  pinInput: { flex: 1, padding: 12, textAlign: 'center', fontSize: 16, fontWeight: 'bold' },
+  pinInput: { flex: 1, padding: 12, textAlign: 'center', fontSize: 20, fontWeight: 'bold', color: '#111827' },
   eyeIcon: { padding: 10 },
   registerButton: { borderRadius: 15, padding: 18, alignItems: 'center', marginTop: 15 },
   registerButtonText: { color: '#FFFFFF', fontSize: 17, fontWeight: 'bold' },

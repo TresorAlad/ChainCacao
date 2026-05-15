@@ -4,19 +4,24 @@ import {
   TouchableOpacity, StatusBar, Dimensions, KeyboardAvoidingView,
   Platform, ScrollView, ActivityIndicator, Alert,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useAuth } from '@/hooks/use-auth';
-import { USER_KEY, type ActorInfo } from '@/services/api';
 import { homePathForActor } from '@/lib/home-path';
+import {
+  FORM_PLACEHOLDER_COLOR,
+  formInputStyle,
+  formLabelStyle,
+  formPasswordInputStyle,
+  formPasswordRowStyle,
+} from '@/constants/form-styles';
 
 const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, loading, error, initialized, isAuthenticated, user } = useAuth();
+  const { login, loading, error, initialized, canAccessApp, needsPinUnlock, user } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,10 +40,12 @@ export default function LoginScreen() {
 
   useEffect(() => {
     if (!initialized) return;
-    if (isAuthenticated && user) {
+    if (needsPinUnlock) {
+      router.replace('/pin-unlock');
+    } else if (canAccessApp && user) {
       router.replace(homePathForActor(user));
     }
-  }, [initialized, isAuthenticated, user, router]);
+  }, [initialized, canAccessApp, needsPinUnlock, user, router]);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -46,29 +53,27 @@ export default function LoginScreen() {
       return;
     }
     const ok = await login(email.trim(), password.trim());
-    if (ok) {
-      const raw = await AsyncStorage.getItem(USER_KEY);
-      const actor = raw ? (JSON.parse(raw) as ActorInfo) : null;
-      router.replace(homePathForActor(actor));
-    }
+    if (!ok) return;
+    // La redirection est gérée par l'effet (PIN ou accueil).
   };
 
   const handleBiometricAuth = async () => {
     setBiometricLoading(true);
     try {
-      // Vérifier si un token existe déjà (biométrie = accès rapide si déjà connecté)
-      if (!isAuthenticated) {
+      if (!canAccessApp && !needsPinUnlock) {
         Alert.alert(
           'Connexion requise',
-          'Veuillez vous connecter une première fois avec votre email et mot de passe.'
+          'Connectez-vous une première fois avec votre email et mot de passe.'
         );
         return;
       }
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Accès Chaincacao',
-        fallbackLabel: 'Utiliser le mot de passe',
+        promptMessage: 'Accès ChainCacao',
+        fallbackLabel: 'Utiliser le code PIN',
       });
-      if (result.success && user) {
+      if (result.success && needsPinUnlock) {
+        router.replace('/pin-unlock');
+      } else if (result.success && user) {
         router.replace(homePathForActor(user));
       }
     } finally {
@@ -106,10 +111,11 @@ export default function LoginScreen() {
             )}
 
             <View style={styles.form}>
-              <Text style={styles.label}>Email</Text>
+              <Text style={formLabelStyle}>Email</Text>
               <TextInput
-                style={styles.input}
+                style={formInputStyle}
                 placeholder="votre@email.com"
+                placeholderTextColor={FORM_PLACEHOLDER_COLOR}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -117,11 +123,12 @@ export default function LoginScreen() {
                 editable={!loading}
               />
 
-              <Text style={styles.label}>Mot de passe</Text>
-              <View style={styles.passwordRow}>
+              <Text style={formLabelStyle}>Mot de passe</Text>
+              <View style={formPasswordRowStyle}>
                 <TextInput
-                  style={styles.passwordInput}
-                  placeholder="••••••••"
+                  style={formPasswordInputStyle}
+                  placeholder="Votre mot de passe"
+                  placeholderTextColor={FORM_PLACEHOLDER_COLOR}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
@@ -218,32 +225,6 @@ const styles = StyleSheet.create({
   },
   errorText: { color: '#C62828', fontSize: 13, flex: 1 },
   form: { width: '100%' },
-  label: {
-    fontSize: 11,
-    color: '#666',
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#F5F7FA',
-    borderRadius: 15,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#E1E8ED',
-    fontSize: 15,
-  },
-  passwordRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F7FA',
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: '#E1E8ED',
-    marginBottom: 20,
-  },
-  passwordInput: { flex: 1, padding: 16, fontSize: 15 },
   eyeBtn: { padding: 12 },
   actionsRow: {
     flexDirection: 'row',

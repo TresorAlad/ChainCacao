@@ -44,8 +44,8 @@ export default function LotsRecusScreen() {
     }, [load])
   );
 
-  const enTransit = lots.filter(isEnTransit);
-  const autres = lots.filter((b) => !isEnTransit(b));
+  const enTransit = lots.filter((b) => isEnTransit(b.statut));
+  const autres = lots.filter((b) => !isEnTransit(b.statut));
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

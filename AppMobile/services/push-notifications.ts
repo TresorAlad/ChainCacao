@@ -1,6 +1,14 @@
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+
+function notificationGranted(perm: Notifications.NotificationPermissionsStatus): boolean {
+  const p = perm as Notifications.NotificationPermissionsStatus & {
+    granted?: boolean;
+    status?: string;
+  };
+  return p.granted === true || p.status === 'granted';
+}
 import { router } from 'expo-router';
 import { deviceApi } from '@/services/api';
 import { homePathForActor } from '@/lib/home-path';
@@ -40,13 +48,13 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
   await ensureAndroidChannel();
 
-  const { status: existing } = await Notifications.getPermissionsAsync();
-  let finalStatus = existing;
-  if (existing !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
+  const existing = await Notifications.getPermissionsAsync();
+  let granted = notificationGranted(existing);
+  if (!granted) {
+    const requested = await Notifications.requestPermissionsAsync();
+    granted = notificationGranted(requested);
   }
-  if (finalStatus !== 'granted') {
+  if (!granted) {
     return null;
   }
 

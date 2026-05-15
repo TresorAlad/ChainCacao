@@ -1,11 +1,13 @@
 /* eslint-env node */
 /**
- * URL de l'API : définie uniquement ici (pas de .env / EXPO_PUBLIC_*).
+ * URL de l'API : EXPO_PUBLIC_API_URL (.env) ou valeur par défaut ci-dessous.
  * Cleartext Android forcé via withAndroidManifest pour les URL http://.
  */
 const { withAndroidManifest } = require('@expo/config-plugins');
 
-const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://api.chaincacao.tg';
+// API locale du projet (tracabilite-api sur le PC). Surcharge possible via EXPO_PUBLIC_API_URL.
+// Émulateur Android : préférer http://10.0.2.2:8080 — Téléphone réel : IP du PC (ex. http://192.168.x.x:8080).
+const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://127.0.0.1:8080';
 const usesCleartextTraffic = apiUrl.startsWith('http://');
 
 /**
@@ -57,7 +59,7 @@ module.exports = {
     },
     android: {
       package: 'com.chaincacao.chaincacao',
-      googleServicesFile: './google-services.json',
+      googleServicesFile: process.env.GOOGLE_SERVICES_JSON || './google-services.json',
       usesCleartextTraffic,
       adaptiveIcon: {
         foregroundImage: './assets/images/app-icon-adaptive-fg.png',

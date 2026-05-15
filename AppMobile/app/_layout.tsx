@@ -73,6 +73,7 @@ export default function RootLayout() {
             <Stack.Screen name="(cooperative)" />
             <Stack.Screen name="(exportateur)" />
             <Stack.Screen name="login" />
+            <Stack.Screen name="pin-unlock" />
             <Stack.Screen name="register" />
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
             <Stack.Screen name="historique" />
