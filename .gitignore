@@ -23,10 +23,10 @@ tmp/
 .env.local
 .env.*.local
 # Conserver les modèles versionnés
-.env.example
-**/.env.example
+!.env.example
+!**/.env.example
 !.env.fabric.example
-**/.env.fabric.example
+!**/.env.fabric.example
 
 # --- Firebase / FCM (clés privées) ---
 *firebase-adminsdk*.json

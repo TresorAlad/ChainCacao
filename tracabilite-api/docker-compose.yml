@@ -39,6 +39,7 @@ services:
       REDIS_URL: redis://redis:6379/0
     volumes:
       - ../fabric-samples/test-network/organizations:/fabric-crypto:ro
+      - ./secrets:/secrets:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     dns:
