@@ -35,6 +35,8 @@ interface AuthResponse {
   success?: boolean
   token?: string
   actor?: { id?: string; email?: string; role?: string }
+  wallet_balance?: number
+  wallet_credit_warning?: string
   error?: string
   message?: string
 }
@@ -103,7 +105,7 @@ interface AuthContextType {
     name: string,
     role?: string,
     extras?: RegisterExtras
-  ) => Promise<string>
+  ) => Promise<{ role: string; walletBalance?: number; walletWarning?: string }>
   logout: () => void
   isAuthenticated: boolean
 }
@@ -211,7 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     name: string,
     role?: string,
     extras?: RegisterExtras
-  ): Promise<string> => {
+  ): Promise<{ role: string; walletBalance?: number; walletWarning?: string }> => {
     const apiRole = mapRoleToApiRole(role || 'agriculteur')
     const payloadSignup: Record<string, string> = {
       nom: name.trim(),
@@ -283,7 +285,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: (jwtPayload?.email as string) || emailFromActor || email.trim().toLowerCase(),
       clientChannel,
     })
-    return resolvedRole
+    const walletBalance =
+      typeof data.wallet_balance === 'number' ? data.wallet_balance : undefined
+    const walletWarning =
+      typeof data.wallet_credit_warning === 'string' ? data.wallet_credit_warning : undefined
+
+    return { role: resolvedRole, walletBalance, walletWarning }
   }
 
   const logout = () => {

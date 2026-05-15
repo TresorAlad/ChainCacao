@@ -25,7 +25,8 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 
 import { useLots, type Lot } from '@/hooks/use-storage';
 import { useAuth } from '@/hooks/use-auth';
-import { batchApi, getApiError, isNetworkError } from '@/services/api';
+import { API_BASE, batchApi, getApiError, isNetworkError } from '@/services/api';
+import { isDeviceOnline } from '@/lib/device-online';
 import { signLotPayload } from '@/lib/lot-crypto';
 import { reverseGeocodeCoords } from '@/lib/geocode';
 import type { LotSignPayload } from '@/lib/lot-payload';
@@ -43,6 +44,15 @@ function frDateToIso(fr: string): string {
   return new Date().toISOString().split('T')[0];
 }
 
+function safeApiHostLabel(): string {
+  try {
+    const u = new URL(API_BASE);
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return API_BASE;
+  }
+}
+
 export default function NouveauLot() {
   const router = useRouter();
   const { user } = useAuth();
@@ -51,6 +61,8 @@ export default function NouveauLot() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitHint, setSubmitHint] = useState<string | null>(null);
   const [pendingBanner, setPendingBanner] = useState<string | null>(null);
+  /** Dernière raison technique (affichée à l’écran — pas de secrets). */
+  const [offlineDiag, setOfflineDiag] = useState<string | null>(null);
 
   const [typeProduit, setTypeProduit] = useState<'Cacao' | 'Café'>('Cacao');
   const [variete, setVariete] = useState('');
@@ -128,9 +140,10 @@ export default function NouveauLot() {
     setIsSubmitting(true);
     setSubmitHint(null);
     setPendingBanner(null);
+    setOfflineDiag(null);
     try {
       const network = await NetInfo.fetch();
-      const isConnected = network.isConnected === true && network.isInternetReachable !== false;
+      const canTryApi = isDeviceOnline(network);
 
       const localId = `local_${Date.now()}`;
       const culture = typeProduit === 'Cacao' ? 'Cacao' : 'Cafe';
@@ -231,7 +244,12 @@ export default function NouveauLot() {
         signer_pubkey,
       };
 
-      if (isConnected) {
+      let fallbackReason: 'netinfo' | 'api_network' | null = null;
+      if (!canTryApi) {
+        fallbackReason = 'netinfo';
+      }
+
+      if (canTryApi) {
         setSubmitHint('Envoi au serveur en cours… (photo + GPS, jusqu’à 1 min)');
         try {
           const { data } = await batchApi.createWithPhoto(storedPhoto, fields);
@@ -253,15 +271,26 @@ export default function NouveauLot() {
           ]);
           return;
         } catch (e) {
-          if (!isNetworkError(e)) {
+          const netErr = isNetworkError(e);
+          if (!netErr) {
             Alert.alert('Erreur API', getApiError(e));
             return;
           }
+          fallbackReason = 'api_network';
           setSubmitHint('Serveur injoignable — enregistrement local…');
         }
       } else {
         setSubmitHint('Hors ligne — enregistrement sur l’appareil…');
       }
+
+      const diagLines =
+        fallbackReason === 'netinfo'
+          ? `Réseau signalé indisponible (connected=${String(network.isConnected)}, internet=${String(network.isInternetReachable)}). API : ${safeApiHostLabel()}`
+          : fallbackReason === 'api_network'
+            ? `L’API ${safeApiHostLabel()} est injoignable (timeout ou pas de réponse). Le web peut fonctionner via un autre chemin (proxy HTTPS).`
+            : 'Raison inconnue.';
+
+      setOfflineDiag(diagLines);
 
       await saveLot(lotRow);
       setPendingBanner(
@@ -270,7 +299,7 @@ export default function NouveauLot() {
       void runPendingSync();
       Alert.alert(
         'En attente réseau',
-        'Lot signé et sauvegardé localement. Il sera envoyé automatiquement dès que l’API sera joignable. Vous pouvez déjà afficher le QR code.',
+        `Lot signé et sauvegardé localement. Il sera envoyé automatiquement dès que l’API sera joignable. Vous pouvez déjà afficher le QR code.\n\n— Diagnostic —\n${diagLines}`,
         [
           {
             text: 'Voir le QR',
@@ -392,6 +421,13 @@ export default function NouveauLot() {
               <View style={styles.pendingBanner}>
                 <MaterialCommunityIcons name="cloud-sync-outline" size={22} color="#E65100" />
                 <Text style={styles.pendingBannerText}>{pendingBanner}</Text>
+              </View>
+            ) : null}
+
+            {offlineDiag ? (
+              <View style={styles.diagBox} accessibilityLabel="diagnostic-reseau">
+                <Text style={styles.diagTitle}>Diagnostic réseau / API</Text>
+                <Text style={styles.diagText}>{offlineDiag}</Text>
               </View>
             ) : null}
 
@@ -595,6 +631,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#E65100',
     lineHeight: 20,
+  },
+  diagBox: {
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#ECEFF1',
+    borderWidth: 1,
+    borderColor: '#B0BEC5',
+  },
+  diagTitle: {
+    fontFamily: 'Montserrat-Bold',
+    fontSize: 12,
+    color: '#37474F',
+    marginBottom: 6,
+  },
+  diagText: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 11,
+    color: '#455A64',
+    lineHeight: 16,
   },
   submitHintBox: {
     flexDirection: 'row',

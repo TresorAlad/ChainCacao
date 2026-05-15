@@ -27,7 +27,7 @@ export function setSessionInvalidateHandler(fn: (() => Promise<void>) | null) {
 // Instance Axios centrale
 export const api = axios.create({
   baseURL: API_BASE,
-  timeout: 15000,
+  timeout: 60000,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -64,7 +64,7 @@ export function getApiError(e: unknown): string {
     return `Délai dépassé — API : ${API_BASE}`;
   }
   if (err.code === 'ERR_NETWORK' || !err.response) {
-    return `Impossible de joindre l'API (${API_BASE}). Vérifiez Internet ou l'URL configurée au build.`;
+    return `Impossible de joindre l'API (${API_BASE}). Vérifiez Internet, que le serveur écoute sur le port 8080, et l'URL EXPO_PUBLIC_API_URL au build.`;
   }
   return err.message || 'Erreur inconnue';
 }
@@ -77,7 +77,12 @@ export function isNetworkError(e: unknown): boolean {
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 
 export interface LoginPayload { email: string; password: string }
-export interface LoginResponse { token: string; actor?: ActorInfo }
+export interface LoginResponse {
+  token: string;
+  actor?: ActorInfo;
+  wallet_balance?: number;
+  wallet_credit_warning?: string;
+}
 export interface SignupPayload {
   nom: string;
   email: string;

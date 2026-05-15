@@ -9,7 +9,7 @@ import { Picker } from '@react-native-picker/picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Location from 'expo-location';
-import { authApi, getApiError } from '@/services/api';
+import { API_BASE, authApi, getApiError } from '@/services/api';
 import { homePathForActor } from '@/lib/home-path';
 import { saveProfileExtrasForActor } from '@/hooks/profile-extra';
 import { useAuth } from '@/hooks/use-auth';
@@ -134,11 +134,26 @@ export default function RegisterScreen() {
       });
       await applySessionFromSignup(data.token, enriched, true);
 
-      Alert.alert('Compte créé ✓', 'Votre compte a été créé. Vous êtes connecté.', [
-        { text: 'OK', onPress: () => router.replace(homePathForActor(enriched)) },
-      ]);
+      const walletMsg =
+        role === 'transformateur' || role === 'exportateur'
+          ? typeof data.wallet_balance === 'number'
+            ? `\n\nPortefeuille démo : ${data.wallet_balance.toLocaleString('fr-FR')} FCFA.`
+            : data.wallet_credit_warning
+              ? `\n\nAttention portefeuille : ${data.wallet_credit_warning}`
+              : ''
+          : '';
+
+      Alert.alert(
+        'Compte créé ✓',
+        `Votre compte a été créé. Vous êtes connecté.${walletMsg}`,
+        [{ text: 'OK', onPress: () => router.replace(homePathForActor(enriched)) }]
+      );
     } catch (e) {
-      Alert.alert('Inscription impossible', getApiError(e));
+      const detail = getApiError(e);
+      Alert.alert(
+        'Inscription impossible',
+        `${detail}\n\nAPI utilisée : ${API_BASE}\n\nSi le navigateur web fonctionne, vérifiez EXPO_PUBLIC_API_URL (même backend que le site).`
+      );
     } finally {
       setIsLoading(false);
     }

@@ -228,7 +228,7 @@ func (h *Handler) Signup(c *gin.Context) {
 	}
 
 	// Crédit démo 2M FCFA (exportateur / transformateur), persistant si PostgreSQL actif.
-	h.batch.EnsureDemoWalletCredit(c.Request.Context(), actor.ID, role)
+	walletBalance, walletCreditErr := h.batch.EnsureDemoWalletCredit(c.Request.Context(), actor.ID, role)
 
 	// Auto-login: retourner un JWT directement
 	token, err := h.jwt.Generate(actor.ID, actor.OrgID, actor.Role)
@@ -237,11 +237,16 @@ func (h *Handler) Signup(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"success": true,
-		"token":   token,
-		"actor":   actor,
-	})
+	resp := gin.H{
+		"success":        true,
+		"token":          token,
+		"actor":          actor,
+		"wallet_balance": walletBalance,
+	}
+	if walletCreditErr != nil {
+		resp["wallet_credit_warning"] = walletCreditErr.Error()
+	}
+	c.JSON(http.StatusCreated, resp)
 }
 
 func (h *Handler) CreateBatch(c *gin.Context) {
@@ -1303,8 +1308,12 @@ func (h *Handler) AdminCreateActor(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	h.batch.EnsureDemoWalletCredit(c.Request.Context(), actor.ID, actor.Role)
-	c.JSON(http.StatusCreated, gin.H{"success": true, "actor": actor})
+	walletBalance, walletCreditErr := h.batch.EnsureDemoWalletCredit(c.Request.Context(), actor.ID, actor.Role)
+	adminResp := gin.H{"success": true, "actor": actor, "wallet_balance": walletBalance}
+	if walletCreditErr != nil {
+		adminResp["wallet_credit_warning"] = walletCreditErr.Error()
+	}
+	c.JSON(http.StatusCreated, adminResp)
 }
 
 func (h *Handler) AdminUpdateActor(c *gin.Context) {

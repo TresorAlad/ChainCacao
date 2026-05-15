@@ -16,6 +16,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
 import NetInfo from '@react-native-community/netinfo';
+import { isDeviceOnline } from '@/lib/device-online';
 
 import { useAuth } from '@/hooks/use-auth';
 import { readLotsListForActor, type Lot } from '@/hooks/use-storage';
@@ -84,8 +85,7 @@ export default function MesLots() {
     setRefreshing(true);
     try {
       const state = await NetInfo.fetch();
-      const connected = state.isConnected === true && state.isInternetReachable !== false;
-      setIsOffline(!connected);
+      setIsOffline(!isDeviceOnline(state));
 
       const local = await readLotsListForActor(user?.id);
       const localMapped = local.map(mapLocalLot);

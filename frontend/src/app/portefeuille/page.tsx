@@ -49,6 +49,11 @@ export default function PortefeuillePage() {
   useEffect(() => {
     if (!isAuthenticated || !user?.role || !allowedRoles.includes(user.role)) return
     fetchBalance()
+    const welcome = sessionStorage.getItem('chaincacao_wallet_welcome')
+    if (welcome) {
+      sessionStorage.removeItem('chaincacao_wallet_welcome')
+      toast.success(welcome, { duration: 6000 })
+    }
   }, [isAuthenticated, user])
 
   const handleDepot = async () => {

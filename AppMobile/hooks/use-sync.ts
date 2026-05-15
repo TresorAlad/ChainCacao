@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
+import { isDeviceOnline } from '@/lib/device-online';
 import { DeviceEventEmitter } from 'react-native';
 import { useEffect, useRef, useCallback } from 'react';
 import {
@@ -272,7 +273,7 @@ async function syncPendingLots(): Promise<void> {
 /** Lance la synchro des lots / file d’attente si le réseau est disponible. */
 export async function runPendingSync(): Promise<void> {
   const state = await NetInfo.fetch();
-  if (state.isConnected) {
+  if (isDeviceOnline(state)) {
     await syncPendingLots();
   }
 }
@@ -290,7 +291,7 @@ export function useSync() {
     intervalRef.current = setInterval(triggerSync, SYNC_INTERVAL_MS);
 
     const unsubscribe = NetInfo.addEventListener((state) => {
-      if (state.isConnected) {
+      if (isDeviceOnline(state)) {
         syncPendingLots();
       }
     });

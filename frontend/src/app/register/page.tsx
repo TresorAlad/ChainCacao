@@ -104,15 +104,33 @@ export default function RegisterPage() {
 
     setIsLoading(true)
     try {
-      const jwtRole = await register(emailNorm, password, name, role, {
-        gps_location: gpsLocation.trim(),
-        field_surface: role === 'agriculteur' ? fieldSurface.trim() : undefined,
-        org_name: role !== 'agriculteur' ? orgName.trim() : undefined,
-        pin_code: pinCode.trim(),
-        preferred_client: 'web',
-      })
+      const { role: jwtRole, walletBalance, walletWarning } = await register(
+        emailNorm,
+        password,
+        name,
+        role,
+        {
+          gps_location: gpsLocation.trim(),
+          field_surface: role === 'agriculteur' ? fieldSurface.trim() : undefined,
+          org_name: role !== 'agriculteur' ? orgName.trim() : undefined,
+          pin_code: pinCode.trim(),
+          preferred_client: 'web',
+        }
+      )
       setHasPinRequired(true)
       markPinUnlocked()
+      if (
+        (role === 'transformateur' || role === 'exportateur') &&
+        walletBalance != null &&
+        walletBalance >= 1_000_000
+      ) {
+        sessionStorage.setItem(
+          'chaincacao_wallet_welcome',
+          `${walletBalance.toLocaleString('fr-FR')} FCFA crédités sur votre portefeuille démo.`
+        )
+      } else if (walletWarning && (role === 'transformateur' || role === 'exportateur')) {
+        sessionStorage.setItem('chaincacao_wallet_welcome', `Portefeuille : ${walletWarning}`)
+      }
       router.replace(getRoleBasedRedirect(jwtRole as UserRole))
     } catch (err: unknown) {
       let message = 'Erreur lors de la création du compte'

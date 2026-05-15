@@ -29,20 +29,27 @@ func isDemoWalletRole(role models.Role) bool {
 }
 
 // EnsureDemoWalletCredit crédite exportateur / transformateur jusqu'au plafond demo.
-func (s *Service) EnsureDemoWalletCredit(ctx context.Context, actorID string, role models.Role) {
-	if !demoCreditEnabled() || !isDemoWalletRole(role) {
-		return
-	}
-	initial := DemoInitialCreditAmount()
+// Retourne le solde final et une éventuelle erreur de dépôt (pour affichage client).
+func (s *Service) EnsureDemoWalletCredit(ctx context.Context, actorID string, role models.Role) (float64, error) {
 	bal, err := s.GetWalletBalance(ctx, actorID)
 	if err != nil {
-		log.Printf("demo wallet: solde %s illisible (%v), crédit quand même", actorID, err)
 		bal = 0
 	}
+	if !demoCreditEnabled() || !isDemoWalletRole(role) {
+		return bal, nil
+	}
+	initial := DemoInitialCreditAmount()
 	if bal >= initial {
-		return
+		return bal, nil
 	}
-	if _, err := s.DepositWallet(ctx, actorID, initial-bal); err != nil {
-		log.Printf("demo wallet: échec crédit %s (+%.0f FCFA): %v", actorID, initial-bal, err)
+	need := initial - bal
+	if _, err := s.DepositWallet(ctx, actorID, need); err != nil {
+		log.Printf("demo wallet: échec crédit %s (+%.0f FCFA): %v", actorID, need, err)
+		return bal, err
 	}
+	final, err := s.GetWalletBalance(ctx, actorID)
+	if err != nil {
+		return initial, nil
+	}
+	return final, nil
 }

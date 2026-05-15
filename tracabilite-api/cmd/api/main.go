@@ -99,7 +99,9 @@ func main() {
 	actorsList, _ := actorService.List(ctx)
 	for _, a := range actorsList {
 		if a.Role == models.RoleTransformateur || a.Role == models.RoleExportateur {
-			batchService.EnsureDemoWalletCredit(ctx, a.ID, a.Role)
+			if _, err := batchService.EnsureDemoWalletCredit(ctx, a.ID, a.Role); err != nil {
+				log.Printf("demo wallet startup %s: %v", a.ID, err)
+			}
 		}
 	}
 
