@@ -82,7 +82,7 @@ function EudrReportContent() {
   if (!isAuthenticated || (user?.role !== 'exportateur' && user?.role !== 'admin')) return null
 
   return (
-    <RoleLayout role={user.role} path="/eudr-report">
+    <RoleLayout role={user.role}>
       <div className="page-container py-8 max-w-3xl">
         <h1 className="text-2xl font-bold text-[var(--color-primary)] mb-2">Rapport EUDR</h1>
         <p className="text-[var(--color-muted)] mb-6">Conformité antidéforestation (CDC critère 13).</p>

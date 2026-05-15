@@ -93,7 +93,7 @@ function ReceptionLotContent() {
   const enTransit = statut.includes('transit')
 
   return (
-    <RoleLayout role={user.role} path="/reception-lot">
+    <RoleLayout role={user.role}>
       <div className="page-container py-6 sm:py-8 max-w-2xl">
         <header className="page-header mb-6">
           <h1 className="text-2xl font-bold text-[var(--color-primary)] flex items-center gap-2">
