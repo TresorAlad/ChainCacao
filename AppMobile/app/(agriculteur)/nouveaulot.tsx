@@ -119,6 +119,12 @@ export default function NouveauLot() {
     void refreshGpsPosition();
   }, [refreshGpsPosition]);
 
+  useEffect(() => {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.log('[ChainCacao][nouveaulot] écran monté');
+    }
+  }, []);
+
   const openCameraModal = async () => {
     const cam = await requestCameraPermission();
     if (!cam.granted) {
@@ -253,8 +259,7 @@ export default function NouveauLot() {
         Alert.alert('Succès', 'Lot enregistré sur la blockchain.', [
           {
             text: 'Voir le QR',
-            onPress: () =>
-              router.replace(`/qr-lot?lotId=${encodeURIComponent(serverId)}` as any),
+            onPress: () => router.replace(AG.qrLot(serverId) as any),
           },
         ]);
         return;

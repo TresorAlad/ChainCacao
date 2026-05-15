@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
-import { getErrorMessage } from '@/lib/error-utils'
+import { getErrorMessage, getAxiosErrorDetail } from '@/lib/error-utils'
 import { reverseGeocodeWebParsed } from '@/lib/geocode'
 import { LocationMap } from '@/components/maps/LocationMapDynamic'
 import { RoleGate } from '@/components/RoleGate'
@@ -131,7 +131,7 @@ export default function NouveauLotPage() {
       toast.success(`Lot créé avec succès${newId ? ` (ID: ${newId})` : ''}`)
       router.push('/dashboard-agriculteur')
     } catch (err: unknown) {
-      console.error('[nouveau-lot] échec création lot', err)
+      console.error('[nouveau-lot] échec création lot', getAxiosErrorDetail(err))
       toast.error(getErrorMessage(err, 'Erreur lors de la création du lot'))
     } finally {
       setIsSubmitting(false)

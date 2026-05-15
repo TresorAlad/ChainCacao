@@ -15,7 +15,7 @@ import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
 
 import { useAuth } from '@/hooks/use-auth';
-import { AG } from '@/lib/agriculteur-routes';
+import { AG, navigateAgriculteurFromTab } from '@/lib/agriculteur-routes';
 
 export default function ProfilAgriculteur() {
   const insets = useSafeAreaInsets();
@@ -53,7 +53,7 @@ export default function ProfilAgriculteur() {
   };
 
   const navigateTo = (path: string) => {
-    router.replace(path as any);
+    navigateAgriculteurFromTab(router, path, 'profil');
   };
 
   if (!fontsLoaded || !initialized) {

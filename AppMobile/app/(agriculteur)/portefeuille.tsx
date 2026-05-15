@@ -17,7 +17,7 @@ import * as Font from 'expo-font';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { walletApi, getApiError } from '@/services/api';
-import { AG } from '@/lib/agriculteur-routes';
+import { AG, navigateAgriculteurFromTab } from '@/lib/agriculteur-routes';
 
 const INITIAL_DATA = [
   { id: '1', type: 'depot', libelle: 'Solde initial', montant: 0, date: '—', heure: '—', isSynced: true },
@@ -146,7 +146,7 @@ export default function Portefeuille() {
   };
 
   const navigateTo = (path: string) => {
-    router.replace(path as any);
+    navigateAgriculteurFromTab(router, path, 'portefeuille');
   };
 
   if (!fontsLoaded) {

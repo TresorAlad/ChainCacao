@@ -13,6 +13,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AG } from '@/lib/agriculteur-routes';
+
 const { width } = Dimensions.get('window');
 
 interface Production {
@@ -149,7 +151,7 @@ export default function ProductionScreen() {
         />
       </View>
 
-      <TouchableOpacity style={styles.fab} onPress={() => router.push('/(agriculteur)/nouveaulot' as any)}>
+      <TouchableOpacity style={styles.fab} onPress={() => router.push(AG.nouveaulot as any)}>
         <MaterialCommunityIcons name="plus" size={35} color="white" />
       </TouchableOpacity>
     </SafeAreaView>

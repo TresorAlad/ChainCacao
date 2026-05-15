@@ -20,7 +20,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { myLotsApi, type BatchResponse, getApiError } from '@/services/api';
 import { LOTS_UPDATED_EVENT } from '@/lib/storage-keys';
 import { mapCdcLotDisplay } from '@/utils/lot-status';
-import { AG } from '@/lib/agriculteur-routes';
+import { AG, navigateAgriculteurFromTab } from '@/lib/agriculteur-routes';
 
 type DisplayLot = {
   id: string;
@@ -100,7 +100,7 @@ export default function MesLots() {
   }, [loadData]);
 
   const handleNavigation = (path: string) => {
-    router.replace(path as any);
+    navigateAgriculteurFromTab(router, path, 'meslots');
   };
 
   const renderLotItem = ({ item }: { item: DisplayLot }) => (

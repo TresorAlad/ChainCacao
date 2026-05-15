@@ -17,7 +17,7 @@ import Svg, { Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { myLotsApi, getApiError } from '@/services/api';
-import { AG } from '@/lib/agriculteur-routes';
+import { AG, logNavigation } from '@/lib/agriculteur-routes';
 
 const { width } = Dimensions.get('window');
 
@@ -70,6 +70,7 @@ export default function AccueilAgriculteur() {
   }, []);
 
   const handleNavigation = (path: string) => {
+    logNavigation('accueil', path);
     router.push(path as any);
   };
 

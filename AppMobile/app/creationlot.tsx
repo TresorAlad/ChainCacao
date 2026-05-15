@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useRouter, Stack } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
 
+import { AG } from '@/lib/agriculteur-routes';
+
 /**
  * Route legacy : redirige vers la création de lot (agriculteur).
  */
@@ -9,7 +11,7 @@ export default function CreationLotRedirect() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/(agriculteur)/nouveaulot' as any);
+    router.replace(AG.nouveaulot as any);
   }, [router]);
 
   return (
