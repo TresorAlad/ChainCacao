@@ -17,6 +17,8 @@ services:
     working_dir: /src
     volumes:
       - .:/src
+      - ../fabric-samples/test-network/organizations:/fabric-crypto:ro
+      - ./secrets:/secrets:ro
     command:
       - sh
       - -c
@@ -28,6 +30,9 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: postgresql://chaincacao:chaincacao@postgres:5432/chaincacao?sslmode=disable
+      # false = tenter le vrai Gateway si FABRIC_PEER_ENDPOINT est dans .env ; monter fabric-samples
+      # (volumes ci-dessus). Si pas de réseau Fabric : laisser FABRIC_PEER_ENDPOINT vide → ledger mémoire.
+      USE_INMEMORY_FABRIC: "false"
     depends_on:
       postgres:
         condition: service_healthy
