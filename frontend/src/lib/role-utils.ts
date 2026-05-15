@@ -6,16 +6,41 @@ export type UserRole =
   | 'exportateur'
   | 'ministere'
 
+const USER_ROLES: UserRole[] = [
+  'admin',
+  'agriculteur',
+  'cooperative',
+  'transformateur',
+  'exportateur',
+  'ministere',
+]
+
 /** Rôle attendu par l'API Go (aligné sur pkg/models). */
 export function mapRoleToApiRole(role: string): string {
   const r = role.trim().toLowerCase()
   return r || 'agriculteur'
 }
 
+/** Normalise un rôle JWT / API vers un `UserRole` connu. */
+export function normalizeUserRole(role: string | undefined): UserRole | undefined {
+  if (!role) return undefined
+  const r = role.trim().toLowerCase()
+  return USER_ROLES.includes(r as UserRole) ? (r as UserRole) : undefined
+}
+
+export function isMinistereRole(role: string | undefined): boolean {
+  return normalizeUserRole(role) === 'ministere'
+}
+
+export function isAdminRole(role: string | undefined): boolean {
+  return normalizeUserRole(role) === 'admin'
+}
+
 export function getRoleBasedRedirect(role: UserRole | string | undefined): string {
   if (!role) return '/login'
+  const r = normalizeUserRole(role) ?? role
 
-  switch (role) {
+  switch (r) {
     case 'admin':
       return '/dashboard-admin'
     case 'agriculteur':

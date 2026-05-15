@@ -93,24 +93,24 @@ export default function ListeGroupeePage() {
   return (
     <RoleLayout role="cooperative">
       <div className="w-full py-6 sm:py-8 max-w-5xl mx-auto">
-        <header className="mb-10">
-          <h1 className="text-4xl font-bold tracking-tight text-[var(--color-primary)] flex items-center gap-3">
-            <RectangleStackIcon className="w-10 h-10 text-[#33691E]" />
+        <header className="page-header mb-6 sm:mb-10">
+          <h1 className="page-heading-row">
+            <RectangleStackIcon className="page-heading-icon" />
             Liste groupée
           </h1>
-          <p className="text-lg mt-2 font-medium opacity-60 text-[var(--color-muted)]">
+          <p className="page-subtitle">
             Regroupez plusieurs lots reçus en une liste unique avec QR code (CDC §7.2).
           </p>
         </header>
 
-        <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)] mb-8">
-          <div className="flex justify-between items-center mb-6">
+        <div className="card-panel mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
             <h2 className="text-lg font-black text-[var(--color-primary)]">Lots en ma possession</h2>
             <button
               type="button"
               onClick={createGroupedList}
               disabled={creating || selected.size < 2}
-              className="px-6 py-2.5 bg-[#33691E] text-white rounded-xl text-sm font-bold disabled:opacity-50 hover:brightness-110"
+              className="w-full sm:w-auto px-6 py-2.5 bg-[#33691E] text-white rounded-xl text-sm font-bold disabled:opacity-50 hover:brightness-110"
             >
               {creating ? 'Création…' : `Créer liste (${selected.size})`}
             </button>
@@ -147,12 +147,12 @@ export default function ListeGroupeePage() {
         </div>
 
         {lastListId && (
-          <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[#C8E6C9] mb-8">
+          <div className="card-panel border-[#C8E6C9] mb-6 sm:mb-8">
             <h2 className="text-lg font-black text-[var(--color-primary)] mb-4 flex items-center gap-2">
               <QrCodeIcon className="w-6 h-6 text-[#33691E]" />
               QR liste créée
             </h2>
-            <p className="font-mono text-sm font-bold text-[#33691E] mb-4">{lastListId}</p>
+            <p className="font-mono text-sm font-bold text-[#33691E] mb-4 break-all">{lastListId}</p>
             {qrUrl && (
               <img
                 src={qrUrl}
@@ -168,13 +168,13 @@ export default function ListeGroupeePage() {
         )}
 
         {history.length > 0 && (
-          <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)]">
+          <div className="card-panel">
             <h2 className="text-lg font-black text-[var(--color-primary)] mb-4">Historique session</h2>
             <ul className="space-y-3">
               {history.map((item) => (
                 <li key={item.list_id} className="p-4 rounded-xl bg-gray-50">
-                  <p className="font-mono font-bold text-sm">{item.list_id}</p>
-                  <p className="text-xs text-gray-500 mt-1">{item.batch_ids.length} lots · {item.batch_ids.join(', ')}</p>
+                  <p className="font-mono font-bold text-sm break-all">{item.list_id}</p>
+                  <p className="text-xs text-gray-500 mt-1 break-words">{item.batch_ids.length} lots · {item.batch_ids.join(', ')}</p>
                 </li>
               ))}
             </ul>

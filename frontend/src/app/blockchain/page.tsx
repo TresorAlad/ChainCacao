@@ -21,13 +21,15 @@ export default function BlockchainPage() {
   const [fetching, setFetching] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const isAdmin = user?.role === 'admin'
+  const isMinistere = user?.role === 'ministere' || user?.role?.toLowerCase() === 'ministere'
+  const canViewStats = isAdmin || isMinistere
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace('/login')
   }, [isAuthenticated, loading, router])
 
   const fetchStats = () => {
-    if (!isAuthenticated || !isAdmin) { setFetching(false); return }
+    if (!isAuthenticated || !canViewStats) { setFetching(false); return }
     setFetching(true)
     api.get<DashboardStats | { data?: DashboardStats }>('/dashboard/stats')
       .then((res) => {
@@ -42,7 +44,7 @@ export default function BlockchainPage() {
   useEffect(() => {
     if (isAuthenticated) fetchStats()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, isAdmin])
+  }, [isAuthenticated, canViewStats])
 
   if (loading) {
     return (
@@ -65,7 +67,7 @@ export default function BlockchainPage() {
             Surveillance de l&apos;infrastructure décentralisée Hyperledger Fabric.
           </p>
         </div>
-        {isAdmin && (
+        {canViewStats && (
           <button
             onClick={fetchStats}
             disabled={fetching}
@@ -77,14 +79,14 @@ export default function BlockchainPage() {
         )}
       </header>
 
-      {!isAdmin && (
+      {!canViewStats && (
         <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800 font-medium">
           Les données blockchain en temps réel (hauteur de bloc, nœuds, hash) nécessitent
           un accès direct au proxy Fabric et sont réservées à l&apos;administrateur système.
         </div>
       )}
 
-      {isAdmin && stats && (
+      {canViewStats && stats && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Lots enregistrés</p>
@@ -112,7 +114,7 @@ export default function BlockchainPage() {
         </div>
       )}
 
-      {isAdmin && !stats && !fetching && (
+      {canViewStats && !stats && !fetching && (
         <div className="mb-8 rounded-2xl border border-gray-200 bg-gray-50 p-6 text-sm text-gray-500">
           Impossible de charger les statistiques. Vérifiez la connexion à l&apos;API.
         </div>

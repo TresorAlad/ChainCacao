@@ -12,7 +12,7 @@ interface RoleLayoutProps {
 export function RoleLayout({ children, role }: RoleLayoutProps) {
   return (
     <div
-      className="relative min-h-[calc(100vh-5rem)] flex flex-col bg-[var(--color-bg)]"
+      className="relative min-h-[calc(100vh-5rem)] flex flex-col bg-[var(--color-bg)] overflow-x-hidden"
       data-dashboard-role={role}
     >
       <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-30">

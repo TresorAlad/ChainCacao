@@ -73,7 +73,7 @@ function EudrReportContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="page-loading">
         <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#33691E] border-t-transparent" />
       </div>
     )
@@ -83,25 +83,25 @@ function EudrReportContent() {
 
   return (
     <RoleLayout role={user.role}>
-      <div className="page-container py-8 max-w-3xl">
-        <h1 className="text-2xl font-bold text-[var(--color-primary)] mb-2">Rapport EUDR</h1>
-        <p className="text-[var(--color-muted)] mb-6">Conformité antidéforestation (CDC critère 13).</p>
+      <div className="page-container py-6 sm:py-8 max-w-3xl">
+        <h1 className="page-heading mb-2">Rapport EUDR</h1>
+        <p className="page-subtitle mb-6">Conformité antidéforestation (CDC critère 13).</p>
 
-        <div className="flex gap-2 mb-6">
+        <div className="toolbar-row mb-6">
           <input
-            className="form-input flex-1"
+            className="form-input"
             placeholder="ID du lot"
             value={lotId}
             onChange={(e) => setLotId(e.target.value)}
           />
-          <button type="button" className="btn-primary" disabled={fetching} onClick={() => void loadReport()}>
+          <button type="button" className="btn btn-primary" disabled={fetching} onClick={() => void loadReport()}>
             Générer
           </button>
         </div>
 
         {report ? (
           <div className="card p-6 space-y-4 text-sm">
-            <p>
+            <p className="break-all">
               <strong>Lot :</strong> {report.lot_id}
             </p>
             <p>
@@ -118,7 +118,7 @@ function EudrReportContent() {
             </p>
             <p>
               <strong>Vérification :</strong>{' '}
-              <a href={report.verify_url} className="text-[var(--color-primary)] underline" target="_blank" rel="noreferrer">
+              <a href={report.verify_url} className="text-[var(--color-primary)] underline break-all" target="_blank" rel="noreferrer">
                 {report.verify_url}
               </a>
             </p>

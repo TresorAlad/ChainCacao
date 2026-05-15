@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { getRoleBasedRedirect } from '@/lib/role-utils'
 import Link from 'next/link'
 import { BrandLogo } from '@/components/BrandLogo'
 import {
@@ -17,21 +18,31 @@ import {
   GiftIcon,
 } from '@heroicons/react/24/outline'
 
+/** Données d’illustration pour la fiche lot (page d’accueil publique). */
+const LOT_PREVIEW_MOCK = {
+  lotId: 'LOT-2026-0515-00042',
+  culture: 'Cacao — Forastero',
+  quantite: '850 kg',
+  origine: 'Kpalimé, Région des Plateaux (Togo)',
+  parcelle: 'Parcelle A12',
+  traceabilityPct: 78,
+}
+
 export default function HomePage() {
   const router = useRouter()
-  const { isAuthenticated, loading } = useAuth()
+  const { isAuthenticated, loading, user } = useAuth()
   const [isVisible, setIsVisible] = useState(false)
 
   useEffect(() => {
     if (!loading) {
       if (isAuthenticated) {
-        router.replace('/dashboard')
+        router.replace(getRoleBasedRedirect(user?.role))
       } else {
         // Animation d'entrée
         setTimeout(() => setIsVisible(true), 100)
       }
     }
-  }, [isAuthenticated, loading, router])
+  }, [isAuthenticated, loading, router, user?.role])
 
   if (loading) {
     return (
@@ -279,7 +290,8 @@ export default function HomePage() {
                       <span className="text-xs text-[var(--color-muted)]">Fiche lot (aperçu)</span>
                     </div>
 
-                    {/* Product Info — illustration sans données fictives */}
+                    <p className="text-[10px] font-mono text-[var(--color-muted)] mb-4 break-all">{LOT_PREVIEW_MOCK.lotId}</p>
+
                     <div className="space-y-4">
                       <div className="flex items-center gap-4 p-4 rounded-xl bg-[var(--color-bg)]/50 border border-[var(--color-border)]/50">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--color-primary)]/20 to-[var(--color-secondary)]/20 flex items-center justify-center">
@@ -287,38 +299,48 @@ export default function HomePage() {
                         </div>
                         <div>
                           <p className="text-sm text-[var(--color-muted)]">Culture</p>
-                          <p className="font-semibold text-[var(--color-earth)]">—</p>
+                          <p className="font-semibold text-[var(--color-earth)]">{LOT_PREVIEW_MOCK.culture}</p>
                         </div>
                       </div>
                       <div>
                         <p className="text-sm text-[var(--color-muted)]">Quantité</p>
-                        <p className="font-semibold text-[var(--color-earth)]">—</p>
+                        <p className="font-semibold text-[var(--color-earth)]">{LOT_PREVIEW_MOCK.quantite}</p>
                       </div>
                       <div>
                         <p className="text-sm text-[var(--color-muted)]">Origine</p>
-                        <p className="font-semibold text-[var(--color-earth)]">—</p>
+                        <p className="font-semibold text-[var(--color-earth)] break-words">{LOT_PREVIEW_MOCK.origine}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-[var(--color-muted)]">Parcelle</p>
+                        <p className="font-semibold text-[var(--color-earth)]">{LOT_PREVIEW_MOCK.parcelle}</p>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                       <div className="p-3 rounded-xl bg-gradient-to-br from-green-500/10 to-green-500/5 border border-green-500/20">
                         <p className="text-xs text-green-500 mb-1">Quantité</p>
-                        <p className="font-bold text-green-600">—</p>
+                        <p className="font-bold text-green-600">{LOT_PREVIEW_MOCK.quantite}</p>
                       </div>
                       <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-500/20">
                         <p className="text-xs text-blue-500 mb-1">Origine</p>
-                        <p className="font-bold text-blue-600">—</p>
+                        <p className="font-bold text-blue-600 text-sm leading-snug">{LOT_PREVIEW_MOCK.origine}</p>
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
+                    <div className="space-y-2 mt-4">
+                      <div className="flex justify-between text-sm gap-2">
                         <span className="text-[var(--color-muted)]">Traçabilité (blockchain)</span>
-                        <span className="font-semibold text-[var(--color-muted)]">Données réelles après connexion</span>
+                        <span className="font-semibold text-[var(--color-primary)]">{LOT_PREVIEW_MOCK.traceabilityPct} %</span>
                       </div>
                       <div className="h-2 rounded-full bg-[var(--color-border)] overflow-hidden">
-                        <div className="h-full w-1/3 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] rounded-full opacity-60" />
+                        <div
+                          className="h-full bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] rounded-full"
+                          style={{ width: `${LOT_PREVIEW_MOCK.traceabilityPct}%` }}
+                        />
                       </div>
+                      <p className="text-[10px] text-[var(--color-muted)]">
+                        Exemple illustratif — connectez-vous pour les données réelles.
+                      </p>
                     </div>
                     </div>
                   </div>

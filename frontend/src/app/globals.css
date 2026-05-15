@@ -71,7 +71,7 @@ body {
 
 /* Typography System */
 .text-display-lg {
-  @apply text-[2.5rem] font-bold leading-tight tracking-tight;
+  @apply text-[1.75rem] sm:text-[2rem] md:text-[2.5rem] font-bold leading-tight tracking-tight;
 }
 
 .text-display-md {
@@ -206,7 +206,58 @@ h4 { @apply text-title-sm font-medium text-[var(--color-earth)]; }
 
 /* Page Container — pleine largeur dans la zone `<main>` (padding géré par AppShell). */
 .page-container {
-  @apply w-full max-w-none mx-auto;
+  @apply w-full max-w-none mx-auto min-w-0;
+}
+
+/* Utilitaires responsive (formulaires, titres, barres d’action) */
+.page-heading {
+  @apply text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-[var(--color-primary)];
+}
+
+.page-subtitle {
+  @apply text-base sm:text-lg mt-2 font-medium text-[var(--color-muted)];
+}
+
+.page-heading-row {
+  @apply page-heading flex flex-wrap items-center gap-2 sm:gap-3;
+}
+
+.page-heading-icon {
+  @apply w-8 h-8 sm:w-10 sm:h-10 shrink-0 text-[#33691E];
+}
+
+.toolbar-row {
+  @apply flex flex-col sm:flex-row gap-2 sm:gap-3;
+}
+
+.toolbar-row .form-input,
+.toolbar-row input:not([type='checkbox']):not([type='radio']) {
+  @apply min-w-0 flex-1 w-full;
+}
+
+.toolbar-row > .btn-primary,
+.toolbar-row > button.btn-primary {
+  @apply w-full sm:w-auto shrink-0 justify-center;
+}
+
+.card-panel {
+  @apply bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 md:p-8 shadow-sm border border-[var(--color-border)];
+}
+
+.page-loading {
+  @apply flex flex-1 items-center justify-center py-20 min-h-[12rem];
+}
+
+.page-actions {
+  @apply flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto;
+}
+
+.stat-grid-2 {
+  @apply grid grid-cols-1 sm:grid-cols-2 gap-3;
+}
+
+.btn-outline {
+  @apply btn btn-primary-outline;
 }
 
 /* Page Header */
@@ -513,7 +564,7 @@ select.form-input {
 /* Grid Systems */
 .grid-cols-responsive {
   @apply grid gap-6;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
 }
 
 .grid-cols-stats {

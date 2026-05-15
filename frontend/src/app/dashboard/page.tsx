@@ -12,6 +12,7 @@ import type {
   RecentTransferRow,
 } from '@/lib/dashboard-types'
 import { getRoleDisplayName, getRoleDescription, getRoleTheme, UserRole } from '@/lib/role-themes'
+import { getRoleBasedRedirect, normalizeUserRole } from '@/lib/role-utils'
 import { RoleLayout } from '@/components/RoleLayout'
 import { KPICard, Badge, Button } from '@/components/ui'
 import {
@@ -48,6 +49,15 @@ export default function DashboardPage() {
       router.replace('/login')
     }
   }, [isAuthenticated, loading, router])
+
+  useEffect(() => {
+    if (loading || !isAuthenticated || !user?.role) return
+    const normalized = normalizeUserRole(user.role)
+    const dedicated = getRoleBasedRedirect(normalized)
+    if (dedicated !== '/dashboard' && dedicated !== '/login') {
+      router.replace(dedicated)
+    }
+  }, [loading, isAuthenticated, user?.role, router])
 
   useEffect(() => {
     if (isAuthenticated) {

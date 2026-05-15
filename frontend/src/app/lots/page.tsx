@@ -86,8 +86,8 @@ export default function LotsPage() {
     <div className="w-full py-6 sm:py-8">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight text-[var(--color-primary)]">Gestion des Lots</h1>
-          <p className="text-lg mt-2 font-medium opacity-60 text-[var(--color-muted)]">
+          <h1 className="page-heading">Gestion des Lots</h1>
+          <p className="page-subtitle">
             Inventaire complet et traçabilité des récoltes de cacao.
           </p>
         </div>
@@ -105,9 +105,9 @@ export default function LotsPage() {
       </header>
 
       {/* Recherche par ID */}
-      <div className="mb-8 bg-white rounded-2xl p-6 shadow-sm border border-[var(--color-border)]">
+      <div className="mb-8 card p-4 sm:p-6">
         <p className="text-sm font-bold text-[var(--color-primary)] mb-3">Rechercher un lot par ID</p>
-        <div className="flex gap-3">
+        <div className="toolbar-row">
           <div className="relative flex-1">
             <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-2.5 text-gray-400" />
             <input
@@ -122,7 +122,7 @@ export default function LotsPage() {
           <button
             onClick={() => fetchLot(searchId)}
             disabled={searching || !searchId.trim()}
-            className="px-5 py-2 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold disabled:opacity-50 hover:brightness-110 transition-all"
+            className="btn-primary px-5 py-2 disabled:opacity-50"
           >
             {searching ? '…' : 'Chercher'}
           </button>
@@ -139,9 +139,9 @@ export default function LotsPage() {
 
       <div className="flex flex-col xl:flex-row gap-8">
         {/* Table */}
-        <div className="flex-1 bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)] overflow-hidden">
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="text-2xl font-black text-[var(--color-primary)]">Registre des Récoltes</h3>
+        <div className="flex-1 card-panel overflow-hidden min-w-0">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 sm:mb-8">
+            <h3 className="text-xl sm:text-2xl font-black text-[var(--color-primary)]">Registre des Récoltes</h3>
             <span className="px-3 py-1 bg-[#F1F8E9] text-[#33691E] rounded-full text-[10px] font-black uppercase tracking-widest">
               Total : {filteredLots.length} lots
             </span>

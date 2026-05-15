@@ -13,7 +13,7 @@ import {
 import { BrandLogo } from '@/components/BrandLogo'
 import { useAuth } from '@/contexts/AuthContext'
 import { getRoleBasedRedirect } from '@/lib/role-utils'
-import { canCreateLot, getNavSectionsForRole, isAdminRole } from '@/lib/role-nav'
+import { canCreateLot, getNavLabel, getNavSectionsForRole, isAdminRole } from '@/lib/role-nav'
 import {
   useSidebarLayout,
   useResponsiveShell,
@@ -50,7 +50,9 @@ export default function Sidebar() {
         } ${collapsed && isLg ? 'justify-center px-2' : ''}`}
       >
         <item.icon className={`h-6 w-6 shrink-0 transition-transform group-hover:scale-110 ${isActive ? 'text-white' : ''}`} />
-        {(!collapsed || !isLg) && <span className="text-sm font-bold">{item.label}</span>}
+        {(!collapsed || !isLg) && (
+          <span className="text-sm font-bold">{getNavLabel(item, user?.role)}</span>
+        )}
       </Link>
     )
   }

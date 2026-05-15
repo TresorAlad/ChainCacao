@@ -133,7 +133,7 @@ function PaiementLotContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="page-loading">
         <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#33691E] border-t-transparent" />
       </div>
     )
@@ -145,34 +145,34 @@ function PaiementLotContent() {
 
   return (
     <RoleLayout role={roleKey}>
-      <div className="w-full py-6 sm:py-8 max-w-2xl mx-auto">
-        <header className="mb-10">
-          <h1 className="text-4xl font-bold tracking-tight text-[var(--color-primary)] flex items-center gap-3">
-            <BanknotesIcon className="w-10 h-10 text-[#33691E]" />
+      <div className="page-container py-6 sm:py-8 max-w-2xl mx-auto">
+        <header className="page-header mb-6 sm:mb-10">
+          <h1 className="page-heading-row">
+            <BanknotesIcon className="page-heading-icon" />
             Paiement par identifiant
           </h1>
-          <p className="text-lg mt-2 font-medium opacity-60 text-[var(--color-muted)]">
+          <p className="page-subtitle">
             Prix brut, marge coopérative et montant net affichés avant confirmation (CDC).
           </p>
         </header>
 
-        <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)] space-y-6">
+        <div className="card-panel space-y-6">
           <div>
             <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Identifiant du lot</label>
-            <div className="flex gap-3 mt-2">
+            <div className="toolbar-row mt-2">
               <input
                 type="text"
                 value={lotId}
                 onChange={(e) => setLotId(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && loadLot()}
                 placeholder="Ex: LOT-2026-05015-00001"
-                className="flex-1 px-4 py-3 rounded-xl border border-gray-200 text-sm font-bold font-mono"
+                className="form-input font-mono text-sm font-bold"
               />
               <button
                 type="button"
                 onClick={() => loadLot()}
                 disabled={searching}
-                className="px-5 py-3 bg-[#33691E] text-white rounded-xl text-sm font-black flex items-center gap-2 disabled:opacity-50"
+                className="btn-primary px-5 py-3 flex items-center gap-2 disabled:opacity-50"
               >
                 <MagnifyingGlassIcon className="w-5 h-5" />
                 {searching ? '…' : 'Charger'}
@@ -182,7 +182,7 @@ function PaiementLotContent() {
 
           {lot && (
             <div className="rounded-2xl bg-[#F1F8E9] border border-[#C8E6C9] p-5 space-y-2">
-              <p className="font-mono font-black text-[#1B5E20]">{lot.id}</p>
+              <p className="font-mono font-black text-[#1B5E20] break-all">{lot.id}</p>
               <p className="text-sm text-gray-600">
                 {lot.culture} {lot.variete ? `· ${lot.variete}` : ''} — {lot.quantite} kg
               </p>
@@ -254,7 +254,7 @@ export default function PaiementLotPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center">
+        <div className="page-loading">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#33691E] border-t-transparent" />
         </div>
       }

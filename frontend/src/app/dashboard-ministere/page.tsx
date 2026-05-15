@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { RoleLayout } from '@/components/RoleLayout'
 import { getRoleTheme } from '@/lib/role-themes'
+import { getRoleBasedRedirect, isAdminRole, isMinistereRole, normalizeUserRole } from '@/lib/role-utils'
 import api, { type ActorDTO, type Batch, type BatchHistoryEvent } from '@/lib/api'
 import { LocationMap } from '@/components/maps/LocationMapDynamic'
 import { coordsFromLot, markersFromActors, type MapMarker } from '@/lib/geo-utils'
@@ -38,8 +39,16 @@ export default function MinistereDashboardPage() {
     if (!loading && !isAuthenticated) router.replace('/login')
   }, [isAuthenticated, loading, router])
 
+  const canAccess = isMinistereRole(user?.role) || isAdminRole(user?.role)
+
   useEffect(() => {
-    if (!isAuthenticated || (user?.role !== 'ministere' && user?.role !== 'admin')) return
+    if (!loading && isAuthenticated && !canAccess) {
+      router.replace(getRoleBasedRedirect(user?.role))
+    }
+  }, [loading, isAuthenticated, canAccess, user?.role, router])
+
+  useEffect(() => {
+    if (!isAuthenticated || !canAccess) return
     setStatsLoading(true)
     Promise.all([
       api.get<{ success: boolean; stats: DashboardStats }>('/dashboard/stats').catch(() => ({ data: { stats: {} } })),
@@ -104,7 +113,13 @@ export default function MinistereDashboardPage() {
     )
   }
 
-  if (!isAuthenticated || (user?.role !== 'ministere' && user?.role !== 'admin')) return null
+  if (!isAuthenticated || !canAccess) {
+    return (
+      <div className="page-loading">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-t-transparent" style={{ borderColor: theme.primary }} />
+      </div>
+    )
+  }
 
   const totalLots = stats?.total_batches ?? stats?.total_lots
   const totalWeight = stats?.total_weight
@@ -204,14 +219,14 @@ export default function MinistereDashboardPage() {
             <MagnifyingGlassIcon className="w-5 h-5 text-[#33691E]" />
             Audit par identifiant de lot
           </h3>
-          <div className="flex gap-3 mb-6">
+          <div className="toolbar-row mb-6">
             <input
               type="text"
+              className="form-input rounded-2xl text-sm font-bold"
               placeholder="Ex: LOT-2026-05015-00001"
               value={searchId}
               onChange={(e) => setSearchId(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && runAudit()}
-              className="flex-1 px-4 py-3 bg-gray-50 border border-[var(--color-border)] rounded-2xl text-sm font-bold focus:ring-2 focus:ring-[#33691E] outline-none"
             />
             <button
               type="button"

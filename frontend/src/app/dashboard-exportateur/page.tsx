@@ -126,7 +126,7 @@ export default function ExportateurDashboardPage() {
             <p className="text-white/60 text-sm">Suivi de vos expéditions à travers le monde.</p>
           </div>
           <div className="absolute inset-0 flex items-center justify-center opacity-20">
-            <GlobeAmericasIcon className="w-[600px] h-[600px] text-white" />
+            <GlobeAmericasIcon className="w-[min(100vw,600px)] h-[min(100vw,600px)] max-w-none text-white" />
           </div>
           <div className="absolute bottom-8 right-8 bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20">
             <div className="flex items-center gap-3">

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { getApiBaseUrl, SESSION_EXPIRED_EVENT } from '@/lib/api-base'
-import { mapRoleToApiRole } from '@/lib/role-utils'
+import { mapRoleToApiRole, normalizeUserRole } from '@/lib/role-utils'
 import {
   type SignupChannel,
   setSignupChannel,
@@ -70,15 +70,20 @@ async function parseAuthJson(res: Response): Promise<AuthResponse> {
   }
 }
 
-function userFromToken(token: string): User | null {
+function resolveUserRole(tokenRole?: string, actorRole?: string): string | undefined {
+  return normalizeUserRole(tokenRole) ?? normalizeUserRole(actorRole)
+}
+
+function userFromToken(token: string, actorRole?: string): User | null {
   if (isJwtExpired(token)) return null
   const payload = decodeJwtPayload(token)
   if (!payload) return null
   const actorId = (payload.actor_id || payload.sub) as string | undefined
+  const role = resolveUserRole(payload.role as string | undefined, actorRole)
   return {
     token,
     actor_id: actorId,
-    role: (payload.role as string) || 'user',
+    role,
     email: payload.email as string | undefined,
     clientChannel: getSignupChannel(actorId),
   }
@@ -120,12 +125,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = (await res.json()) as SessionResponse
         const token = data.token || ''
         if (!token) return
-        const u = userFromToken(token)
+        const u = userFromToken(token, data.actor?.role)
         if (u) {
           setUser({
             ...u,
             actor_id: u.actor_id || data.actor?.id,
-            role: u.role || data.actor?.role,
+            role: resolveUserRole(u.role, data.actor?.role),
           })
         }
       } catch {
@@ -182,12 +187,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       data.actor && typeof data.actor === 'object' && typeof data.actor.email === 'string'
         ? data.actor.email
         : undefined
-    const base = userFromToken(token)
+    const actorRole =
+      data.actor && typeof data.actor === 'object' && typeof data.actor.role === 'string'
+        ? data.actor.role
+        : undefined
+    const base = userFromToken(token, actorRole)
     if (!base) {
       throw new Error('Jeton de session invalide')
     }
     const u: User = {
       ...base,
+      role: resolveUserRole(base.role, actorRole),
       email: base.email || emailFromActor,
       clientChannel: getSignupChannel(base.actor_id),
     }

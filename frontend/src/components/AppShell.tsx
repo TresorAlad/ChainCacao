@@ -21,7 +21,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       ) : null}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-y-auto pt-20 pb-6 sm:pb-10 px-4 sm:px-6 xl:px-10 box-border">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden pt-16 sm:pt-20 pb-6 sm:pb-10 px-3 sm:px-6 xl:px-10 box-border min-w-0">
           {children}
         </main>
       </div>

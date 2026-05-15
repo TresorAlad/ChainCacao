@@ -20,6 +20,8 @@ const LABELS: Record<string, string> = {
   transfer: 'Transferts',
   'paiement-lot': 'Paiement lot',
   'paiement-liste': 'Payer liste groupée',
+  'reception-lot': 'Réception physique',
+  'eudr-report': 'Rapport EUDR',
   transactions: 'Transactions',
   blockchain: 'Blockchain',
   actors: 'Acteurs',
@@ -58,7 +60,7 @@ export default function Header() {
   return (
     <header
       style={{ left: headerLeft }}
-      className="fixed top-0 right-0 z-40 flex h-20 items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 pl-3 pr-4 backdrop-blur-md sm:pl-4 sm:pr-6 md:px-8"
+      className="fixed top-0 right-0 z-40 flex h-16 sm:h-20 items-center gap-2 sm:gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 pl-3 pr-4 backdrop-blur-md sm:pl-4 sm:pr-6 md:px-8"
       role="banner"
     >
       <button

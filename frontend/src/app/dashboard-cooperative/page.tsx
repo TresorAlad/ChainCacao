@@ -111,19 +111,19 @@ export default function CooperativeDashboardPage() {
       <div className="w-full py-6 sm:py-8">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
           <div>
-            <h1 className="text-4xl font-bold tracking-tight text-[var(--color-primary)]">Tableau de bord</h1>
-            <p className="text-lg mt-2 font-medium opacity-60 text-[var(--color-muted)]">
+            <h1 className="page-heading">Tableau de bord</h1>
+            <p className="page-subtitle">
               Bienvenue, voici un aperçu de votre chaîne d&apos;approvisionnement.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="page-actions">
             <Link
               href="/liste-groupee"
-              className="px-6 py-2.5 bg-white border border-[var(--color-border)] rounded-xl text-sm font-bold text-[var(--color-muted)] hover:bg-gray-50 transition-colors"
+              className="px-6 py-2.5 bg-white border border-[var(--color-border)] rounded-xl text-sm font-bold text-[var(--color-muted)] hover:bg-gray-50 transition-colors text-center"
             >
               Liste groupée
             </Link>
-            <button className="flex items-center gap-2 px-6 py-2.5 bg-[#33691E] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all">
+            <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-[#33691E] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all">
               <CalendarIcon className="w-5 h-5" />
               Derniers 30 jours
             </button>
@@ -275,16 +275,16 @@ export default function CooperativeDashboardPage() {
           <h3 className="text-xl font-black text-[var(--color-primary)] mb-5 flex items-center gap-2">
             <MagnifyingGlassIcon className="w-5 h-5 text-[#33691E]" /> Suivi par ID de lot
           </h3>
-          <div className="flex gap-3 mb-5">
+          <div className="toolbar-row mb-5">
             <input
               type="text"
               placeholder="Ex: TC-20260502-00001"
               value={searchId}
               onChange={(e) => setSearchId(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && fetchLotWithHistory()}
-              className="flex-1 px-4 py-3 bg-gray-50 border border-[var(--color-border)] rounded-2xl text-sm font-bold text-[var(--color-primary)] focus:ring-2 focus:ring-[#33691E] outline-none"
+              className="form-input rounded-2xl text-sm font-bold"
             />
-            <button onClick={() => fetchLotWithHistory()} disabled={searching} className="px-6 py-3 bg-[#33691E] text-white rounded-2xl text-sm font-black hover:brightness-110 disabled:opacity-50 flex items-center gap-2">
+            <button onClick={() => fetchLotWithHistory()} disabled={searching} className="btn-primary px-6 py-3 rounded-2xl text-sm font-black disabled:opacity-50 flex items-center gap-2">
               {searching ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <MagnifyingGlassIcon className="w-5 h-5" />}
               Chercher
             </button>
@@ -326,8 +326,8 @@ export default function CooperativeDashboardPage() {
         </div>
         {/* Carte GPS zones de collecte */}
         <div className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-[var(--color-border)]">
-          <div className="p-8 border-b border-[var(--color-border)] flex justify-between items-center">
-            <h3 className="text-2xl font-black text-[var(--color-primary)]">Zones de collecte actives</h3>
+          <div className="p-4 sm:p-8 border-b border-[var(--color-border)] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+            <h3 className="text-xl sm:text-2xl font-black text-[var(--color-primary)]">Zones de collecte actives</h3>
             <div className="flex gap-2">
               <span className="flex items-center gap-1 text-xs font-bold text-gray-400 uppercase">
                 <div className="w-2 h-2 rounded-full bg-[#33691E]" />
@@ -337,8 +337,8 @@ export default function CooperativeDashboardPage() {
           </div>
           <div className="h-[400px] relative">
             <LocationMap height="400px" markers={collectMapMarkers} className="h-full" />
-            <div className="absolute inset-0 p-8 flex items-start justify-end pointer-events-none">
-              <div className="bg-white/80 backdrop-blur-md p-6 rounded-[1.5rem] shadow-xl border border-white/50 w-64">
+            <div className="absolute inset-0 p-3 sm:p-8 flex items-end sm:items-start justify-center sm:justify-end pointer-events-none">
+              <div className="bg-white/80 backdrop-blur-md p-4 sm:p-6 rounded-[1.5rem] shadow-xl border border-white/50 w-full max-w-[16rem] sm:w-64 mx-3 sm:mx-0 mb-3 sm:mb-0">
                 <h4 className="text-sm font-black text-[var(--color-primary)] mb-3 uppercase tracking-widest">Réseau ChainCacao</h4>
                 <div className="space-y-2 text-xs font-bold">
                   <div className="flex justify-between">

@@ -18,7 +18,7 @@ import {
   AdjustmentsHorizontalIcon,
   CurrencyDollarIcon,
 } from '@heroicons/react/24/outline'
-import { getRoleBasedRedirect, type UserRole } from '@/lib/role-utils'
+import { getRoleBasedRedirect, normalizeUserRole, type UserRole } from '@/lib/role-utils'
 
 export type NavIcon = ComponentType<SVGProps<SVGSVGElement>>
 
@@ -220,17 +220,15 @@ const ROUTE_ACCESS: Record<string, UserRole[]> = {
 }
 
 function normalizeRole(role: string | undefined): UserRole | undefined {
-  if (!role) return undefined
-  const r = role.trim().toLowerCase()
-  const allowed: UserRole[] = [
-    'admin',
-    'agriculteur',
-    'cooperative',
-    'transformateur',
-    'exportateur',
-    'ministere',
-  ]
-  return allowed.includes(r as UserRole) ? (r as UserRole) : undefined
+  return normalizeUserRole(role)
+}
+
+/** Libellé sidebar (ex. « Supervision » pour le ministère à la place de « Accueil »). */
+export function getNavLabel(item: NavItemDef, role: UserRole | string | undefined): string {
+  const r = normalizeRole(role)
+  if (item.id === 'home' && r === 'ministere') return 'Supervision'
+  if (item.id === 'home' && r === 'admin') return 'Tableau de bord'
+  return item.label
 }
 
 export function isAdminRole(role: UserRole | string | undefined): boolean {

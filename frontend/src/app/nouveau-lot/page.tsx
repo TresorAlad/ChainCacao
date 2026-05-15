@@ -170,7 +170,7 @@ export default function NouveauLotPage() {
                   })
                 }}
               />
-              <div className="grid grid-cols-2 gap-4 mt-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
                 <input
                   type="number"
                   step="0.000001"
@@ -272,7 +272,7 @@ export default function NouveauLotPage() {
               />
             </div>
 
-            <div className="md:col-span-2 flex gap-4 pt-2">
+            <div className="md:col-span-2 flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2">
               <button
                 type="submit"
                 className="btn btn-primary flex items-center gap-2"

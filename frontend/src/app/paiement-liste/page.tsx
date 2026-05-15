@@ -126,18 +126,18 @@ function PaiementListeContent() {
 
   return (
     <RoleLayout role={roleKey}>
-      <div className="w-full py-6 sm:py-8 max-w-3xl mx-auto">
-        <header className="mb-10">
-          <h1 className="text-4xl font-bold tracking-tight text-[var(--color-primary)] flex items-center gap-3">
-            <BanknotesIcon className="w-10 h-10 text-[#33691E]" />
+      <div className="page-container py-6 sm:py-8 max-w-3xl mx-auto">
+        <header className="page-header mb-6 sm:mb-10">
+          <h1 className="page-heading-row">
+            <BanknotesIcon className="page-heading-icon" />
             Payer une liste groupée
           </h1>
-          <p className="text-lg mt-2 font-medium opacity-60 text-[var(--color-muted)]">
+          <p className="page-subtitle">
             Saisissez l&apos;identifiant LIST-… et le prix convenu par kg. La marge coopérative est déduite automatiquement.
           </p>
         </header>
 
-        <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)] space-y-6">
+        <div className="card-panel space-y-6">
           <div>
             <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Identifiant liste</label>
             <input
@@ -178,8 +178,8 @@ function PaiementListeContent() {
 
           {preview && (
             <div className="rounded-2xl bg-[#F1F8E9] border border-[#C8E6C9] p-5 space-y-4">
-              <p className="font-mono font-black text-[#1B5E20]">{preview.list_id}</p>
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              <p className="font-mono font-black text-[#1B5E20] break-all">{preview.list_id}</p>
+              <div className="stat-grid-2 text-sm">
                 <p>
                   <span className="text-gray-500">Agriculteurs</span>
                   <br />
@@ -211,7 +211,8 @@ function PaiementListeContent() {
                   Net aux producteurs : {fmt(preview.montant_net_agriculteurs)} FCFA
                 </p>
               </div>
-              <table className="w-full text-xs">
+              <div className="table-container -mx-1">
+              <table className="table text-xs min-w-[28rem]">
                 <thead>
                   <tr className="text-left text-gray-500">
                     <th className="py-1">Lot</th>
@@ -224,7 +225,7 @@ function PaiementListeContent() {
                 <tbody>
                   {preview.lots?.map((ln) => (
                     <tr key={ln.lot_id} className="border-t border-[#C8E6C9]/50">
-                      <td className="py-1 font-mono">{ln.lot_id}</td>
+                      <td className="py-1 font-mono break-all max-w-[8rem] sm:max-w-none">{ln.lot_id}</td>
                       <td>{ln.poids_kg}</td>
                       <td>{fmt(ln.montant_brut)}</td>
                       <td>{fmt(ln.marge_fcfa)}</td>
@@ -233,6 +234,7 @@ function PaiementListeContent() {
                   ))}
                 </tbody>
               </table>
+              </div>
               <div>
                 <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Code PIN</label>
                 <input

@@ -81,7 +81,7 @@ function ReceptionLotContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="page-loading">
         <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#33691E] border-t-transparent" />
       </div>
     )
@@ -96,8 +96,8 @@ function ReceptionLotContent() {
     <RoleLayout role={user.role}>
       <div className="page-container py-6 sm:py-8 max-w-2xl">
         <header className="page-header mb-6">
-          <h1 className="text-2xl font-bold text-[var(--color-primary)] flex items-center gap-2">
-            <TruckIcon className="h-7 w-7" />
+          <h1 className="page-heading-row">
+            <TruckIcon className="page-heading-icon h-7 w-7 sm:h-8 sm:w-8" />
             Réception physique du lot
           </h1>
           <p className="text-[var(--color-muted)] mt-2">
@@ -106,22 +106,22 @@ function ReceptionLotContent() {
         </header>
 
         <div className="card p-6 space-y-4">
-          <div className="flex gap-2">
+          <div className="toolbar-row">
             <input
               type="text"
-              className="form-input flex-1"
+              className="form-input"
               placeholder="ID du lot ou scan QR"
               value={lotId}
               onChange={(e) => setLotId(e.target.value)}
             />
-            <button type="button" className="btn-primary px-4" onClick={() => void loadLot()} disabled={searching}>
+            <button type="button" className="btn btn-primary px-4" onClick={() => void loadLot()} disabled={searching}>
               <MagnifyingGlassIcon className="h-5 w-5" />
             </button>
           </div>
 
           {lot ? (
             <div className="rounded-lg bg-[var(--color-surface)] p-4 text-sm space-y-2">
-              <p>
+              <p className="break-all">
                 <strong>ID :</strong> {lot.id}
               </p>
               <p>
