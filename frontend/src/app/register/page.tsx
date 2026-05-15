@@ -11,11 +11,9 @@ import { UserRole, getRoleBasedRedirect } from '@/lib/role-utils'
 function orgLabelForRole(role: UserRole): string {
   switch (role) {
     case 'cooperative':
-    case 'verificateur':
       return "Nom de l'organisation / Coopérative"
     case 'transformateur':
       return "Nom de l'organisation / Transformateur"
-    case 'distributeur':
     case 'exportateur':
       return "Nom de l'organisation / Export"
     default:
@@ -216,10 +214,8 @@ export default function RegisterPage() {
               >
                 <option value="agriculteur">Agriculteur</option>
                 <option value="cooperative">Coopérative</option>
-                <option value="verificateur">Vérificateur (Coopérative)</option>
                 <option value="transformateur">Transformateur</option>
                 <option value="exportateur">Exportateur</option>
-                <option value="distributeur">Distributeur</option>
               </select>
             </div>
 
@@ -356,7 +352,7 @@ export default function RegisterPage() {
                   onChange={(e) => setUsePin(e.target.checked)}
                   disabled={isLoading}
                 />
-                <span className="text-sm text-[var(--color-earth)]">Définir un code PIN (connexion acteur / app)</span>
+                <span className="text-sm text-[var(--color-earth)]">Définir un code PIN pour l&apos;application mobile</span>
               </label>
               {usePin && (
                 <div className="relative">

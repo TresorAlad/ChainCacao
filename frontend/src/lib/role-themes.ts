@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'verificateur' | 'exportateur' | 'cooperative' | 'agriculteur' | 'transformateur' | 'distributeur'
+export type UserRole = 'admin' | 'exportateur' | 'cooperative' | 'agriculteur' | 'transformateur' | 'ministere'
 
 export interface RoleTheme {
   primary: string
@@ -72,7 +72,7 @@ const themes: Record<UserRole, RoleTheme> = {
       muted: '#6B7280'
     }
   },
-  verificateur: {
+  ministere: {
     primary: '#2D5016',
     secondary: '#4CAF50',
     accent: '#F59E0B',
@@ -246,46 +246,13 @@ const themes: Record<UserRole, RoleTheme> = {
       secondary: '#7CB342',
       muted: '#6B7280'
     }
-  },
-  distributeur: {
-    primary: '#1B3A0F',
-    secondary: '#6B9E3A',
-    accent: '#06B6D4',
-    background: '#F8FAF5',
-    surface: '#F8FAFC',
-    sidebar: {
-      background: '#FFFFFF',
-      text: '#374151',
-      activeItem: '#F0FDF4',
-      activeText: '#2D5016',
-      border: '#F3F4F6'
-    },
-    card: {
-      background: '#FFFFFF',
-      shadow: '0 2px 8px rgba(0,0,0,0.08)',
-      border: '#E5E7EB'
-    },
-    button: {
-      primary: '#1B3A0F',
-      secondary: '#2D5016',
-      outline: '#CBD5E1'
-    },
-    badge: {
-      success: '#E8F5E9',
-      warning: '#FFF8E1',
-      error: '#FFEBEE',
-      info: '#E3F2FD'
-    },
-    text: {
-      primary: '#1B3A0F',
-      secondary: '#2D5016',
-      muted: '#6B7280'
-    }
   }
 }
 
-export function getRoleTheme(role: UserRole): RoleTheme {
-  return themes[role] || themes.agriculteur
+export function getRoleTheme(role: UserRole | string): RoleTheme {
+  if (role in themes) return themes[role as UserRole]
+  if (role === 'verificateur' || role === 'distributeur') return themes.agriculteur
+  return themes.agriculteur
 }
 
 export function getRoleBasedRedirect(role: UserRole | string | undefined): string {
@@ -294,8 +261,8 @@ export function getRoleBasedRedirect(role: UserRole | string | undefined): strin
   switch (role) {
     case 'admin':
       return '/dashboard-admin'
-    case 'verificateur':
-      return '/dashboard-verificateur'
+    case 'ministere':
+      return '/dashboard-ministere'
     case 'exportateur':
       return '/dashboard-exportateur'
     case 'cooperative':
@@ -304,8 +271,6 @@ export function getRoleBasedRedirect(role: UserRole | string | undefined): strin
       return '/dashboard-agriculteur'
     case 'transformateur':
       return '/dashboard-transformateur'
-    case 'distributeur':
-      return '/dashboard-distributeur'
     default:
       return '/dashboard'
   }
@@ -317,8 +282,8 @@ export function getRoleDisplayName(role: UserRole | string | undefined): string 
   switch (role) {
     case 'admin':
       return 'Administrateur'
-    case 'verificateur':
-      return 'Vérificateur'
+    case 'ministere':
+      return 'Ministère'
     case 'exportateur':
       return 'Exportateur'
     case 'cooperative':
@@ -327,8 +292,6 @@ export function getRoleDisplayName(role: UserRole | string | undefined): string 
       return 'Agriculteur'
     case 'transformateur':
       return 'Transformateur'
-    case 'distributeur':
-      return 'Distributeur'
     default:
       return 'Utilisateur'
   }
@@ -340,8 +303,8 @@ export function getRoleDescription(role: UserRole | string | undefined): string 
   switch (role) {
     case 'admin':
       return 'Accès complet à toutes les fonctionnalités administratives'
-    case 'verificateur':
-      return 'Gestion des vérifications et conformité des lots'
+    case 'ministere':
+      return 'Supervision nationale et audit de la filière'
     case 'exportateur':
       return 'Gestion des exportations et suivi logistique international'
     case 'cooperative':
@@ -350,8 +313,6 @@ export function getRoleDescription(role: UserRole | string | undefined): string 
       return 'Gestion des lots de cacao et suivi de production'
     case 'transformateur':
       return 'Traitement et transformation du cacao en produits finis'
-    case 'distributeur':
-      return 'Distribution et vente locale des produits cacaoyers'
     default:
       return 'Accès utilisateur standard'
   }
@@ -368,13 +329,11 @@ export function getRoleNavigation(role: UserRole): Array<{ name: string, href: s
       { name: 'Acteurs', href: '/actors', icon: 'users' },
       { name: 'Transactions', href: '/transactions', icon: 'arrows-right-left' },
       { name: 'Blockchain', href: '/blockchain', icon: 'link' },
-      { name: 'Conformité', href: '/conformite', icon: 'document-check' },
       { name: 'Paramètres', href: '/parametres', icon: 'cog-6-tooth' }
     ],
-    verificateur: [
-      { name: 'Vérifications', href: '/verifications', icon: 'document-magnifying-glass' },
-      { name: 'Historique', href: '/historique', icon: 'clock' },
-      { name: 'Profil', href: '/profil', icon: 'user-circle' }
+    ministere: [
+      { name: 'Supervision', href: '/dashboard-ministere', icon: 'building-library' },
+      { name: 'Acteurs', href: '/actors', icon: 'users' }
     ],
     exportateur: [
       { name: 'Exportations', href: '/exportations', icon: 'globe-americas' },
@@ -400,11 +359,6 @@ export function getRoleNavigation(role: UserRole): Array<{ name: string, href: s
       { name: 'Transferts', href: '/transfer', icon: 'arrows-right-left' },
       { name: 'Profil', href: '/profile', icon: 'user-circle' }
     ],
-    distributeur: [
-      { name: 'Lots', href: '/lots', icon: 'cube' },
-      { name: 'Export', href: '/export', icon: 'globe-americas' },
-      { name: 'Profil', href: '/profile', icon: 'user-circle' }
-    ]
   }
 
   return [...baseNav, ...roleSpecificNav[role]]

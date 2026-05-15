@@ -156,14 +156,6 @@ export default function BlockchainPage() {
               Les métriques détaillées (hauteur de bloc, hash, latence) sont disponibles
               directement via le proxy Hyperledger Fabric (accès serveur uniquement).
             </div>
-            {isAdmin && stats && (
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Lots EUDR conformes</span>
-                  <span className="font-bold text-green-700">{stats.eudr_compliant ?? '—'}</span>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>

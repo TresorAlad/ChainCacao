@@ -9,7 +9,6 @@ import type { DashboardStats } from '@/lib/dashboard-stats'
 import type {
   ActivityChartRow,
   AlertsCountPayload,
-  EudrCompliancePayload,
   RecentTransferRow,
 } from '@/lib/dashboard-types'
 import { getRoleDisplayName, getRoleDescription, getRoleTheme, UserRole } from '@/lib/role-themes'
@@ -27,7 +26,8 @@ import {
   CalendarIcon,
   ArrowRightIcon,
   ExclamationTriangleIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
+  TruckIcon,
 } from '@heroicons/react/24/outline'
 
 export default function DashboardPage() {
@@ -38,7 +38,6 @@ export default function DashboardPage() {
   const [statsNote, setStatsNote] = useState<string | null>(null)
   const [recentTransfers, setRecentTransfers] = useState<RecentTransferRow[]>([])
   const [chartData, setChartData] = useState<ActivityChartRow[]>([])
-  const [eudrCompliance, setEudrCompliance] = useState<{ percentage: number; status: string } | null>(null)
   const [alertsCount, setAlertsCount] = useState<{ total: number; urgent: number } | null>(null)
 
   const userRole = (user?.role as UserRole) || 'agriculteur'
@@ -93,22 +92,6 @@ export default function DashboardPage() {
         .get<{ success: boolean; activity: ActivityChartRow[] }>('/dashboard/activity-chart')
         .then((res) => setChartData(res.data.activity || []))
         .catch(() => setChartData([]))
-    }
-  }, [isAuthenticated])
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      api
-        .get<{ success: boolean; compliance: EudrCompliancePayload }>('/dashboard/eudr-compliance')
-        .then((res) => {
-          const c = res.data.compliance
-          if (c && typeof c.percentage === 'number' && typeof c.status === 'string') {
-            setEudrCompliance({ percentage: c.percentage, status: c.status })
-          } else {
-            setEudrCompliance(null)
-          }
-        })
-        .catch(() => setEudrCompliance({ percentage: 94, status: 'Objectif Atteint' }))
     }
   }, [isAuthenticated])
 
@@ -197,11 +180,11 @@ export default function DashboardPage() {
 
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)] relative overflow-hidden group hover:shadow-md transition-all">
              <div className="absolute top-0 right-0 p-8 bg-[#4527A0]/5 rounded-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Conformité EUDR</p>
-             <p className="text-3xl font-black text-[#4527A0]">{eudrCompliance ? `${eudrCompliance.percentage}%` : '94%'}</p>
+             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Lots en transit</p>
+             <p className="text-3xl font-black text-[#4527A0]">{statsLoading ? '...' : (stats?.en_transit ?? '—')}</p>
              <p className="text-xs font-bold text-purple-500 mt-1 flex items-center gap-1">
-                <CheckCircleIcon className="w-3 h-3" />
-                Objectif Atteint
+                <TruckIcon className="w-3 h-3" />
+                En cours de transfert
              </p>
           </div>
 
@@ -314,14 +297,14 @@ export default function DashboardPage() {
              <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)]">
                 <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2 mb-6 flex items-center gap-2">
                    <ShieldCheckIcon className="w-4 h-4" />
-                   Rappel Conformité
+                   Rappels
                 </h3>
                 <div className="space-y-6">
                    <div className="flex gap-4">
                       <div className="w-1 h-12 bg-[#33691E] rounded-full"></div>
                       <div>
-                         <p className="text-sm font-black text-[var(--color-primary)]">Déclaration EUDR</p>
-                         <p className="text-[10px] font-medium text-gray-400 mt-1">Échéance dans 12 jours pour les lots d'export.</p>
+                         <p className="text-sm font-black text-[var(--color-primary)]">Paiement par ID lot</p>
+                         <p className="text-[10px] font-medium text-gray-400 mt-1">Transformateurs et exportateurs paient sur le web via l&apos;identifiant du lot.</p>
                       </div>
                    </div>
                    <div className="flex gap-4">

@@ -108,10 +108,10 @@ export default function CooperativeDashboardPage() {
           </div>
           <div className="flex items-center gap-3">
             <Link
-              href="/eudr-report"
+              href="/liste-groupee"
               className="px-6 py-2.5 bg-white border border-[var(--color-border)] rounded-xl text-sm font-bold text-[var(--color-muted)] hover:bg-gray-50 transition-colors"
             >
-              Rapport EUDR
+              Liste groupée
             </Link>
             <button className="flex items-center gap-2 px-6 py-2.5 bg-[#33691E] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all">
               <CalendarIcon className="w-5 h-5" />
@@ -238,7 +238,7 @@ export default function CooperativeDashboardPage() {
                       <td className="py-4 text-sm text-gray-700">{lot.culture}{lot.variete ? ` · ${lot.variete}` : ''}</td>
                       <td className="py-4 text-sm font-bold text-gray-700">{lot.quantite} kg</td>
                       <td className="py-4">
-                        <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest \${statusColor(lot.statut)}`}>
+                        <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${statusColor(lot.statut)}`}>
                           {statusLabel(lot.statut)}
                         </span>
                       </td>
@@ -247,7 +247,7 @@ export default function CooperativeDashboardPage() {
                           <button onClick={() => { setSearchId(lot.id); fetchLotWithHistory(lot.id) }} className="px-3 py-1.5 text-xs font-black bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors">
                             Historique
                           </button>
-                          <Link href={`/transfer?lot=\${lot.id}`} className="flex items-center gap-1 px-3 py-1.5 text-xs font-black bg-[#33691E] text-white rounded-xl hover:brightness-110">
+                          <Link href={`/transfer?lot=${lot.id}`} className="flex items-center gap-1 px-3 py-1.5 text-xs font-black bg-[#33691E] text-white rounded-xl hover:brightness-110">
                             <ArrowRightIcon className="w-3 h-3" /> Transférer
                           </Link>
                         </div>
@@ -286,10 +286,10 @@ export default function CooperativeDashboardPage() {
                   <p className="text-lg font-black text-[#1B5E20]">{detailData.lot.id}</p>
                   <p className="text-sm text-gray-600">{detailData.lot.culture} — {detailData.lot.quantite} kg</p>
                 </div>
-                <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase \${statusColor(detailData.lot.statut)}`}>{statusLabel(detailData.lot.statut)}</span>
+                <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${statusColor(detailData.lot.statut)}`}>{statusLabel(detailData.lot.statut)}</span>
                 <div className="flex gap-2">
-                  <Link href={`/lot-detail?id=\${detailData.lot.id}`} className="px-4 py-2 text-xs font-black bg-white border border-[#C8E6C9] rounded-xl text-[#33691E] hover:bg-[#E8F5E9]">Détail</Link>
-                  <Link href={`/transfer?lot=\${detailData.lot.id}`} className="flex items-center gap-1 px-4 py-2 text-xs font-black bg-[#33691E] text-white rounded-xl hover:brightness-110">
+                  <Link href={`/lot-detail?id=${detailData.lot.id}`} className="px-4 py-2 text-xs font-black bg-white border border-[#C8E6C9] rounded-xl text-[#33691E] hover:bg-[#E8F5E9]">Détail</Link>
+                  <Link href={`/transfer?lot=${detailData.lot.id}`} className="flex items-center gap-1 px-4 py-2 text-xs font-black bg-[#33691E] text-white rounded-xl hover:brightness-110">
                     <ArrowRightIcon className="w-4 h-4" /> Transférer
                   </Link>
                 </div>
@@ -297,7 +297,7 @@ export default function CooperativeDashboardPage() {
               <div className="space-y-2">
                 {detailData.history.map((ev, idx) => (
                   <div key={idx} className="flex gap-3 items-start p-4 rounded-xl bg-gray-50">
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[10px] font-black \${ev.type === 'transfert' ? 'bg-blue-100 text-blue-700' : ev.type === 'creation' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[10px] font-black ${ev.type === 'transfert' ? 'bg-blue-100 text-blue-700' : ev.type === 'creation' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                       {ev.type === 'creation' ? '+' : ev.type === 'transfert' ? '→' : '·'}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -326,14 +326,15 @@ export default function CooperativeDashboardPage() {
             </div>
           </div>
           <div className="h-[400px] relative">
-            <img
-              src="https://api.mapbox.com/styles/v1/mapbox/light-v10/static/1.23,43.60,11,0/1200x400?access_token=pk.xxx"
-              className="w-full h-full object-cover grayscale opacity-50"
-              alt="Carte de collecte"
-              onError={(e) => {
-                e.currentTarget.src = 'https://images.unsplash.com/photo-1526772662000-3f88f10405ff?auto=format&fit=crop&q=80&w=1200&h=400'
-              }}
-            />
+            <div
+              className="w-full h-full bg-gradient-to-br from-[#E8F5E9] via-[#C8E6C9] to-[#A5D6A7] flex items-center justify-center"
+              role="img"
+              aria-label="Carte des zones de collecte"
+            >
+              <p className="text-sm font-bold text-[#33691E] px-6 text-center">
+                Cartographie des zones de collecte — données GPS des lots synchronisés
+              </p>
+            </div>
             <div className="absolute inset-0 p-8 flex items-start justify-end">
               <div className="bg-white/80 backdrop-blur-md p-6 rounded-[1.5rem] shadow-xl border border-white/50 w-64">
                 <h4 className="text-sm font-black text-[var(--color-primary)] mb-3 uppercase tracking-widest">Réseau ChainCacao</h4>

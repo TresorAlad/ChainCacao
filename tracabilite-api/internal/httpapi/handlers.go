@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"github.com/skip2/go-qrcode"
 	"tracabilite-api/internal/actors"
 	"tracabilite-api/internal/auth"
@@ -23,32 +25,62 @@ import (
 	"tracabilite-api/internal/groupedlist"
 	"tracabilite-api/internal/incidents"
 	"tracabilite-api/internal/media"
-	"tracabilite-api/internal/report"
+	"tracabilite-api/internal/notifications"
 	"tracabilite-api/internal/syncdedup"
 	"tracabilite-api/pkg/models"
 )
 
 type Handler struct {
-	actors *actors.Service
-	jwt    *auth.JWTService
-	batch  *batch.Service
-	media  *media.Repo
-	config config.Repo
-	inc    incidents.Repo
-	dedup  syncdedup.Repo
-	lists  groupedlist.Repo
+	actors     *actors.Service
+	jwt        *auth.JWTService
+	batch      *batch.Service
+	media      *media.Repo
+	config     config.Repo
+	inc        incidents.Repo
+	dedup      syncdedup.Repo
+	lists      groupedlist.Repo
+	notify     *notifications.Service
+	tokenStore notifications.TokenStore
+	pgPool     *pgxpool.Pool
+	redis      *redis.Client
 }
 
-func NewHandler(actors *actors.Service, jwt *auth.JWTService, batch *batch.Service, media *media.Repo, cfg config.Repo, inc incidents.Repo, dedup syncdedup.Repo, lists groupedlist.Repo) *Handler {
+// SetHealthDeps configure les dependances pour /health (PostgreSQL, Redis).
+func (h *Handler) SetHealthDeps(pool *pgxpool.Pool, rdb *redis.Client) {
+	h.pgPool = pool
+	h.redis = rdb
+}
+
+var signupAllowedRoles = map[models.Role]bool{
+	models.RoleAgriculteur:    true,
+	models.RoleCooperative:    true,
+	models.RoleTransformateur: true,
+	models.RoleExportateur:    true,
+}
+
+func NewHandler(
+	actors *actors.Service,
+	jwt *auth.JWTService,
+	batch *batch.Service,
+	media *media.Repo,
+	cfg config.Repo,
+	inc incidents.Repo,
+	dedup syncdedup.Repo,
+	lists groupedlist.Repo,
+	notify *notifications.Service,
+	tokenStore notifications.TokenStore,
+) *Handler {
 	return &Handler{
-		actors: actors,
-		jwt:    jwt,
-		batch:  batch,
-		media:  media,
-		config: cfg,
-		inc:    inc,
-		dedup:  dedup,
-		lists:  lists,
+		actors:     actors,
+		jwt:        jwt,
+		batch:      batch,
+		media:      media,
+		config:     cfg,
+		inc:        inc,
+		dedup:      dedup,
+		lists:      lists,
+		notify:     notify,
+		tokenStore: tokenStore,
 	}
 }
 
@@ -139,10 +171,14 @@ func (h *Handler) Signup(c *gin.Context) {
 		orgID = "AgriculteurMSP"
 	}
 
-	normalizedRole := req.Role
+	normalizedRole := strings.TrimSpace(strings.ToLower(req.Role))
 	role := models.Role(normalizedRole)
 	if role == "" {
 		role = models.RoleAgriculteur
+	}
+	if !signupAllowedRoles[role] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "role non autorise pour l'inscription publique"})
+		return
 	}
 
 	// Mettre a jour l'orgID si absent ou generique selon le role.
@@ -320,6 +356,7 @@ func (h *Handler) TransferBatch(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	h.sendLotTransitNotification(c, req.ToActorID, req.BatchID)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"tx_hash": txHash,
@@ -441,33 +478,6 @@ func (h *Handler) VerifyBatch(c *gin.Context) {
 	})
 }
 
-func (h *Handler) EUDRReport(c *gin.Context) {
-	id := c.Param("id")
-	rep, err := h.batch.BuildEUDRReport(c.Request.Context(), id)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "report": rep})
-}
-
-func (h *Handler) EUDRReportPDF(c *gin.Context) {
-	id := c.Param("id")
-	rep, err := h.batch.BuildEUDRReport(c.Request.Context(), id)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-	pdfBytes, err := report.BuildEUDRPDF(rep)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.Header("Content-Type", "application/pdf")
-	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="eudr-%s.pdf"`, id))
-	c.Data(http.StatusOK, "application/pdf", pdfBytes)
-}
-
 func (h *Handler) GenerateQRCode(c *gin.Context) {
 	id := c.Param("id")
 	baseURL := getenvDefault("PUBLIC_VERIFY_BASE_URL", "https://chaincacao.tg/verify")
@@ -545,6 +555,11 @@ func (h *Handler) SyncOfflineLots(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload sync invalide: tableau attendu"})
 		return
 	}
+	const maxSyncLots = 500
+	if len(payload) > maxSyncLots {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("maximum %d lots par synchronisation", maxSyncLots)})
+		return
+	}
 	actorID := c.GetString(auth.ContextActorID)
 	orgID := c.GetString(auth.ContextOrgID)
 	type syncResult struct {
@@ -585,7 +600,15 @@ func (h *Handler) RecentTransfers(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "transfers": transfers})
+	p := parsePagination(c, 20, 100)
+	pageItems, total := paginateSlice(transfers, p.Page, p.Limit)
+	c.JSON(http.StatusOK, gin.H{
+		"success":   true,
+		"transfers": pageItems,
+		"page":      p.Page,
+		"limit":     p.Limit,
+		"total":     total,
+	})
 }
 
 func (h *Handler) ActivityChart(c *gin.Context) {
@@ -595,15 +618,6 @@ func (h *Handler) ActivityChart(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "activity": activity})
-}
-
-func (h *Handler) EUDRCompliance(c *gin.Context) {
-	compliance, err := h.batch.GetEUDRCompliance(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "compliance": compliance})
 }
 
 func (h *Handler) AlertsCount(c *gin.Context) {
@@ -625,7 +639,15 @@ func (h *Handler) GetMyLots(c *gin.Context) {
 	if lots == nil {
 		lots = []models.Batch{}
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "lots": lots})
+	p := parsePagination(c, 50, 200)
+	pageItems, total := paginateSlice(lots, p.Page, p.Limit)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"lots":    pageItems,
+		"page":    p.Page,
+		"limit":   p.Limit,
+		"total":   total,
+	})
 }
 
 func (h *Handler) ListActors(c *gin.Context) {
@@ -634,16 +656,60 @@ func (h *Handler) ListActors(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	p := parsePagination(c, 50, 500)
+	pageItems, total := paginateSlice(list, p.Page, p.Limit)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"actors":  list,
+		"actors":  pageItems,
+		"page":    p.Page,
+		"limit":   p.Limit,
+		"total":   total,
 	})
 }
 
+func (h *Handler) Me(c *gin.Context) {
+	actorID := c.GetString(auth.ContextActorID)
+	actor, err := h.actors.FindByID(c.Request.Context(), actorID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	actor.PIN = ""
+	actor.PINHash = ""
+	actor.PasswordHash = ""
+	c.JSON(http.StatusOK, gin.H{"success": true, "actor": actor})
+}
+
 func (h *Handler) Health(c *gin.Context) {
-	c.JSON(http.StatusOK, models.APIResponse{
-		Success: true,
-		Message: "ok",
+	ctx := c.Request.Context()
+	checks := map[string]string{"api": "ok"}
+	status := http.StatusOK
+
+	if h.pgPool != nil {
+		if err := h.pgPool.Ping(ctx); err != nil {
+			checks["postgres"] = err.Error()
+			status = http.StatusServiceUnavailable
+		} else {
+			checks["postgres"] = "ok"
+		}
+	} else {
+		checks["postgres"] = "skipped"
+	}
+
+	if h.redis != nil {
+		if err := h.redis.Ping(ctx).Err(); err != nil {
+			checks["redis"] = err.Error()
+			status = http.StatusServiceUnavailable
+		} else {
+			checks["redis"] = "ok"
+		}
+	} else {
+		checks["redis"] = "skipped"
+	}
+
+	c.JSON(status, gin.H{
+		"success": status == http.StatusOK,
+		"checks":  checks,
 	})
 }
 
@@ -791,7 +857,8 @@ func (h *Handler) ConfirmerLot(c *gin.Context) {
 	}
 	price, _ := h.batch.GetBatchPricePerKg(c.Request.Context(), batchID)
 	if price <= 0 {
-		price = 1500.0
+		c.JSON(http.StatusBadRequest, gin.H{"error": "aucun prix defini pour ce lot: fixez un prix avant confirmation"})
+		return
 	}
 	total := price * lot.Quantite
 	txHash, err := h.batch.ConfirmBatchReceipt(c.Request.Context(), batchID, actorID)
@@ -802,6 +869,7 @@ func (h *Handler) ConfirmerLot(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	h.sendPaymentNotifications(c, batchID, lot, actorID, total)
 	c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": txHash, "message": "lot confirme et paiement initie", "montant_total": total})
 }
 
@@ -825,6 +893,7 @@ func (h *Handler) ConfirmerReceptionLot(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	h.sendReceptionNotification(c, batchID, actorID)
 	c.JSON(http.StatusOK, gin.H{
 		"success":  true,
 		"tx_hash":  txHash,
@@ -940,28 +1009,7 @@ func (h *Handler) PayerListeGroupee(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
-	var total float64
-	for _, bid := range l.BatchIDs {
-		lot, err := h.batch.GetBatch(c.Request.Context(), bid)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "lot introuvable dans liste: " + bid})
-			return
-		}
-		if strings.EqualFold(strings.TrimSpace(lot.Statut), "en_transit") {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "lot " + bid + " encore en transit: reception non confirmee par le destinataire"})
-			return
-		}
-		total += req.PrixParKg * lot.Quantite
-		// Fixer le prix par lot (utilise ensuite par Fabric/InMemory pour le credit agriculteur).
-		_, _ = h.batch.SetBatchPrice(c.Request.Context(), bid, actorID, req.PrixParKg)
-	}
-	// Debit du payeur (transformateur/exportateur) avant distribution.
-	if _, err := h.batch.WithdrawWallet(c.Request.Context(), actorID, total); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	txHash, err := h.batch.PayGroupedList(c.Request.Context(), listID, actorID)
+	txHash, total, err := h.batch.PayGroupedListAtomic(c.Request.Context(), listID, actorID, req.PrixParKg, l.BatchIDs)
 	if err != nil {
 		if h.inc != nil {
 			_, _ = h.inc.Create(c.Request.Context(), "pay_grouped_list", map[string]any{"list_id": listID, "actor_id": actorID}, err.Error())
@@ -969,6 +1017,7 @@ func (h *Handler) PayerListeGroupee(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	h.sendGroupedPaymentNotifications(c, l.BatchIDs, actorID, req.PrixParKg)
 	c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": txHash, "message": "paiement de la liste effectue", "montant_total": total})
 }
 
@@ -1005,6 +1054,7 @@ func (h *Handler) PortefeuilleDepot(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	h.sendDepositNotification(c, actorID, req.Montant)
 	c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": txHash, "message": "depot effectue"})
 }
 
@@ -1064,7 +1114,15 @@ func (h *Handler) AdminListActors(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "actors": list})
+	p := parsePagination(c, 50, 500)
+	pageItems, total := paginateSlice(list, p.Page, p.Limit)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"actors":  pageItems,
+		"page":    p.Page,
+		"limit":   p.Limit,
+		"total":   total,
+	})
 }
 
 func (h *Handler) AdminCreateActor(c *gin.Context) {

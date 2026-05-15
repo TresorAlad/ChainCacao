@@ -6,7 +6,6 @@ import {
   HomeIcon,
   CubeIcon,
   TruckIcon,
-  DocumentCheckIcon,
   ChartBarIcon,
   QrCodeIcon,
   Cog6ToothIcon,
@@ -18,6 +17,10 @@ import {
   ArrowUpTrayIcon,
   PlusIcon,
   XMarkIcon,
+  BuildingLibraryIcon,
+  RectangleStackIcon,
+  WalletIcon,
+  BanknotesIcon,
 } from '@heroicons/react/24/outline'
 import { BrandLogo } from '@/components/BrandLogo'
 import { useAuth } from '@/contexts/AuthContext'
@@ -36,31 +39,51 @@ export default function Sidebar() {
   const { collapsed, toggleCollapsed, mobileOpen, closeMobile } = useSidebarLayout()
   const { isLg } = useResponsiveShell()
 
+  const homeHref = getRoleBasedRedirect(user?.role)
+
   const allNavItems = [
     {
       icon: HomeIcon,
       label: 'Accueil',
-      href: getRoleBasedRedirect(user?.role),
-      roles: ['admin', 'agriculteur', 'cooperative', 'verificateur', 'exportateur', 'transformateur', 'distributeur'],
+      href: homeHref,
+      roles: ['admin', 'agriculteur', 'cooperative', 'exportateur', 'transformateur', 'ministere'],
+    },
+    {
+      icon: BuildingLibraryIcon,
+      label: 'Supervision',
+      href: '/dashboard-ministere',
+      roles: ['ministere', 'admin'],
     },
     { icon: CubeIcon, label: 'Mes Lots', href: '/lots', roles: ['agriculteur', 'cooperative', 'admin'] },
+    {
+      icon: RectangleStackIcon,
+      label: 'Liste groupée',
+      href: '/liste-groupee',
+      roles: ['cooperative', 'admin'],
+    },
+    {
+      icon: BanknotesIcon,
+      label: 'Paiement lot',
+      href: '/paiement-lot',
+      roles: ['transformateur', 'exportateur', 'admin'],
+    },
     { icon: ArrowUpTrayIcon, label: 'Export', href: '/export', roles: ['exportateur', 'admin'] },
     {
       icon: TruckIcon,
       label: 'Transferts',
       href: '/transfer',
-      roles: ['agriculteur', 'cooperative', 'verificateur', 'exportateur', 'admin'],
-    },
-    {
-      icon: DocumentCheckIcon,
-      label: 'Conformité',
-      href: '/conformite',
-      roles: ['verificateur', 'admin', 'cooperative'],
+      roles: ['agriculteur', 'cooperative', 'exportateur', 'transformateur', 'admin'],
     },
     { icon: ChartBarIcon, label: 'Transactions', href: '/transactions', roles: ['admin', 'exportateur'] },
-    { icon: QrCodeIcon, label: 'Blockchain', href: '/blockchain', roles: ['admin', 'verificateur'] },
-    { icon: UsersIcon, label: 'Acteurs', href: '/actors', roles: ['admin', 'cooperative'] },
+    { icon: QrCodeIcon, label: 'Blockchain', href: '/blockchain', roles: ['admin', 'ministere'] },
+    { icon: UsersIcon, label: 'Acteurs', href: '/actors', roles: ['admin', 'cooperative', 'ministere'] },
     { icon: ArrowPathIcon, label: 'Sync', href: '/sync', roles: ['admin', 'agriculteur'] },
+    {
+      icon: WalletIcon,
+      label: 'Portefeuille',
+      href: '/portefeuille',
+      roles: ['cooperative', 'transformateur', 'exportateur', 'ministere', 'admin'],
+    },
   ]
 
   const navItems = allNavItems.filter((item) => !user?.role || item.roles.includes(user.role))
@@ -71,6 +94,8 @@ export default function Sidebar() {
   }
 
   const desktopWidthPx = collapsed ? SIDEBAR_COLLAPSED_PX : SIDEBAR_EXPANDED_PX
+  const showNewLot =
+    user?.role === 'agriculteur' || user?.role === 'cooperative' || user?.role === 'admin'
 
   return (
     <aside
@@ -84,10 +109,9 @@ export default function Sidebar() {
         !isLg ? 'w-[min(280px,85vw)]' : '',
       ].join(' ')}
     >
-      {/* Mobile fermer */}
       {!isLg ? (
         <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-4 py-3 lg:hidden">
-          <Link href="/dashboard" className="flex items-center gap-2 min-w-0" onClick={closeMobile}>
+          <Link href={homeHref} className="flex items-center gap-2 min-w-0" onClick={closeMobile}>
             <div className="w-10 h-10 shrink-0 rounded-xl bg-gradient-to-br from-[#1B3A0F] to-[#33691E] p-2 shadow-md">
               <BrandLogo className="w-full h-full text-white" />
             </div>
@@ -106,7 +130,6 @@ export default function Sidebar() {
         </div>
       ) : null}
 
-      {/* Toggle desktop */}
       <button
         type="button"
         onClick={toggleCollapsed}
@@ -116,9 +139,8 @@ export default function Sidebar() {
         {collapsed ? <ChevronRightIcon className="w-5 h-5" /> : <ChevronLeftIcon className="w-5 h-5" />}
       </button>
 
-      {/* Logo desktop */}
       <div className={`${isLg ? '' : 'hidden'} ${collapsed ? 'flex justify-center px-4 pt-6 pb-2' : 'p-8 pb-4'}`}>
-        <Link href="/dashboard" className={`flex items-center gap-4 group ${collapsed ? 'justify-center' : ''}`}>
+        <Link href={homeHref} className={`flex items-center gap-4 group ${collapsed ? 'justify-center' : ''}`}>
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#1B3A0F] to-[#33691E] p-2.5 shadow-lg transition-transform group-hover:rotate-6">
             <BrandLogo className="h-full w-full text-white" />
           </div>
@@ -144,7 +166,7 @@ export default function Sidebar() {
               const isActive = pathname === item.href
               return (
                 <Link
-                  key={item.href}
+                  key={item.href + item.label}
                   href={item.href}
                   onClick={() => !isLg && closeMobile()}
                   className={`flex items-center gap-4 rounded-2xl px-4 py-3.5 transition-all group ${
@@ -181,11 +203,11 @@ export default function Sidebar() {
       </nav>
 
       <div className="space-y-4 border-t border-gray-50 p-4 sm:p-6">
-        {!collapsed || !isLg ? (
+        {showNewLot && (!collapsed || !isLg) ? (
           <button
             type="button"
             onClick={() => {
-              router.push('/lots')
+              router.push('/nouveau-lot')
               closeMobile()
             }}
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#F1F8E9] py-4 text-xs font-black uppercase tracking-widest text-[#33691E] transition-all hover:brightness-95"
@@ -193,15 +215,15 @@ export default function Sidebar() {
             <PlusIcon className="h-5 w-5" />
             Nouveau Lot
           </button>
-        ) : (
+        ) : showNewLot ? (
           <button
             type="button"
-            onClick={() => router.push('/lots')}
+            onClick={() => router.push('/nouveau-lot')}
             className="flex aspect-square w-full items-center justify-center rounded-2xl bg-[#F1F8E9] text-[#33691E] transition-all hover:brightness-95"
           >
             <PlusIcon className="h-6 w-6" />
           </button>
-        )}
+        ) : null}
 
         <button
           type="button"

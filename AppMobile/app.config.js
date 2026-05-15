@@ -5,7 +5,7 @@
  */
 const { withAndroidManifest } = require('@expo/config-plugins');
 
-const apiUrl = 'http://13.60.214.56:8080';
+const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://api.chaincacao.tg';
 const usesCleartextTraffic = apiUrl.startsWith('http://');
 
 /**
@@ -29,10 +29,17 @@ module.exports = {
     slug: 'ChainCacao',
     version: '1.0.0',
     orientation: 'portrait',
-    /** Icône store : médaillon + fond marque (voir scripts/generate-app-icons.py) */
     icon: './assets/images/app-icon.png',
     scheme: 'myapp',
     userInterfaceStyle: 'automatic',
+    runtimeVersion: {
+      policy: 'appVersion',
+    },
+    updates: {
+      url: 'https://u.expo.dev/f6a18683-7b87-4986-8742-0bf31e0078a3',
+      checkAutomatically: 'ON_LOAD',
+      fallbackToCacheTimeout: 0,
+    },
     splash: {
       image: './assets/images/accueil.jpg',
       resizeMode: 'cover',
@@ -40,7 +47,7 @@ module.exports = {
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.votrenom.chaincacao',
+      bundleIdentifier: 'com.chaincacao.chaincacao',
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
           "Cette application nécessite l'accès à votre position pour certifier l'emplacement de votre champ ou de votre siège social.",
@@ -49,7 +56,8 @@ module.exports = {
       },
     },
     android: {
-      package: 'com.votrenom.chaincacao',
+      package: 'com.chaincacao.chaincacao',
+      googleServicesFile: './google-services.json',
       usesCleartextTraffic,
       adaptiveIcon: {
         foregroundImage: './assets/images/app-icon-adaptive-fg.png',
@@ -62,6 +70,7 @@ module.exports = {
         'USE_BIOMETRIC',
         'USE_FINGERPRINT',
         'INTERNET',
+        'POST_NOTIFICATIONS',
       ],
     },
     web: {
@@ -70,6 +79,15 @@ module.exports = {
     plugins: [
       withCleartextPlugin,
       'expo-router',
+      [
+        'expo-notifications',
+        {
+          icon: './assets/images/app-icon.png',
+          color: '#1B5E20',
+          defaultChannel: 'chaincacao_default',
+        },
+      ],
+      'expo-updates',
       [
         'expo-camera',
         {
@@ -90,8 +108,10 @@ module.exports = {
         },
       ],
       '@react-native-community/datetimepicker',
+      'expo-font',
+      'expo-image',
+      'expo-web-browser',
     ],
-    /** Projet EAS (@tresor_228/ChainCacao) — avec app.config.js dynamique, l'ID doit rester défini ici. */
     extra: {
       eas: {
         projectId: 'f6a18683-7b87-4986-8742-0bf31e0078a3',

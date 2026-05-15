@@ -5,16 +5,7 @@ import { clearAuthSessionCookie } from './auth-session-cookie'
 const api = axios.create({
   baseURL: getApiBaseUrl(),
   headers: { 'Content-Type': 'application/json' },
-})
-
-api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('jwt')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-  }
-  return config
+  withCredentials: true,
 })
 
 function messageFromAxiosError(err: AxiosError): string {
@@ -38,8 +29,7 @@ api.interceptors.response.use(
   (err: AxiosError) => {
     const status = err.response?.status
     if (typeof window !== 'undefined' && status === 401) {
-      localStorage.removeItem('jwt')
-      clearAuthSessionCookie()
+      void clearAuthSessionCookie()
       window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
       const path = window.location.pathname
       const publicPaths = /^\/($|login|register|verify|compte-application-mobile)/
@@ -50,6 +40,12 @@ api.interceptors.response.use(
     return Promise.reject(apiErrorFromAxios(err))
   }
 )
+
+/** Client sans redirection 401 — endpoints publics (ex. /verify/:id). */
+export const publicApi = axios.create({
+  baseURL: getApiBaseUrl(),
+  headers: { 'Content-Type': 'application/json' },
+})
 
 export default api
 

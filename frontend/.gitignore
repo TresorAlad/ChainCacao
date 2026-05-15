@@ -1,5 +1,19 @@
-node_modules
-.next
+# Dépendances & build Next.js
+node_modules/
+.next/
+out/
+.vercel/
+
+# Env locaux (secrets)
+.env
 .env.local
+.env.*.local
+!.env.example
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# OS / logs
 .DS_Store
 *.log

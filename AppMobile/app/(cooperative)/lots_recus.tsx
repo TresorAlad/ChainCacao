@@ -14,10 +14,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { myLotsApi, getApiError, type BatchResponse } from '@/services/api';
-
-function isEnTransit(b: BatchResponse): boolean {
-  return String(b.statut ?? '').toLowerCase() === 'en_transit';
-}
+import { isEnTransit, mapStatut } from '@/utils/lot-status';
 
 export default function LotsRecusScreen() {
   const router = useRouter();
@@ -116,8 +113,10 @@ export default function LotsRecusScreen() {
                     <Text style={styles.detailText}>
                       {item.culture ?? 'Cacao'} · {poids} · {item.lieu ?? '—'}
                     </Text>
-                    <View style={styles.badgeTransit}>
-                      <Text style={styles.badgeTransitText}>EN TRANSIT</Text>
+                    <View style={[styles.badgeTransit, { backgroundColor: mapStatut(item.statut).color }]}>
+                      <Text style={[styles.badgeTransitText, { color: mapStatut(item.statut).textColor }]}>
+                        {mapStatut(item.statut).label.toUpperCase()}
+                      </Text>
                     </View>
                   </View>
                   <MaterialCommunityIcons name="chevron-right" size={24} color="#CCC" />

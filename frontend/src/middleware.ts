@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { AUTH_SESSION_COOKIE_NAME, AUTH_SESSION_COOKIE_VALUE } from '@/lib/auth-session-cookie'
+import { AUTH_SESSION_COOKIE_NAME } from '@/lib/auth-session-cookie'
 
 function isPublicPath(pathname: string): boolean {
   if (
@@ -24,8 +24,7 @@ export function middleware(request: NextRequest) {
   if (STATIC_FILE.test(pathname)) return NextResponse.next()
   if (isPublicPath(pathname)) return NextResponse.next()
 
-  const ok =
-    request.cookies.get(AUTH_SESSION_COOKIE_NAME)?.value === AUTH_SESSION_COOKIE_VALUE
+  const ok = !!request.cookies.get(AUTH_SESSION_COOKIE_NAME)?.value
   if (!ok) {
     return NextResponse.redirect(new URL('/login', request.url))
   }

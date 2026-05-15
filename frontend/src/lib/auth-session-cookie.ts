@@ -1,15 +1,18 @@
-/** Nom/valeur du cookie lu par `middleware.ts` (mirroir minimal du JWT en localStorage). */
-export const AUTH_SESSION_COOKIE_NAME = 'chaincacao_auth'
-export const AUTH_SESSION_COOKIE_VALUE = '1'
+/** Cookie httpOnly — presence verifiee par middleware (valeur non lisible cote client). */
+export const AUTH_SESSION_COOKIE_NAME = 'chaincacao_jwt'
 
-const MAX_AGE_SEC = 60 * 60 * 24 * 7
-
-export function setAuthSessionCookie(): void {
-  if (typeof document === 'undefined') return
-  document.cookie = `${AUTH_SESSION_COOKIE_NAME}=${AUTH_SESSION_COOKIE_VALUE}; Path=/; SameSite=Lax; Max-Age=${MAX_AGE_SEC}`
+export async function setAuthSessionCookie(token: string): Promise<void> {
+  await fetch('/api/auth/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ token }),
+  })
 }
 
-export function clearAuthSessionCookie(): void {
-  if (typeof document === 'undefined') return
-  document.cookie = `${AUTH_SESSION_COOKIE_NAME}=; Path=/; Max-Age=0`
+export async function clearAuthSessionCookie(): Promise<void> {
+  await fetch('/api/auth/session', {
+    method: 'DELETE',
+    credentials: 'same-origin',
+  })
 }

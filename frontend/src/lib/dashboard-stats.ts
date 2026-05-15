@@ -5,6 +5,9 @@ export interface DashboardStats {
   en_transit?: number
   exportes?: number
   eudr_conformes?: number
+  eudr_compliance_pct?: number
   total_actors?: number
   total_weight?: number
+  fraud_alerts?: number
+  active_lots?: number
 }

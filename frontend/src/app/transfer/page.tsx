@@ -7,7 +7,7 @@ import { ArrowRightIcon, ShieldCheckIcon } from '@heroicons/react/24/outline'
 import api, { ActorDTO } from '@/lib/api'
 import toast from 'react-hot-toast'
 
-const TRANSFER_ALLOWED_ROLES = ['agriculteur', 'cooperative', 'transformateur', 'distributeur', 'exportateur', 'admin']
+const TRANSFER_ALLOWED_ROLES = ['agriculteur', 'cooperative', 'transformateur', 'exportateur', 'admin']
 
 function TransferContent() {
   const router = useRouter()
@@ -94,6 +94,24 @@ function TransferContent() {
           </p>
         </div>
       </header>
+
+      <div className="flex flex-wrap gap-3 mb-8">
+        {[
+          { step: 1, label: 'Lot', done: !!formData.batch_id },
+          { step: 2, label: 'Destinataire', done: !!formData.to_actor_id },
+          { step: 3, label: 'Commentaire', done: !!formData.commentaire },
+        ].map((s) => (
+          <div
+            key={s.step}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase ${
+              s.done ? 'bg-[#E8F5E9] text-[#2E7D32]' : 'bg-gray-100 text-gray-400'
+            }`}
+          >
+            <span className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-[10px]">{s.step}</span>
+            {s.label}
+          </div>
+        ))}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Form Column */}

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"tracabilite-api/internal/fabric"
@@ -15,6 +15,7 @@ import (
 // ActorLookup verifie qu'un destinataire existe.
 type ActorLookup interface {
 	FindByID(ctx context.Context, id string) (models.Actor, error)
+	FindByIDs(ctx context.Context, ids []string) (map[string]models.Actor, error)
 }
 
 type CreateBatchInput struct {
@@ -264,122 +265,44 @@ func (s *Service) MarkExported(ctx context.Context, batchID, actorID string) (st
 	return txHash, updated, nil
 }
 
-func (s *Service) BuildEUDRReport(ctx context.Context, batchID string) (map[string]any, error) {
-	lot, err := s.GetBatch(ctx, batchID)
-	if err != nil {
-		return nil, err
-	}
-	history, err := s.GetHistory(ctx, batchID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Enrichissement "humain": noms + orgs depuis la base off-chain.
-	type actorView struct {
-		ID    string `json:"id"`
-		Nom   string `json:"nom,omitempty"`
-		OrgID string `json:"org_id,omitempty"`
-		Role  string `json:"role,omitempty"`
-	}
-	resolveActor := func(id string) actorView {
-		if strings.TrimSpace(id) == "" {
-			return actorView{}
-		}
-		a, err := s.actors.FindByID(ctx, id)
-		if err != nil {
-			return actorView{ID: id}
-		}
-		return actorView{ID: a.ID, Nom: a.Nom, OrgID: a.OrgID, Role: string(a.Role)}
-	}
-
-	var (
-		lastTxHash    string
-		originActorID string
-	)
-	if len(history) > 0 {
-		lastTxHash = history[len(history)-1].TxHash
-		for _, e := range history {
-			if e.Type == "creation" && e.ActorID != "" {
-				originActorID = e.ActorID
-				break
-			}
-		}
-	}
-
-	// Conformite EUDR (heuristique minimale, faute de couche carto/anti-deforestation ici).
-	// Rationale: il faut au moins une geolocalisation + une chronologie non vide.
-	eudrOk := lot.Latitude != 0 && lot.Longitude != 0 && strings.TrimSpace(lot.Region) != "" && strings.TrimSpace(lot.Village) != "" && len(history) > 0
-	var eudrReasons []string
-	if lot.Latitude == 0 || lot.Longitude == 0 {
-		eudrReasons = append(eudrReasons, "coordonnees GPS manquantes")
-	}
-	if strings.TrimSpace(lot.Region) == "" || strings.TrimSpace(lot.Village) == "" {
-		eudrReasons = append(eudrReasons, "region/village manquants")
-	}
-	if len(history) == 0 {
-		eudrReasons = append(eudrReasons, "historique blockchain absent")
-	}
-
-	// Chronologie "lisible" pour rapport.
-	transfers := make([]map[string]any, 0, len(history))
-	for _, e := range history {
-		transfers = append(transfers, map[string]any{
-			"type":        e.Type,
-			"tx_hash":     e.TxHash,
-			"created_at":  e.CreatedAtISO,
-			"actor":       resolveActor(e.ActorID),
-			"from_actor":  resolveActor(e.FromActorID),
-			"to_actor":    resolveActor(e.ToActorID),
-			"commentaire": e.Commentaire,
-			"payload":     e.Payload,
-		})
-	}
-
-	return map[string]any{
-		"lot_id": lot.ID,
-		"origin": map[string]any{
-			"actor":     resolveActor(originActorID),
-			"region":    lot.Region,
-			"village":   lot.Village,
-			"parcelle":  lot.Parcelle,
-			"latitude":  lot.Latitude,
-			"longitude": lot.Longitude,
-			"photo_url": lot.PhotoURL,
-		},
-		"date_recolte": lot.DateRecolte,
-		"product": map[string]any{
-			"culture":  lot.Culture,
-			"variete":  lot.Variete,
-			"quantite": lot.Quantite,
-		},
-		"current_owner": map[string]any{
-			"actor": resolveActor(lot.Proprietaire),
-			"org_id": lot.OrgID,
-		},
-		"eudr": map[string]any{
-			"conforme": eudrOk,
-			"reasons":  eudrReasons,
-		},
-		"blockchain": map[string]any{
-			"tx_count":     len(history),
-			"last_tx_hash": lastTxHash,
-		},
-		"timeline":     transfers,
-		"generated_at": time.Now().UTC().Format(time.RFC3339),
-	}, nil
-}
-
 func (s *Service) GetMyLots(ctx context.Context, actorID string) ([]models.Batch, error) {
 	batches, err := s.fabricClient.GetBatchesByOwner(ctx, actorID)
 	if err != nil {
 		return nil, err
 	}
-	// Enrichir l'orgID depuis la table acteurs pour chaque lot.
-	enriched := make([]models.Batch, 0, len(batches))
-	for _, b := range batches {
-		enriched = append(enriched, s.enrichOwnerOrg(ctx, b))
+	return s.enrichBatchesOrg(ctx, batches), nil
+}
+
+func (s *Service) PayGroupedListAtomic(ctx context.Context, listID, actorID string, prixParKg float64, batchIDs []string) (string, float64, error) {
+	if prixParKg <= 0 {
+		return "", 0, errors.New("prix_par_kg invalide")
 	}
-	return enriched, nil
+	var total float64
+	for _, bid := range batchIDs {
+		lot, err := s.fabricClient.GetBatch(ctx, bid)
+		if err != nil {
+			return "", 0, fmt.Errorf("lot introuvable: %s", bid)
+		}
+		if strings.EqualFold(strings.TrimSpace(lot.Statut), "en_transit") {
+			return "", 0, fmt.Errorf("lot %s encore en transit", bid)
+		}
+		total += prixParKg * lot.Quantite
+		if _, err := s.fabricClient.SetBatchPrice(ctx, bid, actorID, prixParKg); err != nil {
+			return "", 0, err
+		}
+	}
+	bal, err := s.fabricClient.GetWalletBalance(ctx, actorID)
+	if err != nil {
+		return "", 0, err
+	}
+	if bal < total {
+		return "", 0, errors.New("solde insuffisant")
+	}
+	txHash, err := s.fabricClient.PayGroupedListWithDebit(ctx, listID, actorID, total)
+	if err != nil {
+		return "", 0, err
+	}
+	return txHash, total, nil
 }
 
 func (s *Service) GetStats(ctx context.Context) map[string]any {
@@ -394,35 +317,65 @@ func (s *Service) GetActivityChart(ctx context.Context) ([]map[string]any, error
 	return s.fabricClient.GetActivityChart(ctx)
 }
 
-func (s *Service) GetEUDRCompliance(ctx context.Context) (map[string]any, error) {
-	return s.fabricClient.GetEUDRCompliance(ctx)
-}
-
 func (s *Service) GetAlertsCount(ctx context.Context) (map[string]any, error) {
 	return s.fabricClient.GetAlertsCount(ctx)
 }
 
 func (s *Service) enrichOwnerOrg(ctx context.Context, b models.Batch) models.Batch {
-	owner, err := s.actors.FindByID(ctx, b.Proprietaire)
-	if err != nil {
+	enriched := s.enrichBatchesOrg(ctx, []models.Batch{b})
+	if len(enriched) == 0 {
 		return b
 	}
-	b.OrgID = owner.OrgID
-	return b
+	return enriched[0]
+}
+
+func (s *Service) enrichBatchesOrg(ctx context.Context, batches []models.Batch) []models.Batch {
+	if len(batches) == 0 {
+		return batches
+	}
+	ids := make([]string, 0, len(batches))
+	seen := make(map[string]struct{})
+	for _, b := range batches {
+		if b.Proprietaire == "" {
+			continue
+		}
+		if _, ok := seen[b.Proprietaire]; ok {
+			continue
+		}
+		seen[b.Proprietaire] = struct{}{}
+		ids = append(ids, b.Proprietaire)
+	}
+	actorsByID, err := s.actors.FindByIDs(ctx, ids)
+	if err != nil {
+		return batches
+	}
+	out := make([]models.Batch, len(batches))
+	for i, b := range batches {
+		if a, ok := actorsByID[b.Proprietaire]; ok {
+			b.OrgID = a.OrgID
+		}
+		out[i] = b
+	}
+	return out
 }
 
 var (
-	lastBatchDate atomic.Value // string YYYYMMDD
-	batchSeq      atomic.Uint32
+	batchIDMu   sync.Mutex
+	lastBatchDate string
+	batchSeq    uint32
 )
 
 func buildBatchID() string {
 	datePart := time.Now().UTC().Format("20060102")
-	if v := lastBatchDate.Load(); v == nil || v.(string) != datePart {
-		lastBatchDate.Store(datePart)
-		// Seed non deterministe raisonnable, sans dependance externe.
-		batchSeq.Store(uint32(time.Now().UTC().UnixNano() % 100000))
+	batchIDMu.Lock()
+	defer batchIDMu.Unlock()
+	if lastBatchDate != datePart {
+		lastBatchDate = datePart
+		batchSeq = uint32(time.Now().UTC().UnixNano() % 100000)
 	}
-	n := batchSeq.Add(1) % 100000
-	return fmt.Sprintf("TC-%s-%05d", datePart, n)
+	batchSeq++
+	if batchSeq >= 100000 {
+		batchSeq = 1
+	}
+	return fmt.Sprintf("TC-%s-%05d", datePart, batchSeq)
 }

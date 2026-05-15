@@ -3,7 +3,9 @@ package actors
 import (
 	"context"
 	"errors"
+	"net/mail"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +19,7 @@ import (
 type Store interface {
 	List(ctx context.Context) ([]models.Actor, error)
 	FindByID(ctx context.Context, id string) (models.Actor, error)
+	FindByIDs(ctx context.Context, ids []string) (map[string]models.Actor, error)
 	FindByEmail(ctx context.Context, email string) (models.Actor, error)
 	Register(ctx context.Context, nom, email, password, orgID string, role models.Role) (models.Actor, error)
 	Update(ctx context.Context, id string, in UpdateInput) (models.Actor, error)
@@ -36,7 +39,11 @@ type UpdateInput struct {
 }
 
 type memoryStore struct {
+	mu     sync.RWMutex
 	actors []models.Actor
+	// lockout memoire (aligne pgStore)
+	pinFailed     map[string]int
+	pinLockedUntil map[string]time.Time
 }
 
 // NewMemoryStore retourne le store demo en RAM.
@@ -76,10 +83,27 @@ func newMemoryStore() *memoryStore {
 			PINHash: string(hash),
 		})
 	}
-	return &memoryStore{actors: actors}
+	return &memoryStore{
+		actors:         actors,
+		pinFailed:      make(map[string]int),
+		pinLockedUntil: make(map[string]time.Time),
+	}
+}
+
+func validateEmail(email string) error {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return errors.New("email obligatoire")
+	}
+	if _, err := mail.ParseAddress(email); err != nil {
+		return errors.New("format email invalide")
+	}
+	return nil
 }
 
 func (m *memoryStore) List(_ context.Context) ([]models.Actor, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	out := make([]models.Actor, len(m.actors))
 	copy(out, m.actors)
 	for i := range out {
@@ -90,7 +114,27 @@ func (m *memoryStore) List(_ context.Context) ([]models.Actor, error) {
 	return out, nil
 }
 
+func (m *memoryStore) FindByIDs(_ context.Context, ids []string) (map[string]models.Actor, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	want := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if id != "" {
+			want[id] = struct{}{}
+		}
+	}
+	out := make(map[string]models.Actor, len(want))
+	for _, a := range m.actors {
+		if _, ok := want[a.ID]; ok {
+			out[a.ID] = a
+		}
+	}
+	return out, nil
+}
+
 func (m *memoryStore) FindByID(_ context.Context, id string) (models.Actor, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	for _, a := range m.actors {
 		if a.ID == id {
 			return a, nil
@@ -101,6 +145,8 @@ func (m *memoryStore) FindByID(_ context.Context, id string) (models.Actor, erro
 
 func (m *memoryStore) FindByEmail(_ context.Context, email string) (models.Actor, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	for _, a := range m.actors {
 		if strings.ToLower(a.Email) == email {
 			return a, nil
@@ -111,9 +157,14 @@ func (m *memoryStore) FindByEmail(_ context.Context, email string) (models.Actor
 
 func (m *memoryStore) Register(_ context.Context, nom, email, password, orgID string, role models.Role) (models.Actor, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
-	if email == "" || strings.TrimSpace(password) == "" || strings.TrimSpace(nom) == "" {
+	if strings.TrimSpace(password) == "" || strings.TrimSpace(nom) == "" {
 		return models.Actor{}, errors.New("nom, email et mot de passe sont obligatoires")
 	}
+	if err := validateEmail(email); err != nil {
+		return models.Actor{}, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for _, a := range m.actors {
 		if strings.EqualFold(a.Email, email) {
 			return models.Actor{}, errors.New("email deja utilise")
@@ -136,6 +187,8 @@ func (m *memoryStore) Register(_ context.Context, nom, email, password, orgID st
 }
 
 func (m *memoryStore) Update(_ context.Context, id string, in UpdateInput) (models.Actor, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for i := range m.actors {
 		if m.actors[i].ID != id {
 			continue
@@ -178,6 +231,8 @@ func (m *memoryStore) SetPIN(_ context.Context, id string, pin string) (models.A
 	if err != nil {
 		return models.Actor{}, errors.New("echec hash pin")
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for i := range m.actors {
 		if m.actors[i].ID == id {
 			m.actors[i].PIN = ""
@@ -193,16 +248,39 @@ func (m *memoryStore) VerifyPIN(_ context.Context, actorID, pin string) (models.
 	if pin == "" {
 		return models.Actor{}, errors.New("pin obligatoire")
 	}
-	a, err := m.FindByID(context.Background(), actorID)
-	if err != nil {
-		return models.Actor{}, err
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var a models.Actor
+	found := false
+	for _, x := range m.actors {
+		if x.ID == actorID {
+			a = x
+			found = true
+			break
+		}
+	}
+	if !found {
+		return models.Actor{}, errors.New("acteur introuvable")
+	}
+	if a.Suspended {
+		return models.Actor{}, errors.New("compte suspendu")
+	}
+	now := time.Now().UTC()
+	if until, ok := m.pinLockedUntil[actorID]; ok && until.After(now) {
+		return models.Actor{}, errors.New("compte bloque temporairement")
 	}
 	if a.PINHash == "" {
 		return models.Actor{}, errors.New("pin non configure")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(a.PINHash), []byte(pin)); err != nil {
+		m.pinFailed[actorID]++
+		if m.pinFailed[actorID] >= 3 {
+			m.pinLockedUntil[actorID] = now.Add(30 * time.Minute)
+		}
 		return models.Actor{}, errors.New("identifiants invalides")
 	}
+	m.pinFailed[actorID] = 0
+	delete(m.pinLockedUntil, actorID)
 	return a, nil
 }
 
@@ -270,6 +348,31 @@ func (p *pgStore) List(ctx context.Context) ([]models.Actor, error) {
 	return list, rows.Err()
 }
 
+func (p *pgStore) FindByIDs(ctx context.Context, ids []string) (map[string]models.Actor, error) {
+	out := make(map[string]models.Actor)
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := p.pool.Query(ctx, `
+		SELECT id, nom, COALESCE(email,''), org_id, role::text, COALESCE(suspended,false),
+			COALESCE(pin_hash,''), COALESCE(password_hash,''),
+			COALESCE(gps_location,''), COALESCE(field_surface,''), COALESCE(org_name,'')
+		FROM actors WHERE id = ANY($1)
+	`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var a models.Actor
+		if err := rows.Scan(&a.ID, &a.Nom, &a.Email, &a.OrgID, &a.Role, &a.Suspended, &a.PINHash, &a.PasswordHash, &a.GPSLocation, &a.FieldSurface, &a.OrgName); err != nil {
+			return nil, err
+		}
+		out[a.ID] = a
+	}
+	return out, rows.Err()
+}
+
 func (p *pgStore) FindByID(ctx context.Context, id string) (models.Actor, error) {
 	var a models.Actor
 	err := p.pool.QueryRow(ctx,
@@ -309,8 +412,11 @@ func (p *pgStore) FindByEmail(ctx context.Context, email string) (models.Actor, 
 
 func (p *pgStore) Register(ctx context.Context, nom, email, password, orgID string, role models.Role) (models.Actor, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
-	if email == "" || strings.TrimSpace(password) == "" || strings.TrimSpace(nom) == "" {
+	if strings.TrimSpace(password) == "" || strings.TrimSpace(nom) == "" {
 		return models.Actor{}, errors.New("nom, email et mot de passe sont obligatoires")
+	}
+	if err := validateEmail(email); err != nil {
+		return models.Actor{}, err
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {

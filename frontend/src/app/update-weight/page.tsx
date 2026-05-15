@@ -7,7 +7,7 @@ import { WeightIcon, TrendingUpIcon } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 
-const UPDATE_WEIGHT_ALLOWED = ['transformateur', 'distributeur', 'exportateur', 'admin']
+const UPDATE_WEIGHT_ALLOWED = ['transformateur', 'exportateur', 'admin']
 
 function UpdateWeightContent() {
   const router = useRouter()

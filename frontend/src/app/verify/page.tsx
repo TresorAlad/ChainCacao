@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { getApiBaseUrl } from '@/lib/api-base'
+import { publicApi } from '@/lib/api'
 import type { Batch, BatchHistoryEvent } from '@/lib/api'
 import toast from 'react-hot-toast'
 
@@ -31,6 +31,7 @@ interface VerifyResponse {
 
 export default function VerifyPage() {
   const [batchId, setBatchId] = useState('')
+  const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<VerifyResponse | null>(null)
 
   const handleVerify = async () => {
@@ -39,32 +40,26 @@ export default function VerifyPage() {
       toast.error('Saisissez un ID de lot')
       return
     }
+    setLoading(true)
     try {
-      const res = await fetch(`${getApiBaseUrl()}/verify/${encodeURIComponent(id)}`)
-      const data = (await res.json().catch(() => null)) as VerifyResponse | null
-      if (!res.ok) {
-        const msg =
-          data && typeof data === 'object' && 'error' in data && typeof (data as { error?: string }).error === 'string'
-            ? (data as { error: string }).error
-            : 'Lot introuvable'
-        throw new Error(msg)
-      }
-      if (data && typeof data === 'object') setResult(data)
-      else throw new Error('Réponse invalide')
+      const res = await publicApi.get<VerifyResponse>(`/verify/${encodeURIComponent(id)}`)
+      setResult(res.data)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Lot introuvable'
       toast.error(message)
       setResult(null)
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
     <div className="page-container max-w-3xl mx-auto py-10 px-4">
       <h1 className="text-3xl font-bold text-[var(--color-primary)] mb-2">
-        Vérification publique d’un lot
+        Vérification publique d&apos;un lot
       </h1>
       <p className="text-[var(--color-muted)] mb-8">
-        Consultez les informations exposées par l’API pour ce lot (sans compte).
+        Consultez les informations exposées par l&apos;API pour ce lot (sans compte).
       </p>
       <div className="flex flex-col sm:flex-row gap-4 mb-8">
         <input
@@ -75,8 +70,8 @@ export default function VerifyPage() {
           className="form-input flex-1"
           onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
         />
-        <button type="button" onClick={handleVerify} className="btn btn-primary shrink-0">
-          Vérifier
+        <button type="button" onClick={handleVerify} disabled={loading} className="btn btn-primary shrink-0">
+          {loading ? 'Vérification…' : 'Vérifier'}
         </button>
       </div>
 
@@ -91,9 +86,6 @@ export default function VerifyPage() {
               <p className="text-[var(--color-muted)]">
                 <strong>Quantité :</strong> {result.lot.quantite} kg — <strong>Statut :</strong>{' '}
                 {result.lot.statut || '—'}
-              </p>
-              <p className="text-[var(--color-muted)]">
-                <strong>EUDR :</strong> {result.eudr_conforme ? 'Conforme' : 'Non conforme'}
               </p>
               {result.blockchain_txhash && (
                 <p className="text-caption font-mono mt-2 break-all">

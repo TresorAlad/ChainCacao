@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { RoleLayout } from '@/components/RoleLayout'
 import { getRoleTheme } from '@/lib/role-themes'
-import api, { type ActorDTO } from '@/lib/api'
+import api, { type ActorDTO, type Batch } from '@/lib/api'
 import {
   GlobeAmericasIcon,
   TruckIcon,
@@ -21,6 +21,7 @@ export default function ExportateurDashboardPage() {
   const theme = getRoleTheme('exportateur')
 
   const [actors, setActors] = useState<ActorDTO[]>([])
+  const [myLots, setMyLots] = useState<Batch[]>([])
   const [fetching, setFetching] = useState(true)
 
   useEffect(() => {
@@ -29,13 +30,20 @@ export default function ExportateurDashboardPage() {
 
   useEffect(() => {
     if (!isAuthenticated) return
-    api.get<ActorDTO[] | { actors?: ActorDTO[]; data?: ActorDTO[] }>('/actors')
-      .then((res) => {
-        const raw = res.data
+    Promise.all([
+      api.get<ActorDTO[] | { actors?: ActorDTO[]; data?: ActorDTO[] }>('/actors'),
+      api.get<{ success: boolean; lots: Batch[] }>('/actors/me/lots'),
+    ])
+      .then(([actorsRes, lotsRes]) => {
+        const raw = actorsRes.data
         const list = Array.isArray(raw) ? raw : (raw as { actors?: ActorDTO[] }).actors ?? (raw as { data?: ActorDTO[] }).data ?? []
         setActors(list)
+        setMyLots(lotsRes.data.lots || [])
       })
-      .catch(() => setActors([]))
+      .catch(() => {
+        setActors([])
+        setMyLots([])
+      })
       .finally(() => setFetching(false))
   }, [isAuthenticated])
 
@@ -47,9 +55,7 @@ export default function ExportateurDashboardPage() {
     )
   }
 
-  // Le rôle 'exportateur' (mobile) est mappé en 'distributeur' côté API; les deux accèdent à ce tableau de bord.
-  const role = user?.role
-  if (!isAuthenticated || (role !== 'exportateur' && role !== 'distributeur' && role !== 'admin')) return null
+  if (!isAuthenticated || (user?.role !== 'exportateur' && user?.role !== 'admin')) return null
 
   return (
     <RoleLayout role="exportateur">
@@ -63,10 +69,10 @@ export default function ExportateurDashboardPage() {
           </div>
           <div className="flex items-center gap-3">
             <Link
-              href="/eudr-report"
+              href="/paiement-lot"
               className="px-6 py-2.5 bg-white border border-[var(--color-border)] rounded-xl text-sm font-bold text-[var(--color-muted)] hover:bg-gray-50 transition-colors"
             >
-              Rapports EUDR
+              Paiement par ID lot
             </Link>
             <Link
               href="/export"
@@ -85,15 +91,15 @@ export default function ExportateurDashboardPage() {
               <GlobeAmericasIcon className="w-6 h-6 text-[#2E7D32]" />
             </div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Expéditions Totales</p>
-            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">—</p>
+            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">{myLots.filter((l) => l.statut === 'exporte').length}</p>
           </div>
 
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
             <div className="w-10 h-10 bg-[#FFF3E0] rounded-xl flex items-center justify-center mb-4">
               <TruckIcon className="w-6 h-6 text-[#E65100]" />
             </div>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">En Transit</p>
-            <p className="text-3xl font-black text-[#E65100] mt-1">—</p>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Lots en stock</p>
+            <p className="text-3xl font-black text-[#E65100] mt-1">{myLots.length}</p>
           </div>
 
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
@@ -142,9 +148,9 @@ export default function ExportateurDashboardPage() {
               <GlobeAmericasIcon className="w-8 h-8 text-[#1565C0]" />
               <span className="text-sm font-bold text-[var(--color-primary)]">Gérer les lots</span>
             </Link>
-            <Link href="/eudr-report" className="flex flex-col items-center gap-3 p-6 bg-gray-50 rounded-2xl hover:brightness-95 transition-all text-center">
-              <CheckCircleIcon className="w-8 h-8 text-[#7B1FA2]" />
-              <span className="text-sm font-bold text-[var(--color-primary)]">Rapport EUDR</span>
+            <Link href="/paiement-lot" className="flex flex-col items-center gap-3 p-6 bg-gray-50 rounded-2xl hover:brightness-95 transition-all text-center">
+              <CurrencyDollarIcon className="w-8 h-8 text-[#7B1FA2]" />
+              <span className="text-sm font-bold text-[var(--color-primary)]">Paiement par ID lot</span>
             </Link>
           </div>
         </div>

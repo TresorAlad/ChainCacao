@@ -1,2 +1,28 @@
+# Secrets & env locaux (ne pas committer)
 .env
-.env.example
+.env.local
+.env.*.local
+# Modèles versionnés (OK sur GitHub)
+!.env.example
+!.env.fabric.example
+
+# Firebase / FCM
+*firebase-adminsdk*.json
+firebase-service-account.json
+
+secrets/
+
+# Build Go
+bin/
+dist/
+*.exe
+*.test
+vendor/
+
+# Uploads & données générées localement
+uploads/
+data/
+
+# Fabric : identités / crypto générés (utiliser fabric-samples/test-network en local)
+wallet/
+organizations/

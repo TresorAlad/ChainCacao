@@ -16,6 +16,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { batchApi, getApiError, lotActionApi, type BatchResponse } from '@/services/api';
+import { isEnTransit, mapStatut } from '@/utils/lot-status';
 
 function firstParam(v: string | string[] | undefined): string {
   if (v === undefined || v === null) return '';
@@ -73,11 +74,10 @@ export default function ConfirmerReceptionLotScreen() {
       Alert.alert('PIN requis', 'Saisissez votre code PIN pour confirmer la réception sur la chaîne.');
       return;
     }
-    const s = String(lot?.statut ?? '').toLowerCase();
-    if (s && s !== 'en_transit') {
+    if (lot?.statut && !isEnTransit(lot.statut)) {
       Alert.alert(
         'Statut',
-        `Ce lot n'est pas en attente de réception (statut : ${lot?.statut ?? '—'}).`
+        `Ce lot n'est pas en attente de réception (statut : ${mapStatut(lot.statut).label}).`
       );
       return;
     }
@@ -163,7 +163,7 @@ export default function ConfirmerReceptionLotScreen() {
                     <MaterialCommunityIcons name="information-outline" size={20} color={brandGreen} />
                     <View style={styles.infoTextGroup}>
                       <Text style={styles.infoLabel}>Statut</Text>
-                      <Text style={styles.infoValue}>{lot.statut ?? '—'}</Text>
+                      <Text style={styles.infoValue}>{mapStatut(lot.statut).label}</Text>
                     </View>
                   </View>
                 </View>

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -23,6 +25,10 @@ func ConnectPool(ctx context.Context) (*pgxpool.Pool, error) {
 	if err != nil {
 		return nil, err
 	}
+	cfg.MaxConns = int32(envIntDefault("PG_MAX_CONNS", 25))
+	cfg.MinConns = int32(envIntDefault("PG_MIN_CONNS", 5))
+	cfg.MaxConnLifetime = time.Hour
+	cfg.MaxConnIdleTime = 30 * time.Minute
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -85,4 +91,16 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 		}
 	}
 	return nil
+}
+
+func envIntDefault(key string, def int) int {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return def
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return def
+	}
+	return n
 }

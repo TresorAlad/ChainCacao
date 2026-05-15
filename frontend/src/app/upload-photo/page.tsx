@@ -34,12 +34,9 @@ export default function UploadPhotoPage() {
     formData.append('file', file)
 
     try {
-      const token = user?.token || (typeof window !== 'undefined' ? localStorage.getItem('jwt') : '')
       const res = await fetch(`${getApiBaseUrl()}/lot/${encodeURIComponent(id)}/photo`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
         body: formData,
       })
       if (!res.ok) {

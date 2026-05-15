@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 	"tracabilite-api/internal/actors"
@@ -18,6 +19,7 @@ import (
 	"tracabilite-api/internal/incidents"
 	"tracabilite-api/internal/groupedlist"
 	"tracabilite-api/internal/media"
+	"tracabilite-api/internal/notifications"
 	"tracabilite-api/internal/syncdedup"
 )
 
@@ -45,6 +47,7 @@ func main() {
 		incRepo    incidents.Repo
 		dedupRepo  syncdedup.Repo
 		listRepo   groupedlist.Repo
+		pgPool     *pgxpool.Pool
 	)
 
 	if os.Getenv("DATABASE_URL") != "" {
@@ -53,6 +56,7 @@ func main() {
 			log.Fatalf("postgres: %v", err)
 		}
 		defer pool.Close()
+		pgPool = pool
 		if err := db.Migrate(ctx, pool); err != nil {
 			log.Fatalf("migrate: %v", err)
 		}
@@ -122,11 +126,20 @@ func main() {
 		}
 	}
 
-	handler := httpapi.NewHandler(actorService, jwtService, batchService, mediaRepo, cfgRepo, incRepo, dedupRepo, listRepo)
+	var tokenStore notifications.TokenStore = notifications.NewMemoryStore()
+	if pgPool != nil {
+		tokenStore = notifications.NewPGStore(pgPool)
+	}
+	notifyService, err := notifications.NewService(tokenStore)
+	if err != nil {
+		log.Fatalf("notifications: %v", err)
+	}
+
+	handler := httpapi.NewHandler(actorService, jwtService, batchService, mediaRepo, cfgRepo, incRepo, dedupRepo, listRepo, notifyService, tokenStore)
+	handler.SetHealthDeps(pgPool, rdb)
 	router := httpapi.NewRouter(handler, jwtService, rdb)
 
-	log.Printf("API ChainCacao ecoute sur :%s", port)
-	if err := router.Run(":" + port); err != nil {
+	if err := httpapi.RunHTTPServer(router, ":"+port); err != nil {
 		log.Fatal(err)
 	}
 }

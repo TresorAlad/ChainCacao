@@ -1,0 +1,22 @@
+{
+  "_comment": "Copiez ce fichier depuis la console Firebase (Paramètres du projet > Vos applications > Android) et renommez-le google-services.json",
+  "project_info": {
+    "project_number": "VOTRE_PROJECT_NUMBER",
+    "project_id": "VOTRE_PROJECT_ID",
+    "storage_bucket": "VOTRE_PROJECT_ID.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:XXX:android:XXX",
+        "android_client_info": {
+          "package_name": "com.chaincacao.chaincacao"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [{ "current_key": "VOTRE_CLE_API" }],
+      "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+    }
+  ],
+  "configuration_version": "1"
+}

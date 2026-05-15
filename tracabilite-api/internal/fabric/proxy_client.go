@@ -167,12 +167,6 @@ func (c *ProxyClient) GetActivityChart(ctx context.Context) ([]map[string]any, e
 	return out, err
 }
 
-func (c *ProxyClient) GetEUDRCompliance(ctx context.Context) (map[string]any, error) {
-	var out map[string]any
-	err := c.doJSON(ctx, http.MethodGet, "/v1/fabric/dashboard/eudr-compliance", nil, &out)
-	return out, err
-}
-
 func (c *ProxyClient) GetAlertsCount(ctx context.Context) (map[string]any, error) {
 	var out map[string]any
 	err := c.doJSON(ctx, http.MethodGet, "/v1/fabric/dashboard/alerts-count", nil, &out)
@@ -232,6 +226,13 @@ func (c *ProxyClient) PayGroupedList(ctx context.Context, listID, actorID string
 	var out proxyTxBatchResponse
 	err := c.doJSON(ctx, http.MethodPost, "/v1/fabric/groupedlist/pay", map[string]any{"list_id": listID, "actor_id": actorID}, &out)
 	return out.TxHash, err
+}
+
+func (c *ProxyClient) PayGroupedListWithDebit(ctx context.Context, listID, actorID string, totalAmount float64) (string, error) {
+	if _, err := c.WithdrawWallet(ctx, actorID, totalAmount); err != nil {
+		return "", err
+	}
+	return c.PayGroupedList(ctx, listID, actorID)
 }
 
 func (c *ProxyClient) SetCooperativeMargin(ctx context.Context, orgID string, margin float64, actorID string) (string, error) {

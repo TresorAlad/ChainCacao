@@ -64,8 +64,8 @@ export default function HomePage() {
     },
     {
       icon: ShieldCheckIcon,
-      title: 'Certification EUDR',
-      description: 'Générez automatiquement des rapports conformes aux réglementations européennes sur la déforestation en un clic.',
+      title: 'Paiements Mobile Money',
+      description: 'Réglez les achats de lots par identifiant, avec confirmation sécurisée et traçabilité des transactions.',
       color: 'bg-gradient-to-br from-[var(--color-accent)]/20 to-[var(--color-accent)]/5',
       iconColor: 'text-[var(--color-accent)]',
       gradient: 'from-[var(--color-accent)]'
@@ -103,15 +103,15 @@ export default function HomePage() {
     },
     {
       title: 'Acteurs de la chaîne',
-      description: 'Coordonnez coopératives, transformateurs et distributeurs sur une même source de vérité.',
+      description: 'Coordonnez coopératives, transformateurs et exportateurs sur une même source de vérité.',
     },
     {
       title: 'Transferts et historique',
       description: 'Enregistrez les changements de propriété et consultez l’historique associé à chaque lot.',
     },
     {
-      title: 'Conformité EUDR',
-      description: 'Appuyez vos déclarations sur des preuves géographiques et documentaires rattachées au lot.',
+      title: 'Vérification publique',
+      description: 'Consultez l’historique et l’origine d’un lot via son identifiant ou son QR de traçabilité.',
     },
   ]
 
@@ -243,7 +243,7 @@ export default function HomePage() {
                   <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
                     <ShieldCheckIcon className="w-4 h-4 text-green-500" />
                   </div>
-                  <span className="text-sm text-[var(--color-muted)]">Certifié EUDR</span>
+                  <span className="text-sm text-[var(--color-muted)]">Traçabilité certifiée</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">

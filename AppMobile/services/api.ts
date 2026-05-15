@@ -7,11 +7,11 @@ export const USER_KEY = 'chaincacao_user';
 
 type ExpoExtra = { apiUrl?: string };
 
-/** URL de base : `extra.apiUrl` injecté par app.config.js (source unique, pas d’environnement). */
+/** URL de base : `extra.apiUrl` dans app.config.js (EXPO_PUBLIC_API_URL en build). */
 export function getApiBaseUrl(): string {
   const fromExtra = (Constants.expoConfig?.extra as ExpoExtra | undefined)?.apiUrl;
   if (typeof fromExtra === 'string' && fromExtra.trim()) return fromExtra.trim();
-  return 'http://13.60.214.56:8080';
+  throw new Error('API URL non configurée : définissez EXPO_PUBLIC_API_URL ou extra.apiUrl dans app.config.js');
 }
 
 export const API_BASE = getApiBaseUrl();
@@ -103,6 +103,15 @@ export const authApi = {
     api.post<LoginResponse>('/api/v1/auth/login', payload),
   signup: (payload: SignupPayload) =>
     api.post<LoginResponse>('/api/v1/auth/signup', payload),
+};
+
+export interface MeResponse {
+  success?: boolean;
+  actor?: ActorInfo;
+}
+
+export const meApi = {
+  get: () => api.get<MeResponse>('/api/v1/me'),
 };
 
 // ─── BATCH ────────────────────────────────────────────────────────────────────
@@ -250,6 +259,7 @@ export const batchApi = {
     form.append('file', { uri: imageUri, name: `lot_${Date.now()}.${ext}`, type: mime } as any);
     appendBatchMultipartFields(form, fields);
     return api.post<CreateBatchResponse>('/api/v1/batch/create', form, {
+      timeout: 120000,
       transformRequest: (data, headers) => {
         delete (headers as Record<string, unknown>)['Content-Type'];
         return data as string;
@@ -387,18 +397,6 @@ export const lotApi = {
     api.get<LotPositionResponse>(`/api/v1/lot/${encodeURIComponent(lotId)}/position`),
 };
 
-// ─── EUDR ────────────────────────────────────────────────────────────────────
-
-export interface EudrReportResponse {
-  success?: boolean;
-  report?: Record<string, unknown>;
-}
-
-export const eudrApi = {
-  report: (lotId: string) =>
-    api.get<EudrReportResponse>(`/api/v1/eudr/${encodeURIComponent(lotId)}/report`),
-};
-
 // ─── CONFIRMER RÉCEPTION / PAIEMENT LOT ─────────────────────────────────────
 
 export interface ConfirmerLotPayload {
@@ -435,6 +433,18 @@ export const lotActionApi = {
       `/api/v1/lot/${encodeURIComponent(lotId)}/reception`,
       payload
     ),
+};
+
+// ─── DEVICE / PUSH ────────────────────────────────────────────────────────────
+
+export interface RegisterDevicePayload {
+  token: string;
+  platform?: string;
+}
+
+export const deviceApi = {
+  register: (payload: RegisterDevicePayload) =>
+    api.post<{ success?: boolean }>('/api/v1/device/register', payload),
 };
 
 // ─── HEALTH ───────────────────────────────────────────────────────────────────

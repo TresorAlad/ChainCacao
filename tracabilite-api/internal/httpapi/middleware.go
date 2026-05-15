@@ -70,15 +70,24 @@ func PublicVerifyRateLimitMiddleware(limitPerMinute int) gin.HandlerFunc {
 	}
 }
 
+// AuthRateLimitRedis limite /auth/login et /auth/signup (20 req/min par IP).
+func AuthRateLimitRedis(rdb *redis.Client, limitPerMinute int) gin.HandlerFunc {
+	return rateLimitByPrefix(rdb, "ratelimit:auth", limitPerMinute)
+}
+
 // PublicVerifyRateLimitRedis limite /verify avec Redis (cle par IP et fenetre 1 min).
 func PublicVerifyRateLimitRedis(rdb *redis.Client, limitPerMinute int) gin.HandlerFunc {
+	return rateLimitByPrefix(rdb, "ratelimit:verify", limitPerMinute)
+}
+
+func rateLimitByPrefix(rdb *redis.Client, prefix string, limitPerMinute int) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if rdb == nil {
 			PublicVerifyRateLimitMiddleware(limitPerMinute)(c)
 			return
 		}
 		ip := c.ClientIP()
-		key := fmt.Sprintf("ratelimit:verify:%s:%d", ip, time.Now().Unix()/60)
+		key := fmt.Sprintf("%s:%s:%d", prefix, ip, time.Now().Unix()/60)
 		ctx := c.Request.Context()
 		n, err := rdb.Incr(ctx, key).Result()
 		if err != nil {

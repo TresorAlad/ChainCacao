@@ -20,7 +20,7 @@ interface LotEntry {
   statut: string
 }
 
-const EXPORT_ALLOWED = ['distributeur', 'exportateur', 'admin']
+const EXPORT_ALLOWED = ['exportateur', 'admin']
 
 export default function ExportPage() {
   const router = useRouter()
@@ -277,9 +277,9 @@ export default function ExportPage() {
 
            <div className="bg-[#1A2E0D] rounded-[2rem] p-8 text-white">
               <ShieldCheckIcon className="w-8 h-8 mb-4 text-[#81C784]" />
-              <h4 className="text-sm font-black mb-2 uppercase tracking-widest">Certification EUDR</h4>
+              <h4 className="text-sm font-black mb-2 uppercase tracking-widest">Manifeste d&apos;export</h4>
               <p className="text-xs text-white/60 leading-relaxed">
-                Ce manifeste inclut les preuves de non-déforestation requises par la réglementation européenne 2024.
+                Ce document regroupe les lots sélectionnés avec leur traçabilité blockchain et origine GPS.
               </p>
            </div>
         </div>

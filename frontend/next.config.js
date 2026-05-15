@@ -10,15 +10,7 @@ const apiRewriteTarget =
 
 const nextConfig = {
   reactStrictMode: true,
-  async rewrites() {
-    const base = stripTrailingSlash(apiRewriteTarget)
-    return [
-      {
-        source: '/api/v1/:path*',
-        destination: `${base}/:path*`,
-      },
-    ]
-  },
+  // Le proxy /api/v1 est gere par app/api/v1/[...path]/route.ts (injection JWT httpOnly).
 }
 
 module.exports = nextConfig

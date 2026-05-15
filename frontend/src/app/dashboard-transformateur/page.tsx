@@ -72,6 +72,8 @@ export default function TransformateurDashboardPage() {
 
   if (!isAuthenticated || user?.role !== 'transformateur') return null
 
+  const totalKg = myLots.reduce((s, l) => s + (l.quantite || 0), 0)
+
   return (
     <RoleLayout role="transformateur">
       <div className="w-full py-6 sm:py-8">
@@ -84,11 +86,17 @@ export default function TransformateurDashboardPage() {
           </div>
           <div className="flex items-center gap-3">
             <Link
-              href="/update-weight"
+              href="/paiement-lot"
+              className="px-6 py-2.5 bg-white border border-[var(--color-border)] rounded-xl text-sm font-bold text-[var(--color-muted)] hover:bg-gray-50 transition-colors"
+            >
+              Paiement par ID lot
+            </Link>
+            <Link
+              href="/transfer"
               className="flex items-center gap-2 px-6 py-2.5 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all"
             >
               <ArrowPathIcon className="w-5 h-5" />
-              Mettre à jour poids
+              Transférer un lot
             </Link>
           </div>
         </header>
@@ -99,8 +107,8 @@ export default function TransformateurDashboardPage() {
             <div className="w-10 h-10 bg-[#E8F5E9] rounded-xl flex items-center justify-center mb-4">
               <BeakerIcon className="w-6 h-6 text-[#2E7D32]" />
             </div>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Lots Transformés</p>
-            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">—</p>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Lots en stock</p>
+            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">{lotsLoading ? '—' : myLots.length}</p>
           </div>
 
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
@@ -116,7 +124,7 @@ export default function TransformateurDashboardPage() {
               <ArchiveBoxIcon className="w-6 h-6 text-[#1565C0]" />
             </div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Stock Masse (kg)</p>
-            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">—</p>
+            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">{lotsLoading ? '—' : totalKg.toLocaleString('fr-FR')}</p>
           </div>
 
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">

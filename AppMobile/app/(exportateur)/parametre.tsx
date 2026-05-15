@@ -49,7 +49,7 @@ export default function SettingsScreen() {
         <Text style={styles.sectionTitle}>Compte & Entreprise</Text>
         <View style={styles.settingsGroup}>
           <SettingItem icon="office-building" label="Informations Société" />
-          <SettingItem icon="shield-check-outline" label="Certifications EUDR" />
+          <SettingItem icon="shield-check-outline" label="Certifications export" />
           <SettingItem icon="bank-outline" label="Coordonnées Bancaires" />
         </View>
 

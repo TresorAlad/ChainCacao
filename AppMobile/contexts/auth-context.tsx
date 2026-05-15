@@ -14,14 +14,16 @@ import {
   USER_KEY,
   ActorInfo,
   getApiError,
-  actorsApi,
+  meApi,
 } from '@/services/api';
+import { decodeJwtPayload, isJwtExpired } from '@/lib/jwt-utils';
 import {
   loadProfileExtrasForActor,
   saveProfileExtrasForActor,
   StoredProfileExtras,
   PROFILE_EXTRA_KEY,
 } from '@/hooks/profile-extra';
+import { registerForPushNotifications } from '@/services/push-notifications';
 
 export type AuthContextValue = {
   token: string | null;
@@ -53,23 +55,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(USER_KEY),
         ]);
         if (storedToken) {
-          setToken(storedToken);
-          if (storedUser) {
-            try {
-              setUser(JSON.parse(storedUser));
-            } catch {
-              /* ignore corrupt profile json */
+          if (isJwtExpired(storedToken)) {
+            await AsyncStorage.removeItem(TOKEN_KEY);
+            await AsyncStorage.removeItem(USER_KEY);
+          } else {
+            setToken(storedToken);
+            if (storedUser) {
+              try {
+                setUser(JSON.parse(storedUser));
+              } catch {
+                /* ignore corrupt profile json */
+              }
             }
-          }
-          try {
-            await actorsApi.list();
-          } catch (e) {
-            const status = (e as AxiosError).response?.status;
-            if (status === 401 || status === 403) {
-              await AsyncStorage.removeItem(TOKEN_KEY);
-              await AsyncStorage.removeItem(USER_KEY);
-              setToken(null);
-              setUser(null);
+            try {
+              const { data } = await meApi.get();
+              if (data.actor) {
+                const extras = await loadProfileExtrasForActor(data.actor.id);
+                const merged: ActorInfo = {
+                  ...data.actor,
+                  ...extras,
+                  nom: extras.nom ?? data.actor.nom,
+                  name: extras.name ?? data.actor.name,
+                };
+                await AsyncStorage.setItem(USER_KEY, JSON.stringify(merged));
+                setUser(merged);
+              }
+              void registerForPushNotifications();
+            } catch (e) {
+              const status = (e as AxiosError).response?.status;
+              if (status === 401 || status === 403) {
+                await AsyncStorage.removeItem(TOKEN_KEY);
+                await AsyncStorage.removeItem(USER_KEY);
+                setToken(null);
+                setUser(null);
+              }
             }
           }
         }
@@ -102,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.setItem(USER_KEY, JSON.stringify(merged));
         setUser(merged);
       }
+      void registerForPushNotifications();
       return true;
     } catch (e) {
       setError(getApiError(e));
@@ -143,6 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem(USER_KEY, JSON.stringify(actor));
     setToken(newToken);
     setUser(actor);
+    void registerForPushNotifications();
   }, []);
 
   const value = useMemo<AuthContextValue>(

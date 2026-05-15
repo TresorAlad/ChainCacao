@@ -1,115 +1,81 @@
-# ChainCacao — Système de traçabilité agricole sur blockchain
+# ChainCacao — Traçabilité cacao sur blockchain
 
-> Plateforme de traçabilité de la chaîne de valeur cacao (et cultures agricoles) basée sur **Hyperledger Fabric**, une **API Go** et une **application mobile Expo / React Native**.  
+Plateforme de traçabilité de la filière cacao (Togo) : **Hyperledger Fabric**, **API Go (Gin)**, **application web Next.js** et **application mobile Expo / React Native**.
+
 > Projet réalisé dans le cadre d'un concours d'innovation — demi-finale.
 
 ---
 
 ## Sommaire
 
-1. [Contexte et problématique](#1-contexte-et-problématique)
-2. [Architecture technique](#2-architecture-technique)
-3. [Ce que nous avons réalisé](#3-ce-que-nous-avons-réalisé)
+1. [Contexte](#1-contexte)
+2. [Architecture](#2-architecture)
+3. [Rôles MVP](#3-rôles-mvp)
 4. [Structure du dépôt](#4-structure-du-dépôt)
 5. [Prérequis](#5-prérequis)
 6. [Démarrage rapide](#6-démarrage-rapide)
 7. [Variables d'environnement](#7-variables-denvironnement)
 8. [Référence API](#8-référence-api)
-9. [Application mobile](#9-application-mobile)
-10. [Chaincode Hyperledger Fabric](#10-chaincode-hyperledger-fabric)
-11. [Tests](#11-tests)
-12. [Critères d'acceptation couverts](#12-critères-dacceptation-couverts)
-13. [Équipe](#13-équipe)
+9. [Application web (Next.js)](#9-application-web-nextjs)
+10. [Application mobile](#10-application-mobile)
+11. [Chaincode Fabric](#11-chaincode-fabric)
+12. [Tests](#12-tests)
 
 ---
 
-## 1. Contexte et problématique
+## 1. Contexte
 
-La filière cacao (et plus largement agricole) souffre de plusieurs problèmes structurels :
+| Problème | Réponse ChainCacao |
+|----------|-------------------|
+| Provenance difficile à prouver | Ledger immuable + historique par lot |
+| Chaîne fragmentée | Acteurs unifiés (agriculteur → export) |
+| Saisie terrain absente | Mobile offline + sync |
+| Vérification consommateur | Page publique `/verify/:id` + QR |
 
-| Problème | Impact |
-|----------|--------|
-| **Falsification des données de provenance** | Perte de confiance des acheteurs et des certificateurs |
-| **Manque de transparence** de la chaîne d'approvisionnement | Impossibilité de reconstituer le parcours d'un lot |
-| **Absence d'outil numérique terrain** adapté aux agriculteurs | Saisies papier, pertes d'information, retards |
-| **Difficulté de vérification consommateur** | Le consommateur final ne peut pas vérifier l'authenticité d'un produit |
-
-**ChainCacao** répond à ces enjeux en enregistrant chaque événement de la chaîne de valeur — de la récolte au distributeur — sur un ledger **Hyperledger Fabric** immuable et vérifiable publiquement.
+Chaque événement (création, transfert, transformation, paiement, export) est enregistré avec traçabilité blockchain et preuves GPS / photo lorsque applicable.
 
 ---
 
-## 2. Architecture technique
+## 2. Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                       Couche présentation                        │
-│   Application Mobile (Expo / React Native)                       │
-│   [Agriculteurs terrain — iOS & Android]                         │
-└──────────────────┬───────────────────────────────────────────────┘
-                   │ HTTPS / JWT
-┌──────────────────▼───────────────────────────────────────────────┐
-│                       Backend — API Go (Gin)                     │
-│  Auth JWT · Validation métier · Gestion acteurs · Rapports EUDR  │
-│  PostgreSQL (acteurs, médias) · Redis (rate-limit, cache)        │
-│  Cloudinary (photos lots) · PDF signature RSA                    │
-└──────────────────┬───────────────────────────────────────────────┘
-                   │ Fabric Gateway SDK
-┌──────────────────▼───────────────────────────────────────────────┐
-│               Blockchain — Hyperledger Fabric                    │
-│  3 Peers (OrgAgriculteur · OrgTransformateur · OrgDistributeur)  │
-│  1 Orderer Raft · 1 CA par org · Channel : agri-chain            │
-│  Chaincode Go : CreateBatch · TransferBatch · GetHistory …       │
-└──────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│  Présentation                                                    │
+│  · Web Next.js 14 (dashboards par rôle, lots, paiement, export) │
+│  · Mobile Expo (agriculteurs, coopératives, exportateurs…)      │
+└────────────────────────────┬────────────────────────────────────┘
+                             │ HTTPS + JWT
+┌────────────────────────────▼────────────────────────────────────┐
+│  API Go (Gin) — tracabilite-api/                                 │
+│  Auth · Lots · Transferts · Paiements · Listes groupées          │
+│  Portefeuille · Dashboard · Admin                                │
+│  PostgreSQL · Redis · Cloudinary                                 │
+└────────────────────────────┬────────────────────────────────────┘
+                             │ Fabric Gateway / InMemory
+┌────────────────────────────▼────────────────────────────────────┐
+│  Hyperledger Fabric — chaincode/chaincacao.go                      │
+│  CreateBatch · TransferBatch · GetHistory · …                      │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
-### Flux d'une transaction type
-
-1. L'agriculteur saisit un lot sur l'app mobile (ou via l'API).
-2. L'API Go **valide** les données et **authentifie** l'acteur via JWT.
-3. Le SDK Fabric Go **soumet la transaction** au réseau.
-4. Les peers des organisations concernées **endossent** la transaction.
-5. L'orderer Raft **crée un bloc** et le distribue à tous les peers.
-6. L'API renvoie le **hash de transaction** et l'**UUID du lot** à l'interface.
+**Flux type :** saisie lot → validation API + JWT → transaction Fabric → hash renvoyé à l’interface.
 
 ---
 
-## 3. Ce que nous avons réalisé
+## 3. Rôles MVP
 
-### Livrable 1 — API & interface fonctionnelle ✅
+| Rôle | Interface principale | Capacités clés |
+|------|---------------------|----------------|
+| **Agriculteur** | Mobile | Création lots, GPS/photo, portefeuille, sync offline |
+| **Coopérative** | Mobile + Web | Réception, **liste groupée**, marges |
+| **Transformateur** | Web | Lots reçus, mise à jour poids, **paiement par ID lot**, transfert |
+| **Exportateur** | Web + Mobile | Stock, export, **paiement par ID lot** (pas de scan QR web) |
+| **Ministère** | Web | Supervision nationale, audit par ID, alertes |
+| **Admin** | Web | Acteurs, config, incidents, stats globales |
 
-- **Enregistrement d'un lot** : formulaire structuré (culture, quantité, lieu GPS, date de récolte, notes) → appel `POST /api/v1/lot` → UUID de lot + hash Fabric.
-- **Transfert entre acteurs** : recherche par UUID ou QR code, sélection du destinataire, commentaire, signature JWT → `POST /api/v1/transfer`.
-- **Gestion des rôles** : Agriculteur, Coopérative, Transformateur, Distributeur, Admin — chaque rôle dispose de droits distincts sur le ledger et sur l'API.
-- **Mise à jour de poids** après transformation (`PUT /api/v1/lot/:id/weight`).
-- **Export** d'un lot vers un distributeur (`POST /api/v1/lot/:id/export`).
-- **Upload de photos** par lot vers Cloudinary (`POST /api/v1/lot/:id/photo`).
+> **Hors MVP :** rôles `verificateur` / `distributeur`, conformité **EUDR** et rapports PDF associés (retirés du produit et de l’API).
 
-### Livrable 2 — Vérification publique ✅
-
-- Page de vérification **sans authentification** : `GET /api/v1/verify/:id`
-- Retourne une **frise chronologique complète** (création → transferts → transformation → certification) issue directement du ledger via `GetHistoryForKey`.
-- **QR code** généré par l'API (`GET /api/v1/qrcode/:id`) pointant vers l'URL de vérification publique.
-- **Rapport de conformité EUDR** : heuristique GPS + historique + PDF signé RSA (`GET /api/v1/eudr/:id/report/pdf`).
-
-### Livrable 3 — Application mobile agriculteurs ✅
-
-- **Authentification** par email/password ou PIN (LocalAuthentication biométrique possible).
-- **Saisie de lot simplifiée** avec géolocalisation automatique (GPS du téléphone).
-- **Scan QR code** pour identifier un lot existant (transfert ou vérification).
-- **Mode hors-ligne** : lots stockés dans AsyncStorage, synchronisation automatique toutes les **30 secondes** à la reconnexion réseau (`NetInfo`).
-- **Indicateur visuel** : lot confirmé (hash blockchain visible) vs lot en attente de sync.
-- **Consultation de l'historique** des lots de l'agriculteur connecté.
-
-### Couche blockchain — Hyperledger Fabric ✅
-
-| Fonction chaincode | Action |
-|--------------------|--------|
-| `CreateBatch` | Création d'une entrée immuable sur le ledger |
-| `TransferBatch` | Transfert de propriété entre organisations |
-| `UpdateBatchWeight` | Mise à jour du poids (transformation) avec justification |
-| `MarkBatchExported` | Changement de statut en `exporte` |
-| `GetBatch` | Lecture de l'état courant d'un lot |
-| `GetHistory` | Historique complet via `GetHistoryForKey` |
+**Paiement web :** transformateur et exportateur paient via **`/paiement-lot`** en saisissant l’**identifiant du lot** (PIN + prix optionnel). Le scan QR sert à la **traçabilité publique**, pas au paiement sur le web.
 
 ---
 
@@ -117,263 +83,210 @@ La filière cacao (et plus largement agricole) souffre de plusieurs problèmes s
 
 ```
 chaincacao/
-├── AppMobile/                  # Application mobile Expo / React Native
-│   ├── app/                    # Écrans Expo Router (login, création lot, transfert, profil…)
-│   ├── components/             # Composants réutilisables
-│   ├── contexts/               # Auth context (session JWT, AsyncStorage)
-│   ├── hooks/                  # use-auth, use-sync (offline sync), use-storage
-│   ├── services/               # Client Axios + types API
-│   ├── utils/                  # Helpers QR code, timeline
-│   ├── __tests__/              # Tests unitaires Jest
-│   ├── app.config.js           # Config Expo (URL API, EAS, plugins)
-│   └── eas.json                # Profils de build EAS (preview APK, production AAB)
-│
-├── tracabilite-api/            # Backend Go (Gin)
-│   ├── cmd/api/                # Point d'entrée — serveur HTTP (port 8080)
-│   ├── cmd/fabric-proxy/       # Proxy HTTP → Fabric Gateway (déploiement distribué)
-│   ├── internal/
-│   │   ├── auth/               # JWT (génération, validation, middleware RBAC)
-│   │   ├── actors/             # Acteurs : store PostgreSQL ou mémoire
-│   │   ├── batch/              # Logique métier lots + rapport EUDR
-│   │   ├── fabric/             # Clients Fabric : Gateway réel, InMemory, Proxy
-│   │   ├── db/                 # Pool pgx + migrations SQL
-│   │   ├── httpapi/            # Router Gin + handlers + middlewares CORS/rate-limit
-│   │   ├── cloudinary/         # Upload photos
-│   │   ├── media/              # Persistance métadonnées médias (PostgreSQL)
-│   │   └── report/             # Génération PDF EUDR (fpdf + signature RSA)
-│   ├── pkg/models/             # Structs partagés (Batch, Actor, APIResponse, Role)
-│   ├── configs/                # connection-profile.yaml, crypto-config.yaml (Fabric)
-│   ├── docker-compose.yml      # Postgres 16 + Redis 7 + API
-│   ├── Dockerfile              # Build statique Alpine
-│   └── .env.fabric.example     # Modèle de variables d'environnement
-│
-├── chaincode/                  # Chaincode Hyperledger Fabric (Go)
-│   └── chaincacao.go           # Contrat : CreateBatch, Transfer, GetHistory…
-│
-├── scripts/
-│   ├── deploy-fabric.sh        # Lance test-network + déploie le chaincode
-│   ├── install-compose.sh      # Installation Docker Compose
-│   └── start-api.sh            # Démarrage de l'API Go
-│
-└── fabric-samples/             # Cloné automatiquement par deploy-fabric.sh
+├── frontend/                 # Next.js 14 — interface web par rôle
+│   └── src/app/              # Pages : dashboards, lots, paiement-lot, liste-groupee…
+├── AppMobile/                # Expo Router — terrain & exportateur mobile
+├── tracabilite-api/          # Backend Go (Gin)
+│   ├── cmd/api/              # Serveur HTTP :8080
+│   ├── cmd/fabric-proxy/     # Proxy HTTP → Fabric (déploiement distribué)
+│   └── internal/             # auth, batch, fabric, httpapi, actors…
+├── chaincode/                # Smart contract Go (Fabric)
+├── scripts/                  # deploy-fabric.sh, start-api.sh…
+└── fabric-samples/           # Réseau Fabric (clone / test-network)
 ```
+
+Documentation détaillée API : [`tracabilite-api/README.md`](tracabilite-api/README.md).
 
 ---
 
 ## 5. Prérequis
 
-| Outil | Version minimale |
-|-------|-----------------|
-| Go | 1.21+ |
+| Outil | Version |
+|-------|---------|
+| Go | 1.23+ |
 | Node.js | 20+ |
-| Docker & Docker Compose | 24+ |
-| Expo CLI | dernière version (`npm i -g expo-cli`) |
-| EAS CLI (optionnel, builds cloud) | `npm i -g eas-cli` |
+| Docker & Docker Compose | récent |
+| Expo CLI | pour le mobile |
 
 ---
 
 ## 6. Démarrage rapide
 
-### 6.1 Réseau Fabric + Chaincode
+### 6.1 API Go
 
 ```bash
-# Clone le dépôt fabric-samples si absent, lance le réseau et déploie le chaincode
-cd chaincacao/
-bash scripts/deploy-fabric.sh
-```
-
-Le réseau Hyperledger Fabric démarre en moins de 2 minutes avec Docker Compose.
-
-### 6.2 Backend API Go
-
-```bash
-cd tracabilite-api/
-
-# Copier et remplir le fichier d'environnement
-cp .env.fabric.example .env
-# Éditer .env (JWT_SECRET, DATABASE_URL, variables Fabric…)
-
-# Option A — avec Docker Compose (Postgres + Redis + API)
+cd tracabilite-api
+cp .env.fabric.example .env   # puis éditer JWT_SECRET, etc.
 docker compose up --build
-
-# Option B — démarrage direct Go (sans Postgres ni Fabric réel)
+# ou, sans Postgres/Fabric réel :
 USE_INMEMORY_FABRIC=true go run ./cmd/api
 ```
 
-L'API est accessible sur **http://localhost:8080**.  
-`GET /health` doit renvoyer `{"status":"ok"}`.
+```bash
+curl -s http://localhost:8080/health
+```
+
+### 6.2 Frontend web
+
+```bash
+cd frontend
+npm install
+cp .env.local.example .env.local   # NEXT_PUBLIC_API_URL=http://localhost:8080
+npm run dev
+```
+
+Ouvrir **http://localhost:3000** — connexion selon les comptes seed (voir API).
 
 ### 6.3 Application mobile
 
 ```bash
-cd AppMobile/
+cd AppMobile
 npm install
-
-# Démarrer en développement (Expo Go)
 npx expo start
-
-# Construire un APK de prévisualisation (EAS)
-eas build --profile preview --platform android
 ```
 
-> L'URL de l'API est configurée dans `app.config.js` → `extra.apiUrl`.
+URL API : `app.config.js` → `extra.apiUrl`.
+
+### 6.4 Réseau Fabric (optionnel)
+
+```bash
+bash scripts/deploy-fabric.sh
+```
 
 ---
 
 ## 7. Variables d'environnement
 
-Fichier modèle : `tracabilite-api/.env.fabric.example`
+Fichier modèle : **`tracabilite-api/.env.fabric.example`**
 
-| Variable | Description | Défaut |
-|----------|-------------|--------|
-| `PORT` | Port HTTP de l'API | `8080` |
-| `JWT_SECRET` | Secret HMAC-SHA256 pour les tokens | — (obligatoire) |
-| `ALLOWED_ORIGINS` | CORS — domaines autorisés | `*` |
-| `DATABASE_URL` | URL PostgreSQL (`postgres://…`) | — (optionnel, mémoire si absent) |
-| `REDIS_URL` | URL Redis (`redis://…`) | — (optionnel) |
-| `USE_INMEMORY_FABRIC` | `true` → Fabric simulé en mémoire | `false` |
-| `FABRIC_PEER_ENDPOINT` | Adresse du peer Fabric | — |
-| `FABRIC_GATEWAY_PEER_SSL_OVERRIDE` | SNI pour TLS Fabric | — |
-| `FABRIC_PROXY_URL` | URL du fabric-proxy (si déployé) | — |
-| `CLOUDINARY_URL` | URL Cloudinary pour l'upload photos | — (optionnel) |
-| `PUBLIC_VERIFY_BASE_URL` | URL de base des QR codes | `http://localhost:3000/verify` |
-| `EUDR_RSA_PRIVATE_KEY_PEM` | Clé RSA pour signature PDF EUDR | — (optionnel) |
+| Variable | Description |
+|----------|-------------|
+| `PORT` | Port API (défaut `8080`) |
+| `JWT_SECRET` | Secret JWT (**obligatoire en prod**) |
+| `DATABASE_URL` | PostgreSQL (sinon acteurs en mémoire) |
+| `REDIS_URL` | Rate limit `/verify` |
+| `USE_INMEMORY_FABRIC` | `true` → ledger simulé |
+| `PUBLIC_VERIFY_BASE_URL` | Base URL des QR (ex. `https://…/verify`) |
+| `CLOUDINARY_*` | Upload photos lots |
+| `FABRIC_*` | Connexion Fabric Gateway (prod) |
+
+Frontend : `NEXT_PUBLIC_API_URL` dans `frontend/.env.local`.
 
 ---
 
 ## 8. Référence API
 
-### Routes publiques
+Base : **`/api/v1`**
+
+### Public
 
 | Méthode | Route | Description |
 |---------|-------|-------------|
-| `GET` | `/health` | Health check |
-| `POST` | `/api/v1/auth/login` | Connexion (`actor_id`+`pin` ou `email`+`password`) → JWT |
-| `POST` | `/api/v1/auth/signup` | Inscription agriculteur → JWT |
-| `GET` | `/api/v1/verify/:id` | Vérification publique d'un lot (historique complet) |
-| `GET` | `/api/v1/qrcode/:id` | QR code vers l'URL de vérification (`?format=png`) |
-| `GET` | `/api/v1/lot/:id` | État courant d'un lot |
-| `GET` | `/api/v1/lot/:id/history` | Historique complet d'un lot |
+| `GET` | `/health` | Santé |
+| `POST` | `/auth/login` | `actor_id`+`pin` ou `email`+`password` → JWT |
+| `POST` | `/auth/signup` | Inscription agriculteur |
+| `GET` | `/verify/:id` | Vérification publique (timeline) |
+| `GET` | `/lot/:id`, `/lot/:id/history` | Lecture lot |
+| `GET` | `/qrcode/:id` | QR traçabilité (`?format=png`) |
 
-### Routes authentifiées (Bearer JWT)
+### Authentifié (JWT)
 
-| Méthode | Route | Rôles | Description |
-|---------|-------|-------|-------------|
-| `POST` | `/api/v1/auth/register` | Admin | Créer un acteur avec rôle arbitraire |
-| `POST` | `/api/v1/lot` | Agriculteur, Admin | Créer un lot sur le ledger |
-| `POST` | `/api/v1/transfer` | Tous sauf Agriculteur, Admin | Transférer un lot |
-| `PUT` | `/api/v1/lot/:id/weight` | Transformateur, Distributeur, Admin | Mettre à jour le poids |
-| `POST` | `/api/v1/lot/:id/export` | Distributeur, Admin | Marquer un lot exporté |
-| `POST` | `/api/v1/lot/:id/photo` | JWT | Uploader une photo (Cloudinary) |
-| `GET` | `/api/v1/eudr/:id/report` | Distributeur, Admin | Rapport conformité EUDR (JSON) |
-| `GET` | `/api/v1/eudr/:id/report/pdf` | Distributeur, Admin | Rapport EUDR en PDF signé |
-| `POST` | `/api/v1/sync` | Agriculteur, Admin | Sync groupée de lots hors-ligne |
-| `GET` | `/api/v1/dashboard/stats` | Admin | Statistiques globales |
-| `GET` | `/api/v1/actors` | JWT | Liste des acteurs enregistrés |
+| Méthode | Route | Rôles (résumé) |
+|---------|-------|----------------|
+| `POST` | `/lot` | agriculteur, admin |
+| `POST` | `/transfer` | chaîne complète |
+| `PUT` | `/lot/:id/weight` | transformateur, exportateur, admin |
+| `POST` | `/lot/:id/export` | exportateur, admin |
+| `POST` | `/lot/:id/prix` | prix au kg |
+| `POST` | `/lot/:id/confirmer` | **paiement** transformateur / exportateur / admin |
+| `POST` | `/lot/:id/reception` | confirmation réception physique |
+| `POST` | `/liste-groupee` | coopérative, admin |
+| `POST` | `/liste-groupee/:id/payer` | transformateur, exportateur, admin |
+| `GET` | `/portefeuille/solde` | portefeuille acteur |
+| `GET` | `/actors/me/lots` | lots du propriétaire courant |
+| `GET` | `/dashboard/stats` | admin, ministère |
+| `GET` | `/dashboard/alerts-count` | admin |
+| `POST` | `/sync` | sync lots offline (agriculteur) |
 
-> Routes de compatibilité : `POST /api/v1/batch/create`, `POST /api/v1/batch/transfer`, `GET /api/v1/batch/:id`, `GET /api/v1/batch/:id/history`.
+Admin : `/api/v1/admin/actors`, `/admin/config`, `/admin/incidents`, etc.
+
+Compatibilité : `/batch/create`, `/batch/transfer`, `/batch/:id`.
+
+Exemple paiement :
+
+```bash
+curl -s -X POST "http://localhost:8080/api/v1/lot/LOT-.../confirmer" \
+  -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \
+  -d '{"pin":"2222"}'
+```
 
 ---
 
-## 9. Application mobile
+## 9. Application web (Next.js)
 
-### Fonctionnalités implémentées
+| Route | Usage |
+|-------|--------|
+| `/login`, `/register` | Authentification |
+| `/dashboard-*` | Tableau de bord par rôle |
+| `/lots`, `/nouveau-lot`, `/lot-detail` | Gestion lots |
+| `/paiement-lot` | Paiement par **ID lot** (transformateur / exportateur) |
+| `/liste-groupee` | Regroupement coopérative |
+| `/portefeuille` | Solde et mouvements |
+| `/transfer`, `/export` | Logistique |
+| `/verify` | Vérification (lien public) |
+| `/dashboard-ministere` | Supervision & audit |
+| `/blockchain`, `/actors` | Admin / ministère |
 
-- **Authentification** : connexion email/mot de passe ou PIN, gestion de session avec token JWT dans AsyncStorage.
-- **Création de lot** : formulaire adapté aux petits écrans (culture, quantité, localisation GPS automatique, notes).
-- **Transfert de lot** : scan QR ou saisie UUID, sélection du destinataire, commentaire.
-- **Historique** : timeline des lots enregistrés par l'acteur connecté.
-- **Scanner QR** : identification rapide d'un lot existant.
-- **Mode hors-ligne** : les saisies sont stockées localement (`AsyncStorage`) et synchronisées automatiquement toutes les 30 secondes dès que la connexion réseau est rétablie (`NetInfo`). L'indicateur visuel distingue les lots confirmés (hash blockchain) des lots en attente.
-- **Profil** : informations de l'acteur connecté, déconnexion.
+Build production : `cd frontend && npm run build`.
 
-### Build
+---
+
+## 10. Application mobile
+
+- Authentification PIN / email, session JWT (`AsyncStorage`)
+- Création lot (GPS, photo), transferts, portefeuille
+- Mode hors-ligne + `POST /sync`
+- Exportateur : stock, paiement mobile par lot (scan / ID selon écran)
 
 ```bash
-# APK de développement / prévisualisation
+cd AppMobile && npm test
 eas build --profile preview --platform android
-
-# Build de production (AAB pour Play Store)
-eas build --profile production --platform android
 ```
 
 ---
 
-## 10. Chaincode Hyperledger Fabric
+## 11. Chaincode Fabric
 
-Le smart contract est situé dans `chaincode/chaincacao.go` et utilise `fabric-contract-api-go`.
+Fichier : `chaincode/chaincacao.go`
 
-### Structure d'un lot sur le ledger
+Fonctions principales : `CreateBatch`, `TransferBatch`, `UpdateBatchWeight`, `MarkBatchExported`, `GetBatch`, `GetHistory`, `GetStats`.
 
-```go
-type Batch struct {
-    ID             string  // Identifiant unique (format TC-YYYYMMDD-xxxxx)
-    Culture        string  // Type de produit (ex : cacao, maïs)
-    Quantite       float64 // Poids en kg
-    Lieu           string  // Géolocalisation (village, région ou GPS)
-    DateRecolte    string  // ISO 8601
-    ProprietaireID string  // ActeurID courant
-    OrgID          string  // Organisation Fabric MSP
-    Statut         string  // cree | transfere | transforme | exporte
-    Timestamp      string  // Horodatage Fabric
-}
-```
-
-### Déploiement manuel (sans script)
+Déploiement (exemple) :
 
 ```bash
-# Depuis fabric-samples/test-network/
+cd fabric-samples/test-network
 ./network.sh up createChannel -c agri-chain -ca
-./network.sh deployCC -c agri-chain -ccn chaincacao \
-  -ccp ../../chaincode -ccl go
+./network.sh deployCC -c agri-chain -ccn chaincacao -ccp ../../chaincode -ccl go
 ```
 
 ---
 
-## 11. Tests
-
-### Backend Go
+## 12. Tests
 
 ```bash
-cd tracabilite-api/
-go test ./...
+# API
+cd tracabilite-api && go test ./...
+
+# Frontend
+cd frontend && npm run build
+
+# Mobile
+cd AppMobile && npm test
 ```
-
-### Application mobile (Jest)
-
-```bash
-cd AppMobile/
-npm test
-```
-
-Les tests unitaires couvrent :
-- `__tests__/apiPayloads.test.ts` — Validation des payloads API
-- `__tests__/historiqueTimeline.test.ts` — Construction de la frise chronologique
-- `__tests__/lotQr.test.ts` — Génération et parsing QR code
 
 ---
 
-## 12. Critères d'acceptation couverts
+## Équipe
 
-| Critère | Statut |
-|---------|--------|
-| Un agriculteur peut créer un lot et obtenir un UUID | ✅ |
-| Le transfert est enregistré sur la blockchain | ✅ |
-| Un UUID valide affiche l'historique chronologique complet | ✅ |
-| L'historique provient directement du ledger (`GetHistoryForKey`) | ✅ |
-| La page de vérification est accessible sans authentification | ✅ |
-| L'app tourne sur Android sans erreur | ✅ |
-| La saisie hors-ligne est stockée et synchronisée à la reconnexion | ✅ |
-| Le scan QR code identifie correctement un lot existant | ✅ |
-| Le réseau Fabric démarre avec Docker Compose en moins de 2 minutes | ✅ |
-| Toutes les fonctions du chaincode sont opérationnelles | ✅ |
-| Un bloc est créé et visible après chaque transaction confirmée | ✅ |
-
----
-
-## 13. Équipe
-
-Projet développé pour la **demi-finale du concours du MBH** — *Système de traçabilité agricole sur blockchain*.
-
-- Architecture : Hyperledger Fabric · Go API · React Native
-- Version du cahier des charges : 1.0 — 29 avril 2026
+Projet **MBH** — *Système de traçabilité agricole sur blockchain*.  
+Stack : Hyperledger Fabric · Go · Next.js · React Native / Expo.

@@ -25,6 +25,10 @@ func (s *Service) FindByID(ctx context.Context, id string) (models.Actor, error)
 	return s.store.FindByID(ctx, id)
 }
 
+func (s *Service) FindByIDs(ctx context.Context, ids []string) (map[string]models.Actor, error) {
+	return s.store.FindByIDs(ctx, ids)
+}
+
 func (s *Service) Authenticate(ctx context.Context, actorID, pin string) (models.Actor, error) {
 	return s.store.VerifyPIN(ctx, actorID, pin)
 }
@@ -72,6 +76,8 @@ func InitMemoryWebPasswords(store Store) error {
 		"actor-min-001":   "8888",
 		"actor-admin-001": "9999",
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for i := range m.actors {
 		pass := demoPass[m.actors[i].ID]
 		if pass == "" {

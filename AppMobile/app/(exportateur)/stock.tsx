@@ -15,34 +15,11 @@ import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { myLotsApi, getApiError, type BatchResponse } from '@/services/api';
+import { mapStatut } from '@/utils/lot-status';
 
 const { width } = Dimensions.get('window');
 
 const PLACEHOLDER = 'https://images.unsplash.com/photo-1582131503261-fca1d1c058d3?q=80&w=500&auto=format&fit=crop';
-
-function statutLotLabel(statut?: string): string {
-  const s = String(statut ?? '').toLowerCase();
-  if (s === 'en_transit') return 'En transit — confirmez la réception';
-  if (s === 'recu') return 'Reçu';
-  if (s === 'paye') return 'Payé';
-  if (s === 'cree') return 'Créé';
-  if (s === 'transfere') return 'Transféré (ancien flux)';
-  if (s === 'exporte') return 'Exporté';
-  return statut ? statut.toUpperCase() : '—';
-}
-
-function badgeColor(statut?: string): string {
-  const s = String(statut ?? '').toLowerCase();
-  if (s === 'en_transit') return '#FFF3E0';
-  if (s === 'paye') return '#E8F5E9';
-  return '#E8F5E9';
-}
-
-function badgeTextColor(statut?: string): string {
-  const s = String(statut ?? '').toLowerCase();
-  if (s === 'en_transit') return '#E65100';
-  return '#2E7D32';
-}
 
 export default function StockScreen() {
   const router = useRouter();
@@ -116,9 +93,9 @@ export default function StockScreen() {
                     <View style={styles.cardContent}>
                       <View style={styles.cardHeader}>
                         <Text style={styles.lotId}>{id}</Text>
-                        <View style={[styles.badge, { backgroundColor: badgeColor(item.statut) }]}>
-                          <Text style={[styles.badgeText, { color: badgeTextColor(item.statut) }]}>
-                            {statutLotLabel(item.statut)}
+                        <View style={[styles.badge, { backgroundColor: mapStatut(item.statut).color }]}>
+                          <Text style={[styles.badgeText, { color: mapStatut(item.statut).textColor }]}>
+                            {mapStatut(item.statut).label}
                           </Text>
                         </View>
                       </View>
@@ -153,14 +130,6 @@ export default function StockScreen() {
                             </Text>
                           </TouchableOpacity>
                         ) : null}
-                        <TouchableOpacity
-                          style={[styles.linkBtn, { backgroundColor: '#E8F5E9' }]}
-                          onPress={() =>
-                            router.push(`/(exportateur)/rapport-eudr?lotId=${encodeURIComponent(id)}` as any)
-                          }
-                        >
-                          <Text style={[styles.linkBtnText, { color: '#1B5E20' }]}>Rapport EUDR</Text>
-                        </TouchableOpacity>
                         <TouchableOpacity
                           style={[styles.linkBtn, { backgroundColor: enTransit ? '#EEEEEE' : '#FFF3E0' }]}
                           disabled={enTransit}

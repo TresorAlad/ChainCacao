@@ -12,6 +12,7 @@ export default function Providers({ children }: { children: ReactNode }) {
   const isAuthPage = pathname === '/login' || pathname === '/register'
   /** Pages sans sidebar : landing, auth, vérification publique */
   const isPublicPage =
+    pathname == null ||
     isAuthPage ||
     pathname === '/' ||
     pathname === '/verify' ||

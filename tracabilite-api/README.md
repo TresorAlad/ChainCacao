@@ -1,29 +1,32 @@
 # API Go — ChainCacao (tracabilité Fabric)
 
-Backend Gin reliant Next.js / React Native à **Hyperledger Fabric** (via **fabric-gateway**), avec **PostgreSQL** (dont **Neon**), **Redis**, upload **Cloudinary**, **PDF EUDR** (signature RSA optionnelle) et **QR code PNG**.
+Backend **Gin** pour le web Next.js et l’app mobile Expo : lots, transferts, **paiements par PIN**, listes groupées, portefeuille, dashboards et administration. Connexion **Hyperledger Fabric** (gateway ou mock mémoire), **PostgreSQL**, **Redis**, **Cloudinary**, QR PNG.
+
+> **MVP :** pas de routes EUDR / conformité (supprimées).
 
 ## Architecture
 
 | Dossier | Rôle |
 |--------|------|
 | `cmd/api` | Serveur HTTP |
+| `cmd/fabric-proxy` | Proxy HTTP → Fabric Gateway |
 | `internal/auth` | JWT, middleware, rôles |
-| `internal/actors` | Acteurs : PostgreSQL ou mémoire |
-| `internal/db` | Migrations SQL embarquées |
-| `internal/batch` | Métier lots |
-| `internal/fabric` | `InMemoryClient` **ou** `GatewayClient` (Fabric) |
+| `internal/actors` | Acteurs PostgreSQL ou mémoire |
+| `internal/db` | Migrations SQL |
+| `internal/batch` | Métier lots, paiements, stats |
+| `internal/fabric` | `InMemoryClient` ou `GatewayClient` |
 | `internal/httpapi` | Routes Gin, CORS, rate limit |
-| `internal/cloudinary` | Upload image (preset non signé) |
-| `internal/media` | Métadonnées `lot_media` en SQL |
-| `internal/report` | Génération PDF EUDR |
+| `internal/cloudinary` | Upload images |
+| `internal/media` | Métadonnées `lot_media` |
+| `internal/groupedlist` | Listes groupées coopérative |
 | `pkg/models` | Modèles partagés |
 
 ## Prérequis
 
 - Go **1.23+**
-- Pour la stack complète : Docker / Docker Compose
+- Docker / Docker Compose (stack complète)
 
-## Démarrage rapide (Docker : API + Postgres + Redis)
+## Démarrage rapide
 
 ```bash
 cd tracabilite-api
@@ -31,104 +34,140 @@ docker compose up --build
 ```
 
 - API : `http://localhost:8080`
-- Sans réseau Fabric local, `USE_INMEMORY_FABRIC=true` (défaut dans `docker-compose.yml`) simule le ledger.
-
-Santé :
+- Sans Fabric local : `USE_INMEMORY_FABRIC=true` (défaut compose)
 
 ```bash
 curl -s http://localhost:8080/health
 ```
 
-## Variables d’environnement (principales)
+Sans Docker :
+
+```bash
+USE_INMEMORY_FABRIC=true go run ./cmd/api
+```
+
+Sans `DATABASE_URL` → acteurs en **mémoire** ; sans `REDIS_URL` → rate limit `/verify` en mémoire.
+
+## Variables d’environnement
 
 | Variable | Description |
 |----------|-------------|
 | `PORT` | Port HTTP (défaut `8080`) |
-| `DATABASE_URL` | PostgreSQL, ex. `postgres://...` (**Neon** : ajouter `?sslmode=require`) |
-| `REDIS_URL` | ex. `redis://localhost:6379/0` — rate limit `/verify` |
 | `JWT_SECRET` | Secret HMAC JWT |
-| `ALLOWED_ORIGINS` | CORS, liste séparée par virgules |
-| `USE_INMEMORY_FABRIC` | `true` force le mock ledger |
-| `PUBLIC_VERIFY_BASE_URL` | Base URL des QR (défaut `https://chaincacao.tg/verify`) |
+| `APP_ENV` | `production` → `JWT_SECRET` obligatoire |
+| `DATABASE_URL` | PostgreSQL (`?sslmode=require` sur Neon) |
+| `REDIS_URL` | Rate limit `GET /verify/:id` |
+| `ALLOWED_ORIGINS` | CORS (virgules) |
+| `USE_INMEMORY_FABRIC` | `true` → mock ledger |
+| `PUBLIC_VERIFY_BASE_URL` | Base URL QR (défaut `https://chaincacao.tg/verify`) |
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary |
-| `CLOUDINARY_UPLOAD_PRESET` | Preset **unsigned** (recommandé) |
-| `EUDR_RSA_PRIVATE_KEY_PEM` | PEM PKCS1/PKCS8 RSA pour signature PDF |
+| `CLOUDINARY_UPLOAD_PRESET` | Preset **unsigned** |
+| `DEMO_INITIAL_CREDIT` | Crédit portefeuille demo (`false` pour désactiver) |
 
-### Fabric Gateway (production)
+### Fabric Gateway
 
-Si `FABRIC_PEER_ENDPOINT` est défini et `USE_INMEMORY_FABRIC` ≠ `true`, l’API utilise **`internal/fabric/gateway.go`**.
+Si `FABRIC_PEER_ENDPOINT` est défini et `USE_INMEMORY_FABRIC` ≠ `true` :
 
-| Variable | Exemple / note |
-|----------|----------------|
+| Variable | Exemple |
+|----------|---------|
 | `FABRIC_MSP_ID` | `Org1MSP` |
-| `FABRIC_PEER_ENDPOINT` | `dns:///peer0.org1.example.com:7051` |
-| `FABRIC_GATEWAY_PEER` | SNI TLS, ex. `peer0.org1.example.com` |
-| `FABRIC_TLS_CERT_PATH` | CA TLS du peer (PEM) |
-| `FABRIC_SIGNCERT_PATH` ou `FABRIC_SIGNCERT_DIR` | Certificat utilisateur |
-| `FABRIC_KEY_PATH` ou `FABRIC_KEYSTORE_DIR` | Clé privée |
-| `FABRIC_CHANNEL` | ex. `mychannel` |
-| `FABRIC_CHAINCODE` | ex. `chaincacao` |
+| `FABRIC_PEER_ENDPOINT` | `dns:///peer0…:7051` |
+| `FABRIC_TLS_CERT_PATH` | PEM CA peer |
+| `FABRIC_SIGNCERT_PATH` / `FABRIC_KEY_PATH` | Identité Gateway |
+| `FABRIC_CHANNEL` | `mychannel` |
+| `FABRIC_CHAINCODE` | `chaincacao` |
 
-**Contrat chaincode attendu** (arguments `string` ; lectures = JSON) :
+**Chaincode attendu :** `CreateBatch`, `TransferBatch`, `UpdateBatchWeight`, `MarkBatchExported`, `GetBatch`, `GetHistory`, `GetStats`, etc.
 
-- `CreateBatch(batchJSON, actorID)` — submit  
-- `TransferBatch(batchID, fromActorID, toActorID, comment)` — submit  
-- `UpdateBatchWeight(batchID, actorID, newWeight, justification)` — submit  
-- `MarkBatchExported(batchID, actorID)` — submit  
-- `GetBatch(batchID)` — evaluate → JSON `models.Batch`  
-- `GetHistory(batchID)` — evaluate → JSON `[]models.BatchHistoryEvent`  
-- `GetStats()` — evaluate → JSON (optionnel ; sinon message d’erreur dans les stats)
+L’API signe les transactions avec **une identité Gateway** ; l’`actor_id` JWT est une donnée métier côté chaincode.
 
-### Modèle d’identité Fabric (important)
+## Rôles (`pkg/models`)
 
-Dans l’implémentation actuelle, **l’API signe les transactions Fabric** (Gateway/Proxy) avec **une identité unique** (certificat/clé configurés par variables d’environnement).
+| Rôle API | Usage |
+|----------|--------|
+| `agriculteur` | Création lots, sync offline |
+| `cooperative` | Listes groupées, réception |
+| `transformateur` | Poids, paiement, transfert |
+| `exportateur` | Export, paiement |
+| `ministere` | Stats / supervision |
+| `admin` | Back-office complet |
 
-- **Conséquence**: l’`actor_id` passé à Fabric est une **donnée applicative** (provenant du JWT) et non une signature “par acteur” au niveau Fabric.
-- **Recommandation**:
-  - MVP/demo: ce modèle “API super-user” est acceptable si le chaincode applique strictement les règles métier.
-  - Production (cible): envisager une identité par acteur (wallet), ou au minimum renforcer les contrôles chaincode + audit/logs.
+## Routes `/api/v1`
 
-## Neon & Cloudinary
+### Public
 
-- **Neon** : crée un projet, copie l’URL `DATABASE_URL`, mets `sslmode=require`. Tu peux retirer le service `postgres` du compose et ne passer que l’URL dans `api.environment`.
-- **Cloudinary** : active un **upload preset unsigned** ; renseigne `CLOUDINARY_CLOUD_NAME` + `CLOUDINARY_UPLOAD_PRESET`.  
-  Upload : `POST /api/v1/lot/:id/photo` (multipart, champ `file`).
+| Méthode | Route | Description |
+|---------|-------|-------------|
+| `POST` | `/auth/login` | PIN ou email/password |
+| `POST` | `/auth/signup` | Inscription |
+| `GET` | `/verify/:id` | Vérification publique |
+| `GET` | `/lot/:id` | Détail lot |
+| `GET` | `/lot/:id/history` | Historique |
+| `GET` | `/qrcode/:id` | QR (`?format=png`) |
 
-## Routes (v2.1 + compat)
+### JWT — lots & logistique
 
-- `POST /api/v1/auth/login` — public  
-- `POST /api/v1/auth/register` — JWT admin  
-- `POST /api/v1/lot` — JWT agriculteur / admin (**CDC**: multipart avec photo `file` + GPS EXIF)  
-- `GET /api/v1/lot/:id` — public  
-- `GET /api/v1/lot/:id/history` — public  
-- `GET /api/v1/lot/:id/qr` — JWT (alias CDC)  
-- `POST /api/v1/transfer` — JWT coop / transfo / export / admin  
-- `PUT /api/v1/lot/:id/weight` — JWT  
-- `POST /api/v1/lot/:id/export` — JWT export / admin  
-- `POST /api/v1/lot/:id/photo` — JWT + Cloudinary  
-- `GET /api/v1/eudr/:id/report` — JSON (JWT export / admin)  
-- `GET /api/v1/eudr/:id/report/pdf` — **PDF** (JWT export / admin)  
-- `GET /api/v1/qrcode/:id` — JSON ; **`?format=png`** → image PNG  
-- `GET /api/v1/verify/:id` — public (rate limit Redis ou mémoire)  
-- `POST /api/v1/sync` — JWT agriculteur / admin  
-- `GET /api/v1/dashboard/stats` — JWT **admin/ministere**  
-- `GET /api/v1/actors` — JWT  
-- `GET /health` — public  
+| Méthode | Route | Rôles |
+|---------|-------|-------|
+| `POST` | `/lot` | agriculteur, admin |
+| `GET` | `/lot/:id/qr` | JWT |
+| `POST` | `/transfer` | agriculteur, cooperative, transformateur, exportateur, admin |
+| `PUT` | `/lot/:id/weight` | transformateur, exportateur, admin |
+| `POST` | `/lot/:id/export` | exportateur, admin |
+| `POST` | `/lot/:id/photo` | multipart Cloudinary |
+| `PUT` | `/lot/:id/corriger` | agriculteur, cooperative, admin |
+| `GET` | `/lot/:id/position` | JWT |
+| `POST` | `/sync` | agriculteur, admin |
 
-### Routes Admin (CDC)
+### JWT — paiements & portefeuille
 
-- `GET /api/v1/admin/actors` — liste acteurs  
-- `POST /api/v1/admin/actors` — création acteur (inclut `pin`)  
-- `PATCH /api/v1/admin/actors/:id` — maj (nom/email/org/role/suspended)  
-- `POST /api/v1/admin/actors/:id/reset-pin` — reset PIN (retourne le PIN pour backoffice)  
-- `GET /api/v1/admin/config` / `PUT /api/v1/admin/config` — configuration système (JSON)  
-- `GET /api/v1/admin/incidents` / `POST /api/v1/admin/incidents/:id/resolve` — incidents (paiements/portefeuille)  
+| Méthode | Route | Rôles |
+|---------|-------|-------|
+| `POST` | `/lot/:id/prix` | fixer prix/kg |
+| `POST` | `/lot/:id/confirmer` | **paiement** (PIN) — transformateur, exportateur, admin |
+| `POST` | `/lot/:id/reception` | confirmation réception |
+| `GET` | `/lot/:id/paiement` | détail paiement |
+| `GET` | `/portefeuille/solde` | solde |
+| `POST` | `/portefeuille/depot` | dépôt |
+| `POST` | `/portefeuille/retrait` | retrait |
 
-Compat : `/api/v1/batch/*` inchangé.
+### JWT — listes groupées
+
+| Méthode | Route | Rôles |
+|---------|-------|-------|
+| `POST` | `/liste-groupee` | cooperative, admin |
+| `POST` | `/liste-groupee/:id/preview` | transformateur, exportateur, admin |
+| `POST` | `/liste-groupee/:id/payer` | transformateur, exportateur, admin |
+
+### JWT — dashboards
+
+| Méthode | Route | Rôles |
+|---------|-------|-------|
+| `GET` | `/dashboard/stats` | admin, ministere |
+| `GET` | `/dashboard/recent-transfers` | admin |
+| `GET` | `/dashboard/activity-chart` | admin |
+| `GET` | `/dashboard/alerts-count` | admin |
+
+### JWT — admin `/api/v1/admin/*`
+
+Acteurs, config, incidents, `metrics/expvar` — rôle **admin** uniquement.
+
+`POST /admin/marge` — marge coopérative.
+
+### Divers
+
+| Méthode | Route | Description |
+|---------|-------|-------------|
+| `GET` | `/actors` | Liste acteurs |
+| `GET` | `/actors/me/lots` | Lots du propriétaire courant |
+| `POST` | `/device/register` | Push notifications |
+| `POST` | `/auth/register` | Création acteur (admin) |
+
+**Compat :** `POST /batch/create`, `POST /batch/transfer`, `GET /batch/:id`, `GET /batch/:id/history`.
 
 ## Exemples
 
-Login PIN :
+Login :
 
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/auth/login \
@@ -136,16 +175,7 @@ curl -s -X POST http://localhost:8080/api/v1/auth/login \
   -d '{"actor_id":"actor-agri-001","pin":"1111"}'
 ```
 
-Avec PostgreSQL, le même mot de passe que le PIN est aussi posé en `password_hash` au démarrage (seed) : login possible avec  
-`{"email":"agri@chaincacao.tg","password":"1111"}`.
-
-QR PNG :
-
-```bash
-curl -s -o qr.png "http://localhost:8080/api/v1/qrcode/TC-20260429-00001?format=png"
-```
-
-Création d’un lot (CDC, multipart + EXIF GPS):
+Création lot (multipart + EXIF GPS) :
 
 ```bash
 curl -s -X POST "http://localhost:8080/api/v1/lot" \
@@ -154,25 +184,43 @@ curl -s -X POST "http://localhost:8080/api/v1/lot" \
   -F "culture=cacao" \
   -F "variete=forastero" \
   -F "quantite=25" \
-  -F "lieu=ferme" \
   -F "region=Plateaux" \
   -F "village=Kpalime" \
-  -F "parcelle=P-01" \
   -F "date_recolte=2026-05-01"
 ```
 
-Paiement (PIN obligatoire):
+Paiement lot :
 
 ```bash
+curl -s -X POST "http://localhost:8080/api/v1/lot/LOT-.../prix" \
+  -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \
+  -d '{"prix_kg": 1200}'
+
 curl -s -X POST "http://localhost:8080/api/v1/lot/LOT-.../confirmer" \
   -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \
   -d '{"pin":"2222"}'
 ```
 
-## Développement sans Docker
+QR PNG :
 
 ```bash
+curl -s -o qr.png "http://localhost:8080/api/v1/qrcode/LOT-...?format=png"
+```
+
+## Neon & Cloudinary
+
+- **Neon :** `DATABASE_URL` avec `sslmode=require` ; possible sans service Postgres du compose.
+- **Cloudinary :** preset unsigned → `POST /api/v1/lot/:id/photo` (champ `file`).
+
+## Développement
+
+```bash
+go test ./...
 go run ./cmd/api
 ```
 
-Sans `DATABASE_URL`, les acteurs restent en **mémoire** ; sans `REDIS_URL`, le rate limit `/verify` est **en mémoire**.
+Cache Go en environnement contraint :
+
+```bash
+GOCACHE=$PWD/.gocache TMPDIR=$PWD/.tmp go build -o ./bin/api ./cmd/api
+```

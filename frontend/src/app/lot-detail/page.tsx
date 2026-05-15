@@ -90,8 +90,6 @@ function LotDetailContent() {
     )
   }
 
-  const isCompliant = lot.eudr_conforme
-
   return (
     <div className="page-container py-6 sm:py-8">
       {/* En-tête du lot */}
@@ -110,9 +108,9 @@ function LotDetailContent() {
               <QrCodeIcon className="w-4 h-4" />
               QR Code
             </Link>
-            <Link href={`/eudr-report?lot=${lot.id}`} className="btn btn-primary btn-sm flex items-center gap-2">
-              <DownloadIcon className="w-4 h-4" />
-              Rapport EUDR
+            <Link href={`/full-history?lot=${lot.id}`} className="btn btn-primary btn-sm flex items-center gap-2">
+              <HistoryIcon className="w-4 h-4" />
+              Historique complet
             </Link>
           </div>
         </div>
@@ -123,12 +121,6 @@ function LotDetailContent() {
         <div className="card-body">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4 flex-wrap">
-              <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
-                isCompliant ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-              }`}>
-                <ShieldCheckIcon className="w-4 h-4" />
-                {isCompliant ? 'Conforme EUDR' : 'Non conforme'}
-              </span>
               {lot.statut && (
                 <span className="inline-flex px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                   {lot.statut}
@@ -285,10 +277,6 @@ function LotDetailContent() {
                   <ShareIcon className="w-4 h-4 text-[var(--color-muted)] group-hover/btn:text-[var(--color-primary)] transition-colors" />
                   <span className="text-[var(--color-earth)]">Partager</span>
                 </button>
-                <Link href={`/eudr-report?lot=${lot.id}`} className="w-full btn btn-primary btn-sm justify-start group/btn">
-                  <FileCheckIcon className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
-                  <span>Rapport EUDR</span>
-                </Link>
                 <Link href={`/qrcode?id=${lot.id}`} className="w-full btn btn-outline btn-sm text-left justify-start group/btn">
                   <QrCodeIcon className="w-4 h-4 text-[var(--color-muted)] group-hover/btn:text-[var(--color-primary)] transition-colors" />
                   <span className="text-[var(--color-earth)]">Générer QR</span>

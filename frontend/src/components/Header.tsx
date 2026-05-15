@@ -13,11 +13,12 @@ const LABELS: Record<string, string> = {
   'dashboard-admin': 'Dashboard Admin',
   'dashboard-exportateur': 'Dashboard Exportateur',
   'dashboard-transformateur': 'Dashboard Transformateur',
-  'dashboard-distributeur': 'Dashboard Distributeur',
-  'dashboard-verificateur': 'Dashboard Vérificateur',
+  'dashboard-ministere': 'Supervision Ministère',
+  'liste-groupee': 'Liste groupée',
+  portefeuille: 'Portefeuille',
   lots: 'Mes lots',
   transfer: 'Transferts',
-  conformite: 'Conformité',
+  'paiement-lot': 'Paiement lot',
   transactions: 'Transactions',
   blockchain: 'Blockchain',
   actors: 'Acteurs',
@@ -30,7 +31,6 @@ const LABELS: Record<string, string> = {
   'upload-photo': 'Photo du lot',
   qrcode: 'QR code',
   verify: 'Vérification',
-  'eudr-report': 'Rapport EUDR',
   'full-history': 'Historique',
 }
 

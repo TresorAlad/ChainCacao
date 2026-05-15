@@ -40,28 +40,29 @@ export default function AgriculteurDashboardPage() {
     if (!loading && !isAuthenticated) router.replace('/login')
   }, [isAuthenticated, loading, router])
 
-  // Charger les lots de l'utilisateur depuis localStorage
   useEffect(() => {
     if (!isAuthenticated) return
-    const ids = JSON.parse(localStorage.getItem('chaincacao_my_lots') || '[]') as string[]
-    if (ids.length === 0) return
     setLotsLoading(true)
-    Promise.all(
-      ids.map(async (id) => {
-        try {
-          const [lotRes, histRes] = await Promise.all([
-            api.get<Batch>(`/lot/${id}`),
-            api.get<{ success: boolean; events: BatchHistoryEvent[] }>(`/lot/${id}/history`),
-          ])
-          return { lot: lotRes.data as Batch, history: histRes.data.events || [] }
-        } catch {
-          return null
-        }
+    api
+      .get<{ success: boolean; lots: Batch[] }>('/actors/me/lots')
+      .then(async (res) => {
+        const batches = res.data.lots || []
+        const withHistory = await Promise.all(
+          batches.map(async (lot) => {
+            try {
+              const histRes = await api.get<{ success: boolean; events: BatchHistoryEvent[] }>(
+                `/lot/${lot.id}/history`
+              )
+              return { lot, history: histRes.data.events || [] }
+            } catch {
+              return { lot, history: [] }
+            }
+          })
+        )
+        setMyLots(withHistory)
       })
-    ).then((results) => {
-      setMyLots(results.filter(Boolean) as LotWithHistory[])
-      setLotsLoading(false)
-    })
+      .catch(() => setMyLots([]))
+      .finally(() => setLotsLoading(false))
   }, [isAuthenticated])
 
   const fetchLot = useCallback(async (id: string) => {

@@ -23,7 +23,6 @@ type Client interface {
 	GetStats(ctx context.Context) map[string]any
 	GetRecentTransfers(ctx context.Context) ([]map[string]any, error)
 	GetActivityChart(ctx context.Context) ([]map[string]any, error)
-	GetEUDRCompliance(ctx context.Context) (map[string]any, error)
 	GetAlertsCount(ctx context.Context) (map[string]any, error)
 
 	UpdateBatch(ctx context.Context, batchID, actorID string, variete, parcelle, notes string, poids float64, justification string) (txHash string, updated models.Batch, err error)
@@ -36,6 +35,8 @@ type Client interface {
 	GetPaymentStatus(ctx context.Context, batchID string) (map[string]any, error)
 	CreateGroupedList(ctx context.Context, listID string, batchIDs []string, actorID string) (txHash string, err error)
 	PayGroupedList(ctx context.Context, listID, actorID string) (txHash string, err error)
+	// PayGroupedListWithDebit debite le payeur puis distribue les paiements (operation atomique cote ledger demo).
+	PayGroupedListWithDebit(ctx context.Context, listID, actorID string, totalAmount float64) (txHash string, err error)
 	SetCooperativeMargin(ctx context.Context, orgID string, margin float64, actorID string) (txHash string, err error)
 	GetWalletBalance(ctx context.Context, actorID string) (float64, error)
 	DepositWallet(ctx context.Context, actorID string, amount float64) (txHash string, err error)
@@ -253,22 +254,49 @@ func (c *InMemoryClient) GetRecentTransfers(_ context.Context) ([]map[string]any
 }
 
 func (c *InMemoryClient) GetActivityChart(_ context.Context) ([]map[string]any, error) {
-	return []map[string]any{
-		{"day": "Lun", "value": 142, "width": "85%"},
-		{"day": "Mar", "value": 176, "width": "100%"},
-		{"day": "Mer", "value": 124, "width": "70%"},
-		{"day": "Jeu", "value": 188, "width": "95%"},
-		{"day": "Ven", "value": 156, "width": "90%"},
-		{"day": "Sam", "value": 87, "width": "50%"},
-		{"day": "Dim", "value": 55, "width": "35%"},
-	}, nil
-}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
-func (c *InMemoryClient) GetEUDRCompliance(_ context.Context) (map[string]any, error) {
-	return map[string]any{
-		"percentage": 94,
-		"status":     "Objectif Atteint",
-	}, nil
+	dayLabels := []string{"Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"}
+	counts := make([]int, 7)
+	now := time.Now().UTC()
+	for _, events := range c.history {
+		for _, ev := range events {
+			if ev.Type != "creation" && ev.Type != "transfert" {
+				continue
+			}
+			t, err := time.Parse(time.RFC3339, ev.CreatedAtISO)
+			if err != nil {
+				continue
+			}
+			if now.Sub(t) > 7*24*time.Hour {
+				continue
+			}
+			wd := int(t.Weekday())
+			counts[wd]++
+		}
+	}
+	maxVal := 1
+	for _, v := range counts {
+		if v > maxVal {
+			maxVal = v
+		}
+	}
+	out := make([]map[string]any, 0, 7)
+	for i := 0; i < 7; i++ {
+		wd := (int(now.Weekday()) - 6 + i + 7) % 7
+		v := counts[wd]
+		width := "0%"
+		if maxVal > 0 {
+			width = fmt.Sprintf("%.0f%%", float64(v)/float64(maxVal)*100)
+		}
+		out = append(out, map[string]any{
+			"day":   dayLabels[wd],
+			"value": v,
+			"width": width,
+		})
+	}
+	return out, nil
 }
 
 func (c *InMemoryClient) GetAlertsCount(_ context.Context) (map[string]any, error) {
@@ -421,38 +449,60 @@ func (c *InMemoryClient) CreateGroupedList(_ context.Context, listID string, bat
 func (c *InMemoryClient) PayGroupedList(_ context.Context, listID, actorID string) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.payGroupedListLocked(listID, actorID, 0, false)
+}
+
+func (c *InMemoryClient) PayGroupedListWithDebit(_ context.Context, listID, actorID string, totalAmount float64) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.payGroupedListLocked(listID, actorID, totalAmount, true)
+}
+
+func (c *InMemoryClient) payGroupedListLocked(listID, actorID string, debitAmount float64, withDebit bool) (string, error) {
 	batchIDs, exists := c.groupedLists[listID]
 	if !exists {
 		return "", errors.New("liste introuvable")
 	}
+	if withDebit {
+		if c.wallets[actorID] < debitAmount {
+			return "", errors.New("solde insuffisant")
+		}
+		c.wallets[actorID] -= debitAmount
+	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	txHash := newTxHash()
 	for _, batchID := range batchIDs {
-		if b, ok := c.batches[batchID]; ok {
-			if b.Statut == "en_transit" {
-				return "", fmt.Errorf("lot %s en transit: reception non confirmee", batchID)
-			}
-			b.Statut = "paye"
-			b.Timestamp = now
-			c.batches[batchID] = b
-			c.payments[batchID] = "paye"
-			price := c.prices[batchID]
-			if price <= 0 { price = 1500 }
-			seller, ok := c.sellers[batchID]
-			if !ok || seller == "" {
-				seller = b.Proprietaire
-			}
-			c.wallets[seller] += price * b.Quantite
-			
-			c.history[batchID] = append(c.history[batchID], models.BatchHistoryEvent{
-				BatchID:      batchID,
-				Type:         "paiement_liste",
-				ActorID:      actorID,
-				TxHash:       txHash,
-				CreatedAtISO: now,
-				Payload:      b,
-			})
+		b, ok := c.batches[batchID]
+		if !ok {
+			return "", fmt.Errorf("lot introuvable: %s", batchID)
 		}
+		if b.Statut == "en_transit" {
+			if withDebit {
+				c.wallets[actorID] += debitAmount
+			}
+			return "", fmt.Errorf("lot %s en transit: reception non confirmee", batchID)
+		}
+		b.Statut = "paye"
+		b.Timestamp = now
+		c.batches[batchID] = b
+		c.payments[batchID] = "paye"
+		price := c.prices[batchID]
+		if price <= 0 {
+			price = 1500
+		}
+		seller, ok := c.sellers[batchID]
+		if !ok || seller == "" {
+			seller = b.Proprietaire
+		}
+		c.wallets[seller] += price * b.Quantite
+		c.history[batchID] = append(c.history[batchID], models.BatchHistoryEvent{
+			BatchID:      batchID,
+			Type:         "paiement_liste",
+			ActorID:      actorID,
+			TxHash:       txHash,
+			CreatedAtISO: now,
+			Payload:      b,
+		})
 	}
 	return txHash, nil
 }

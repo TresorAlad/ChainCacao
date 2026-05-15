@@ -19,6 +19,7 @@ import * as Network from 'expo-network';
 import { useAuth } from '@/hooks/use-auth';
 import { readLotsListForActor, type Lot } from '@/hooks/use-storage';
 import { myLotsApi, type BatchResponse, getApiError } from '@/services/api';
+import { mapLocalSyncStatus, mapStatut } from '@/utils/lot-status';
 
 type DisplayLot = {
   id: string;
@@ -30,12 +31,13 @@ type DisplayLot = {
 };
 
 function mapServerLot(b: BatchResponse): DisplayLot {
+  const mapped = mapStatut(b.statut);
   return {
     id: b.id,
     nom: `${b.culture ?? 'Lot'} — ${b.lieu ?? ''}`.trim(),
     poids: String(b.quantite ?? 0),
     date: b.date_recolte ?? b.timestamp ?? '',
-    statut: b.statut ?? 'Validé',
+    statut: mapped.label,
     isSynced: true,
   };
 }
@@ -46,7 +48,7 @@ function mapLocalLot(l: Lot): DisplayLot {
     nom: l.title,
     poids: l.poids,
     date: l.date,
-    statut: l.synced ? 'Validé' : 'En attente',
+    statut: mapLocalSyncStatus(l.synced, l.status),
     isSynced: l.synced,
   };
 }
@@ -141,7 +143,13 @@ export default function MesLots() {
                 styles.statusBadge,
                 {
                   backgroundColor:
-                    item.statut === 'Validé' ? '#E8F5E9' : item.statut === 'En attente' ? '#FFF3E0' : '#E3F2FD',
+                    item.statut === 'Synchronisé' || item.statut === 'Payé' || item.statut === 'Reçu'
+                      ? '#E8F5E9'
+                      : item.statut === 'En attente' || item.statut === 'En transit'
+                        ? '#FFF3E0'
+                        : item.statut === 'Problème'
+                          ? '#FFEBEE'
+                          : '#E3F2FD',
                 },
               ]}
             >
@@ -150,7 +158,13 @@ export default function MesLots() {
                   styles.statusText,
                   {
                     color:
-                      item.statut === 'Validé' ? '#2E7D32' : item.statut === 'En attente' ? '#EF6C00' : '#1976D2',
+                      item.statut === 'Synchronisé' || item.statut === 'Payé' || item.statut === 'Reçu'
+                        ? '#2E7D32'
+                        : item.statut === 'En attente' || item.statut === 'En transit'
+                          ? '#EF6C00'
+                          : item.statut === 'Problème'
+                            ? '#C62828'
+                            : '#1976D2',
                   },
                 ]}
               >

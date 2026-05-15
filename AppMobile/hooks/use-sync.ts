@@ -112,6 +112,7 @@ async function syncPendingLots(): Promise<void> {
             ...updated[idx],
             id: serverId,
             synced: true,
+            status: 'Terminé',
           };
           changed = true;
         }

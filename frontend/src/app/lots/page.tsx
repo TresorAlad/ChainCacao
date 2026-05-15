@@ -35,6 +35,10 @@ export default function LotsPage() {
   const [searchId, setSearchId] = useState('')
   const [searchResult, setSearchResult] = useState<Batch | null | 'not-found'>(null)
   const [searching, setSearching] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+
+  const filteredLots =
+    statusFilter === 'all' ? lots : lots.filter((l) => (l.statut || '').toLowerCase() === statusFilter)
 
   const fetchLot = useCallback(async (id: string) => {
     if (!id.trim()) return
@@ -56,7 +60,16 @@ export default function LotsPage() {
     if (!loading && !isAuthenticated) router.replace('/login')
   }, [isAuthenticated, loading, router])
 
-  // L'API n'expose pas GET /lot (liste globale) — les lots sont chargés via la recherche par ID
+  useEffect(() => {
+    if (!isAuthenticated || !user?.role) return
+    if (!['agriculteur', 'cooperative', 'admin'].includes(user.role)) return
+    setFetching(true)
+    api
+      .get<{ success: boolean; lots: Batch[] }>('/actors/me/lots')
+      .then((res) => setLots(res.data.lots || []))
+      .catch(() => setLots([]))
+      .finally(() => setFetching(false))
+  }, [isAuthenticated, user])
 
   if (loading || fetching) {
     return (
@@ -127,11 +140,25 @@ export default function LotsPage() {
           <div className="flex justify-between items-center mb-8">
             <h3 className="text-2xl font-black text-[var(--color-primary)]">Registre des Récoltes</h3>
             <span className="px-3 py-1 bg-[#F1F8E9] text-[#33691E] rounded-full text-[10px] font-black uppercase tracking-widest">
-              Total : {lots.length} lots
+              Total : {filteredLots.length} lots
             </span>
           </div>
+          <div className="flex flex-wrap gap-2 mb-6">
+            {['all', 'cree', 'transfere', 'exporte'].map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatusFilter(s)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase ${
+                  statusFilter === s ? 'bg-[#1B3A0F] text-white' : 'bg-gray-100 text-gray-500'
+                }`}
+              >
+                {s === 'all' ? 'Tous' : s}
+              </button>
+            ))}
+          </div>
 
-          {lots.length === 0 ? (
+          {filteredLots.length === 0 ? (
             <div className="py-16 flex flex-col items-center gap-4 text-center">
               <CubeIcon className="w-16 h-16 text-gray-200" />
               <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Aucun lot disponible</p>
@@ -153,7 +180,7 @@ export default function LotsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {lots.map((lot) => {
+                  {filteredLots.map((lot) => {
                     const st = statusLabel(lot.statut)
                     return (
                       <tr
@@ -221,12 +248,6 @@ export default function LotsPage() {
                 <div className="flex justify-between">
                   <span className="text-gray-500">Date récolte</span>
                   <span className="font-bold text-[var(--color-primary)]">{formatDate(selectedLot.date_recolte)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">EUDR</span>
-                  <span className={`font-black ${selectedLot.eudr_conforme ? 'text-green-700' : 'text-red-600'}`}>
-                    {selectedLot.eudr_conforme ? 'Conforme' : 'Non conforme'}
-                  </span>
                 </div>
               </div>
 

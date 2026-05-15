@@ -10,6 +10,7 @@ import {
   clearSignupChannel,
 } from '@/lib/signup-channel-storage'
 import { setAuthSessionCookie, clearAuthSessionCookie } from '@/lib/auth-session-cookie'
+import { decodeJwtPayload, isJwtExpired } from '@/lib/jwt-utils'
 
 export type RegisterExtras = {
   gps_location?: string
@@ -24,7 +25,6 @@ interface User {
   actor_id?: string
   role?: string
   email?: string
-  /** Préférence d’interface mémorisée sur ce navigateur (inscription). */
   clientChannel?: SignupChannel | null
 }
 
@@ -38,11 +38,17 @@ interface AuthResponse {
   message?: string
 }
 
+interface SessionResponse {
+  success?: boolean
+  token?: string
+  actor?: { id?: string; role?: string; org_id?: string }
+  error?: string
+}
+
 function networkErrorMessage(): string {
   return "Impossible de joindre le serveur. Vérifiez votre connexion internet."
 }
 
-/** Extrait un message d'erreur lisible depuis la réponse JSON (data.error peut être un objet ou une string). */
 function extractApiError(data: AuthResponse, fallback: string): string {
   if (typeof data.error === 'string' && data.error.trim()) return data.error
   if (typeof data.message === 'string' && data.message.trim()) return data.message
@@ -64,19 +70,21 @@ async function parseAuthJson(res: Response): Promise<AuthResponse> {
 }
 
 function userFromToken(token: string): User | null {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]))
-    const actorId = (payload.actor_id || payload.sub) as string | undefined
-    return {
-      token,
-      actor_id: actorId,
-      role: payload.role || 'user',
-      email: payload.email,
-      clientChannel: getSignupChannel(actorId),
-    }
-  } catch {
-    return null
+  if (isJwtExpired(token)) return null
+  const payload = decodeJwtPayload(token)
+  if (!payload) return null
+  const actorId = (payload.actor_id || payload.sub) as string | undefined
+  return {
+    token,
+    actor_id: actorId,
+    role: (payload.role as string) || 'user',
+    email: payload.email as string | undefined,
+    clientChannel: getSignupChannel(actorId),
   }
+}
+
+async function persistSession(token: string): Promise<void> {
+  await setAuthSessionCookie(token)
 }
 
 interface AuthContextType {
@@ -101,20 +109,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const token = localStorage.getItem('jwt')
-    if (token) {
-      const u = userFromToken(token)
-      if (u) {
-        setUser(u)
-        setAuthSessionCookie()
-      } else localStorage.removeItem('jwt')
-    }
-    setLoading(false)
+    ;(async () => {
+      try {
+        const res = await fetch('/api/auth/session', { credentials: 'same-origin' })
+        if (!res.ok) {
+          setUser(null)
+          return
+        }
+        const data = (await res.json()) as SessionResponse
+        const token = data.token || ''
+        if (!token) return
+        const u = userFromToken(token)
+        if (u) {
+          setUser({
+            ...u,
+            actor_id: u.actor_id || data.actor?.id,
+            role: u.role || data.actor?.role,
+          })
+        }
+      } catch {
+        setUser(null)
+      } finally {
+        setLoading(false)
+      }
+    })()
   }, [])
 
   useEffect(() => {
     const onSessionExpired = () => {
-      clearAuthSessionCookie()
+      void clearAuthSessionCookie()
       setUser(null)
     }
     window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired)
@@ -136,6 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       res = await fetch(`${getApiBaseUrl()}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(body),
       })
     } catch {
@@ -143,18 +167,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const data = await parseAuthJson(res)
-
     if (!res.ok) {
       throw new Error(extractApiError(data, 'Identifiants invalides'))
     }
 
     const token = typeof data.token === 'string' ? data.token : ''
-    if (!token) {
+    if (!token || isJwtExpired(token)) {
       throw new Error(extractApiError(data, 'Réponse serveur sans jeton de session'))
     }
 
-    localStorage.setItem('jwt', token)
-    setAuthSessionCookie()
+    await persistSession(token)
     const emailFromActor =
       data.actor && typeof data.actor === 'object' && typeof data.actor.email === 'string'
         ? data.actor.email
@@ -201,6 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       res = await fetch(`${getApiBaseUrl()}/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(payloadSignup),
       })
     } catch {
@@ -208,13 +231,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const data = await parseAuthJson(res)
-
     if (!res.ok) {
       throw new Error(extractApiError(data, 'Erreur lors de la création du compte'))
     }
 
     const token = typeof data.token === 'string' ? data.token : ''
-    if (!token) {
+    if (!token || isJwtExpired(token)) {
       throw new Error(
         typeof data.error === 'string'
           ? data.error
@@ -222,10 +244,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       )
     }
 
-    localStorage.setItem('jwt', token)
-    setAuthSessionCookie()
-    const jwtPayload = JSON.parse(atob(token.split('.')[1]))
-    const actorId = (jwtPayload.actor_id || jwtPayload.sub || data.actor?.id) as string | undefined
+    await persistSession(token)
+    const jwtPayload = decodeJwtPayload(token)
+    const actorId = (jwtPayload?.actor_id || jwtPayload?.sub || data.actor?.id) as string | undefined
     const emailFromActor =
       data.actor && typeof data.actor === 'object' && typeof data.actor.email === 'string'
         ? data.actor.email
@@ -243,20 +264,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const clientChannel: SignupChannel | null =
       pref === 'mobile' || pref === 'web' ? pref : getSignupChannel(actorId)
 
-    const resolvedRole = (jwtPayload.role || data.actor?.role || 'user') as string
+    const resolvedRole = (jwtPayload?.role || data.actor?.role || 'user') as string
     setUser({
       token,
       actor_id: actorId,
       role: resolvedRole,
-      email: jwtPayload.email || emailFromActor || email.trim().toLowerCase(),
+      email: (jwtPayload?.email as string) || emailFromActor || email.trim().toLowerCase(),
       clientChannel,
     })
     return resolvedRole
   }
 
   const logout = () => {
-    localStorage.removeItem('jwt')
-    clearAuthSessionCookie()
+    void clearAuthSessionCookie()
     setUser(null)
   }
 

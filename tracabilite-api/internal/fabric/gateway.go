@@ -361,15 +361,6 @@ func (g *GatewayClient) GetActivityChart(ctx context.Context) ([]map[string]any,
 	}, nil
 }
 
-func (g *GatewayClient) GetEUDRCompliance(ctx context.Context) (map[string]any, error) {
-	// TODO: Implement actual smart contract call to get EUDR compliance
-	// For now, return mock data
-	return map[string]any{
-		"percentage": 94,
-		"status":     "Objectif Atteint",
-	}, nil
-}
-
 func (g *GatewayClient) GetAlertsCount(ctx context.Context) (map[string]any, error) {
 	// TODO: Implement actual smart contract call to get alerts count
 	// For now, return mock data
@@ -460,6 +451,13 @@ func (g *GatewayClient) CreateGroupedList(ctx context.Context, listID string, ba
 func (g *GatewayClient) PayGroupedList(ctx context.Context, listID, actorID string) (string, error) {
 	txID, _, err := g.submit(ctx, "PayGroupedList", listID, actorID)
 	return txID, err
+}
+
+func (g *GatewayClient) PayGroupedListWithDebit(ctx context.Context, listID, actorID string, totalAmount float64) (string, error) {
+	if _, err := g.WithdrawWallet(ctx, actorID, totalAmount); err != nil {
+		return "", err
+	}
+	return g.PayGroupedList(ctx, listID, actorID)
 }
 
 func (g *GatewayClient) SetCooperativeMargin(ctx context.Context, orgID string, margin float64, actorID string) (string, error) {

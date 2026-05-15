@@ -399,17 +399,6 @@ func main() {
 			c.JSON(http.StatusOK, list)
 		})
 
-		v1.GET("/dashboard/eudr-compliance", func(c *gin.Context) {
-			ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
-			defer cancel()
-			m, err := fc.GetEUDRCompliance(ctx)
-			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-				return
-			}
-			c.JSON(http.StatusOK, m)
-		})
-
 		v1.GET("/dashboard/alerts-count", func(c *gin.Context) {
 			ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
 			defer cancel()

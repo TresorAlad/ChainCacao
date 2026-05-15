@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { RoleLayout } from '@/components/RoleLayout'
 import { KPICard, Badge, Button } from '@/components/ui'
 import { getRoleTheme } from '@/lib/role-themes'
@@ -17,7 +18,8 @@ import {
   CpuChipIcon,
   SignalIcon,
   ServerStackIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  TruckIcon,
 } from '@heroicons/react/24/outline'
 
 export default function AdminDashboardPage() {
@@ -30,6 +32,7 @@ export default function AdminDashboardPage() {
   const [statsNote, setStatsNote] = useState<string | null>(null)
   const [recentTransfers, setRecentTransfers] = useState<RecentTransferRow[]>([])
   const [chartData, setChartData] = useState<ActivityChartRow[]>([])
+  const [alertsCount, setAlertsCount] = useState<number | null>(null)
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
@@ -74,6 +77,14 @@ export default function AdminDashboardPage() {
         .get<{ success: boolean; activity: ActivityChartRow[] }>('/dashboard/activity-chart')
         .then((res) => setChartData(res.data.activity || []))
         .catch(() => setChartData([]))
+
+      api
+        .get<{ success: boolean; alerts: Record<string, number> }>('/dashboard/alerts-count')
+        .then((res) => {
+          const a = res.data.alerts
+          setAlertsCount(a?.total ?? a?.count ?? null)
+        })
+        .catch(() => setAlertsCount(null))
     }
   }, [isAuthenticated, user])
 
@@ -117,10 +128,10 @@ export default function AdminDashboardPage() {
             <button className="px-6 py-2.5 bg-white border border-[var(--color-border)] rounded-xl text-sm font-bold text-[var(--color-muted)] hover:bg-gray-50 transition-colors">
               Paramètres Système
             </button>
-            <button className="flex items-center gap-2 px-6 py-2.5 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all">
+            <Link href="/actors" className="flex items-center gap-2 px-6 py-2.5 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all">
               <UsersIcon className="w-5 h-5" />
               Gérer les Acteurs
-            </button>
+            </Link>
           </div>
         </header>
 
@@ -131,7 +142,7 @@ export default function AdminDashboardPage() {
               <CubeIcon className="w-6 h-6 text-[#2E7D32]" />
             </div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Lots Enregistrés</p>
-            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">{statsLoading ? '—' : (stats?.total_batches || '2,847')}</p>
+            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">{statsLoading ? '—' : (stats?.total_batches ?? '—')}</p>
           </div>
 
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
@@ -139,15 +150,15 @@ export default function AdminDashboardPage() {
               <UsersIcon className="w-6 h-6 text-[#1565C0]" />
             </div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Acteurs Actifs</p>
-            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">{statsLoading ? '—' : (stats?.total_actors || '412')}</p>
+            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">{statsLoading ? '—' : (stats?.total_actors ?? '—')}</p>
           </div>
 
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
-            <div className="w-10 h-10 bg-[#F3E5F5] rounded-xl flex items-center justify-center mb-4">
-              <DocumentCheckIcon className="w-6 h-6 text-[#7B1FA2]" />
+            <div className="w-10 h-10 bg-[#FFF3E0] rounded-xl flex items-center justify-center mb-4">
+              <TruckIcon className="w-6 h-6 text-[#E65100]" />
             </div>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Conformité EUDR</p>
-            <p className="text-3xl font-black text-[#2E7D32] mt-1">94%</p>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Lots en transit</p>
+            <p className="text-3xl font-black text-[#E65100] mt-1">{statsLoading ? '—' : (stats?.en_transit ?? '—')}</p>
           </div>
 
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
@@ -155,7 +166,7 @@ export default function AdminDashboardPage() {
               <ExclamationTriangleIcon className="w-6 h-6 text-[#B71C1C]" />
             </div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Alertes Système</p>
-            <p className="text-3xl font-black text-[#B71C1C] mt-1">38</p>
+            <p className="text-3xl font-black text-[#B71C1C] mt-1">{statsLoading ? '—' : alertsCount ?? '—'}</p>
           </div>
         </div>
 

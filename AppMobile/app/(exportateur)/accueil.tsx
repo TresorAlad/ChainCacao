@@ -142,20 +142,6 @@ export default function ExportateurDashboard() {
               </View>
             ))}
 
-            {/* BANNIÈRE EUDR */}
-            <TouchableOpacity 
-              activeOpacity={0.9}
-              style={styles.eudrBanner}
-              onPress={() => router.push('/(exportateur)/rapport')}
-            >
-              <MaterialCommunityIcons name="shield-check" size={30} color="white" />
-              <View style={{marginLeft: 15, flex: 1}}>
-                <Text style={styles.eudrBannerTitle}>Conformité EUDR</Text>
-                <Text style={styles.eudrBannerSub}>Certificats de non-déforestation</Text>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={24} color="white" />
-            </TouchableOpacity>
-
             <View style={{ height: 100 }} />
           </ScrollView>
         </View>

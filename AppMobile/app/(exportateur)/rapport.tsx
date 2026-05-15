@@ -32,7 +32,7 @@ export default function RapportScreen() {
         {/* SECTION RÉSUMÉ CONFORMITÉ */}
         <View style={styles.complianceCard}>
           <View style={styles.complianceHeader}>
-            <Text style={styles.complianceTitle}>Conformité EUDR</Text>
+            <Text style={styles.complianceTitle}>Traçabilité export</Text>
             <View style={styles.statusBadge}>
               <Text style={styles.statusText}>À JOUR</Text>
             </View>
