@@ -15,15 +15,13 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
-import NetInfo from '@react-native-community/netinfo';
-import { isDeviceOnline } from '@/lib/device-online';
 
 import { useAuth } from '@/hooks/use-auth';
 import { readLotsListForActor, type Lot } from '@/hooks/use-storage';
 import { runPendingSync } from '@/hooks/use-sync';
-import { myLotsApi, type BatchResponse, getApiError } from '@/services/api';
+import { myLotsApi, type BatchResponse, getApiError, isNetworkError } from '@/services/api';
 import { LOTS_UPDATED_EVENT } from '@/lib/storage-keys';
-import { mapCdcLotDisplay, mapStatut } from '@/utils/lot-status';
+import { mapCdcLotDisplay } from '@/utils/lot-status';
 
 type DisplayLot = {
   id: string;
@@ -77,27 +75,27 @@ export default function MesLots() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
+  /** Indicateur léger uniquement si l’API liste a échoué (pas la détection NetInfo, souvent fausse). */
+  const [listApiFailed, setListApiFailed] = useState(false);
   const [lots, setLots] = useState<DisplayLot[]>([]);
   const pendingCount = lots.filter((l) => !l.isSynced).length;
 
   const loadData = useCallback(async () => {
     setRefreshing(true);
     try {
-      const state = await NetInfo.fetch();
-      setIsOffline(!isDeviceOnline(state));
-
       const local = await readLotsListForActor(user?.id);
       const localMapped = local.map(mapLocalLot);
       const byId = new Map<string, DisplayLot>();
       localMapped.forEach((l) => byId.set(l.id, l));
 
-      if (isDeviceOnline(state) && user?.id) {
+      if (user?.id) {
         try {
           const { data } = await myLotsApi.list();
+          setListApiFailed(false);
           const remote = (data.lots ?? []).map(mapServerLot);
           remote.forEach((l) => byId.set(l.id, l));
         } catch (e) {
+          setListApiFailed(isNetworkError(e));
           console.warn('API mes lots:', getApiError(e, 'lots_offline'));
         }
       }
@@ -216,8 +214,10 @@ export default function MesLots() {
               <Text style={styles.heroCount}>{lots.length} lots</Text>
             </View>
             <View style={styles.statusRow}>
-              <View style={[styles.dot, { backgroundColor: isOffline ? '#FF5252' : '#4CAF50' }]} />
-              <Text style={styles.heroSubtitle}>{isOffline ? 'Mode hors-ligne' : 'Connecté au réseau'}</Text>
+              <View style={[styles.dot, { backgroundColor: listApiFailed ? '#FFA726' : '#4CAF50' }]} />
+              <Text style={styles.heroSubtitle}>
+                {listApiFailed ? 'Données locales — tirez pour recharger depuis le serveur' : 'Liste à jour depuis le serveur'}
+              </Text>
             </View>
           </View>
         </ImageBackground>
@@ -237,7 +237,7 @@ export default function MesLots() {
               <TouchableOpacity
                 style={styles.syncBtn}
                 onPress={() => void handleRetrySync()}
-                disabled={syncing || isOffline}
+                disabled={syncing}
               >
                 {syncing ? (
                   <ActivityIndicator size="small" color="#fff" />
@@ -258,7 +258,9 @@ export default function MesLots() {
               <View style={styles.emptyContainer}>
                 <MaterialCommunityIcons name="archive-off-outline" size={60} color="#CCC" />
                 <Text style={styles.emptyText}>Aucun lot trouvé</Text>
-                {isOffline && <Text style={styles.emptySubText}>Vérifiez votre connexion pour synchroniser</Text>}
+                {listApiFailed ? (
+                  <Text style={styles.emptySubText}>Impossible de charger la liste serveur pour l’instant. Tirez pour réessayer.</Text>
+                ) : null}
               </View>
             }
           />

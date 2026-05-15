@@ -53,7 +53,7 @@ export default function ScannerScreen() {
       } as any);
     } catch (e) {
       const msg = isNetworkError(e)
-        ? 'Réseau indisponible. Réessayez plus tard.'
+        ? `Serveur injoignable. Vérifiez que le serveur ChainCacao est démarré, puis réessayez.`
         : getApiError(e);
       Alert.alert('Vérification lot', msg, [{ text: 'OK', onPress: () => setScanned(false) }]);
     }

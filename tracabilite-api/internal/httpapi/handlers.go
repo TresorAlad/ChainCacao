@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -596,7 +597,22 @@ func (h *Handler) SyncOfflineLots(c *gin.Context) {
 }
 
 func (h *Handler) DashboardStats(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"success": true, "stats": h.batch.GetStats(c.Request.Context())})
+	ctx := c.Request.Context()
+	stats := h.batch.GetStats(ctx)
+	if list, err := h.actors.List(ctx); err == nil {
+		stats["total_actors"] = len(list)
+	}
+	if h.dedup != nil {
+		if n, err := h.dedup.CountDistinctLotIDs(ctx); err == nil && n > 0 {
+			stats["lots_synchronises"] = n
+			if batch.IntFromAny(stats["total_lots"]) == 0 {
+				stats["total_lots"] = n
+				stats["total_batches"] = n
+			}
+		}
+	}
+	stats = batch.NormalizeDashboardStats(stats)
+	c.JSON(http.StatusOK, gin.H{"success": true, "stats": stats})
 }
 
 func (h *Handler) RecentTransfers(c *gin.Context) {
@@ -1196,19 +1212,33 @@ func (h *Handler) PortefeuilleRetrait(c *gin.Context) {
 func (h *Handler) SetMargeCooperative(c *gin.Context) {
 	var req struct {
 		OrgID  string  `json:"org_id" binding:"required"`
-		Margin float64 `json:"margin" binding:"required"`
+		Margin float64 `json:"margin"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("[admin] SetMargeCooperative bind_error: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload invalide"})
+		return
+	}
+	if req.Margin < 0 || req.Margin > 100 {
+		log.Printf("[admin] SetMargeCooperative invalid_range org_id=%s margin=%.4f", req.OrgID, req.Margin)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "marge hors plage (0 à 100 %)"})
 		return
 	}
 	actorID := c.GetString(auth.ContextActorID)
 	txHash, err := h.batch.SetCooperativeMargin(c.Request.Context(), req.OrgID, req.Margin, actorID)
 	if err != nil {
+		log.Printf("[admin] SetMargeCooperative FAIL org_id=%s margin=%.4f actor=%s err=%v", req.OrgID, req.Margin, actorID, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": txHash, "message": "marge configuree"})
+	log.Printf("[admin] SetMargeCooperative OK org_id=%s margin_pct=%.4f actor=%s tx_hash=%s", req.OrgID, req.Margin, actorID, txHash)
+	c.JSON(http.StatusOK, gin.H{
+		"success":    true,
+		"tx_hash":    txHash,
+		"org_id":     req.OrgID,
+		"margin_pct": req.Margin,
+		"message":    fmt.Sprintf("Marge enregistrée avec succès : %.2f %% pour l’organisation %s", req.Margin, req.OrgID),
+	})
 }
 
 func (h *Handler) GetMargeCooperativeAdmin(c *gin.Context) {
@@ -1343,16 +1373,25 @@ func (h *Handler) AdminResetActorPIN(c *gin.Context) {
 	id := c.Param("id")
 	pin, err := randomPIN4()
 	if err != nil {
+		log.Printf("[admin] AdminResetActorPIN random_fail actor_id=%s err=%v", id, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "generation PIN echouee"})
 		return
 	}
 	actor, err := h.actors.SetPIN(c.Request.Context(), id, pin)
 	if err != nil {
+		log.Printf("[admin] AdminResetActorPIN FAIL actor_id=%s admin=%s err=%v", id, c.GetString(auth.ContextActorID), err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	// CDC: reset PIN via SMS idealement; ici on retourne le PIN pour usage backoffice.
-	c.JSON(http.StatusOK, gin.H{"success": true, "actor_id": actor.ID, "pin": pin})
+	log.Printf("[admin] AdminResetActorPIN OK actor_id=%s nom=%s admin=%s", actor.ID, actor.Nom, c.GetString(auth.ContextActorID))
+	// CDC: en production, envoyer le PIN par SMS ; ici réponse réservée au back-office.
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"actor_id": actor.ID,
+		"nom":      actor.Nom,
+		"pin":      pin,
+		"message":  "PIN réinitialisé. Communiquez ce code à l’utilisateur par un canal sécurisé ; il doit le changer après première connexion si votre procédure l’exige.",
+	})
 }
 
 func randomPIN4() (string, error) {

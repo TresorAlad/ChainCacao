@@ -8,6 +8,7 @@ import api from '@/lib/api'
 
 interface DashboardStats {
   total_lots?: number
+  total_batches?: number
   total_actors?: number
   total_transfers?: number
   lots_verified?: number
@@ -31,10 +32,10 @@ export default function BlockchainPage() {
   const fetchStats = () => {
     if (!isAuthenticated || !canViewStats) { setFetching(false); return }
     setFetching(true)
-    api.get<DashboardStats | { data?: DashboardStats }>('/dashboard/stats')
+    api.get<{ success?: boolean; stats?: DashboardStats }>('/dashboard/stats')
       .then((res) => {
-        const raw = res.data
-        setStats((raw as { data?: DashboardStats }).data ?? raw as DashboardStats)
+        const body = res.data
+        setStats(body.stats ?? null)
         setLastRefresh(new Date())
       })
       .catch(() => setStats(null))
@@ -90,7 +91,7 @@ export default function BlockchainPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Lots enregistrés</p>
-            <p className="text-3xl font-black text-[var(--color-primary)]">{stats.total_lots ?? '—'}</p>
+            <p className="text-3xl font-black text-[var(--color-primary)]">{stats.total_lots ?? stats.total_batches ?? '—'}</p>
             <p className="text-xs font-bold text-green-500 mt-1">transactions blockchain</p>
           </div>
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">

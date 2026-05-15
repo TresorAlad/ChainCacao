@@ -20,6 +20,8 @@ type Record struct {
 type Repo interface {
 	Get(ctx context.Context, actorID, clientLotID string) (Record, bool, error)
 	Put(ctx context.Context, actorID, clientLotID, lotID, txHash string) error
+	// CountDistinctLotIDs nombre de lots distincts ayant été synchronisés (PostgreSQL ou mémoire).
+	CountDistinctLotIDs(ctx context.Context) (int64, error)
 }
 
 type MemoryRepo struct {
@@ -47,6 +49,17 @@ func (m *MemoryRepo) Put(_ context.Context, actorID, clientLotID, lotID, txHash 
 		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
 	}
 	return nil
+}
+
+func (m *MemoryRepo) CountDistinctLotIDs(_ context.Context) (int64, error) {
+	seen := make(map[string]struct{}, len(m.m))
+	for _, r := range m.m {
+		if r.LotID == "" {
+			continue
+		}
+		seen[r.LotID] = struct{}{}
+	}
+	return int64(len(seen)), nil
 }
 
 type PGRepo struct {
@@ -80,5 +93,11 @@ func (p *PGRepo) Put(ctx context.Context, actorID, clientLotID, lotID, txHash st
 		ON CONFLICT (actor_id, client_lot_id) DO NOTHING
 	`, actorID, clientLotID, lotID, txHash)
 	return err
+}
+
+func (p *PGRepo) CountDistinctLotIDs(ctx context.Context) (int64, error) {
+	var n int64
+	err := p.pool.QueryRow(ctx, `SELECT COUNT(DISTINCT lot_id) FROM sync_dedup`).Scan(&n)
+	return n, err
 }
 

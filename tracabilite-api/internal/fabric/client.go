@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -224,11 +225,27 @@ func (c *InMemoryClient) GetStats(_ context.Context) map[string]any {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	byStatus := map[string]int{}
+	totalWeight := 0.0
+	enTransit := 0
+	exportes := 0
 	for _, b := range c.batches {
 		byStatus[b.Statut]++
+		totalWeight += b.Quantite
+		st := strings.ToLower(strings.TrimSpace(b.Statut))
+		switch st {
+		case "en_transit":
+			enTransit++
+		case "exporte", "exporté":
+			exportes++
+		}
 	}
+	n := len(c.batches)
 	return map[string]any{
-		"total_lots":       len(c.batches),
+		"total_lots":       n,
+		"total_batches":    n,
+		"total_weight":     totalWeight,
+		"en_transit":       enTransit,
+		"exportes":         exportes,
 		"lots_by_statut":   byStatus,
 		"generated_at_utc": time.Now().UTC().Format(time.RFC3339),
 	}

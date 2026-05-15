@@ -311,7 +311,7 @@ func (s *Service) GetMyLots(ctx context.Context, actorID string) ([]models.Batch
 
 
 func (s *Service) GetStats(ctx context.Context) map[string]any {
-	return s.fabricClient.GetStats(ctx)
+	return NormalizeDashboardStats(s.fabricClient.GetStats(ctx))
 }
 
 func (s *Service) GetRecentTransfers(ctx context.Context) ([]map[string]any, error) {

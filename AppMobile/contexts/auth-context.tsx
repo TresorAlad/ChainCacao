@@ -261,7 +261,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return false;
         }
         // localOk === null : pas de hash enregistré, on ne peut pas vérifier hors-ligne.
-        setPinUnlockError('Réseau indisponible — connectez-vous une fois en ligne pour activer le déverrouillage hors-ligne.');
+        setPinUnlockError(
+          'Pas de réponse du serveur pour vérifier le PIN. Connectez-vous une fois lorsque l’API est disponible pour activer le déverrouillage de secours.'
+        );
         return false;
       }
       setPinUnlockError(getApiError(e, 'auth'));

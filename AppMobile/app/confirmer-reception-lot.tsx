@@ -1,3 +1,11 @@
+/**
+ * confirmer-reception-lot.tsx
+ *
+ * MODIFIÉ : suppression du check expo-network (isConnected && isInternetReachable)
+ * qui bloquait la confirmation sur la chaîne quand le réseau était détecté comme absent
+ * (faux positif Vodafone / 4G Android).
+ * L'appel API est maintenant toujours tenté directement.
+ */
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
@@ -15,7 +23,6 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import * as Network from 'expo-network';
 import { batchApi, getApiError, lotActionApi, type BatchResponse, isNetworkError } from '@/services/api';
 import { isEnTransit, mapStatut } from '@/utils/lot-status';
 import { enqueueCoopReception } from '@/lib/offline-queue';
@@ -87,37 +94,21 @@ export default function ConfirmerReceptionLotScreen() {
     }
     setSubmitting(true);
     try {
-      const net = await Network.getNetworkStateAsync();
-      const online = !!(net.isConnected && net.isInternetReachable);
-      if (!online) {
-        if (!user?.id) {
-          Alert.alert('Connexion', 'Session invalide.');
-          return;
-        }
-        const poids = parseFloat(poidsReception.replace(',', '.'));
-        await enqueueCoopReception({
-          lot_id: lotId,
-          pin: pin.trim(),
-          poids_constate: poids > 0 ? poids : undefined,
-          actor_id: user.id,
-        });
-        Alert.alert(
-          'Réception en file d’attente',
-          'Hors ligne : la confirmation sera envoyée automatiquement dès que le réseau sera disponible.',
-          [{ text: 'OK', onPress: () => router.back() }]
-        );
-        return;
-      }
+      // Appel API direct — pas de pré-vérification réseau (faux positifs fréquents sur Android).
+      console.log('[ConfirmerReception] Appel API confirmerReception pour lot:', lotId);
       const poids = parseFloat(poidsReception.replace(',', '.'));
       await lotActionApi.confirmerReception(lotId, {
         pin: pin.trim(),
         poids_constate: poids > 0 ? poids : undefined,
       });
-      Alert.alert('Réception confirmée', 'Le lot est enregistré comme reçu. L’historique du lot inclura cet événement.', [
+      console.log('[ConfirmerReception] Succès');
+      Alert.alert('Réception confirmée', "Le lot est enregistré comme reçu. L'historique du lot inclura cet événement.", [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (e) {
+      console.warn('[ConfirmerReception] Erreur:', e);
       if (isNetworkError(e) && user?.id) {
+        // Serveur injoignable → file d'attente locale.
         const poids = parseFloat(poidsReception.replace(',', '.'));
         await enqueueCoopReception({
           lot_id: lotId,
@@ -126,8 +117,8 @@ export default function ConfirmerReceptionLotScreen() {
           actor_id: user.id,
         });
         Alert.alert(
-          'Réception en file d’attente',
-          'La confirmation sera synchronisée à la reconnexion.',
+          "Réception en file d'attente",
+          'Le serveur est injoignable. La confirmation sera synchronisée automatiquement dès que le serveur sera disponible.',
           [{ text: 'OK', onPress: () => router.back() }]
         );
       } else {
@@ -234,7 +225,7 @@ export default function ConfirmerReceptionLotScreen() {
                 </View>
                 <Text style={styles.hint}>
                   La confirmation sur la chaîne enregistre la réception du lot (événement « réception » dans
-                  l’historique). Le paiement au producteur reste une action distincte.
+                  l'historique). Le paiement au producteur reste une action distincte.
                 </Text>
               </View>
 

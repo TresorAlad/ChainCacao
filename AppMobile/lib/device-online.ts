@@ -1,15 +1,21 @@
+/**
+ * device-online.ts — DÉSACTIVÉ (mode online forcé)
+ *
+ * Les fonctions retournent toujours `true` pour ne jamais bloquer les requêtes API.
+ * La détection NetInfo génère des faux négatifs sur Android (4G / Vodafone) ce qui
+ * provoquait des blocages d'inscription et de connexion alors que le réseau est actif.
+ *
+ * À réactiver lorsque le problème NetInfo Android sera résolu.
+ */
+
 import type { NetInfoState } from '@react-native-community/netinfo';
 
-/**
- * Retourne `true` uniquement si la connectivité est confirmée explicitement.
- *
- * `isConnected === null` (état initial Android au démarrage) est traité comme
- * "inconnu / hors-ligne" pour éviter de lancer des syncs prématurées.
- * `isInternetReachable === null` est toléré (Android ne le renseigne pas toujours)
- * tant que `isConnected === true`.
- */
-export function isDeviceOnline(state: NetInfoState): boolean {
-  if (state.isConnected !== true) return false;
-  if (state.isInternetReachable === false) return false;
+/** Toujours `true` — pré-vérification réseau désactivée. */
+export function isNetworkLikelyAvailable(_state: NetInfoState): boolean {
+  return true;
+}
+
+/** Toujours `true` — détection hors-ligne désactivée. */
+export function isDeviceOnline(_state: NetInfoState): boolean {
   return true;
 }

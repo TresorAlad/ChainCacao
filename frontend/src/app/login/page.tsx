@@ -6,8 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { EyeIcon, EyeOffIcon } from 'lucide-react'
 import { BrandLogo } from '@/components/BrandLogo'
-import { getRoleBasedRedirect } from '@/lib/role-utils'
-import type { UserRole } from '@/lib/role-utils'
+import { getRoleBasedRedirect, isWebPinGateExempt, type UserRole } from '@/lib/role-utils'
 import { getErrorMessage } from '@/lib/error-utils'
 import api from '@/lib/api'
 import { markPinUnlocked, setHasPinRequired } from '@/lib/pin-session'
@@ -26,7 +25,7 @@ export default function LoginPage() {
     void (async () => {
       try {
         const { data } = await api.get<{ has_pin?: boolean }>('/me')
-        if (data.has_pin) {
+        if (data.has_pin && !isWebPinGateExempt(user.role)) {
           setHasPinRequired(true)
           router.replace('/pin-unlock')
           return
@@ -49,7 +48,7 @@ export default function LoginPage() {
       const loggedIn = await login(email.trim(), password, 'email')
       try {
         const { data } = await api.get<{ has_pin?: boolean }>('/me')
-        if (data.has_pin) {
+        if (data.has_pin && !isWebPinGateExempt(loggedIn.role)) {
           setHasPinRequired(true)
           router.replace('/pin-unlock')
           return

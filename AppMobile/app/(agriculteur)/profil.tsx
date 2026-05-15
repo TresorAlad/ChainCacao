@@ -14,16 +14,12 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
 
-// --- MODULES HORS-LIGNE ---
-import * as Network from 'expo-network';
 import { useAuth } from '@/hooks/use-auth';
 
 export default function ProfilAgriculteur() {
   const router = useRouter();
   const { logout, user, initialized } = useAuth();
   const [fontsLoaded, setFontsLoaded] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
-
   useEffect(() => {
     async function initProfil() {
       try {
@@ -31,9 +27,6 @@ export default function ProfilAgriculteur() {
           'Montserrat-Bold': require('../../assets/fonts/Montserrat-Bold.ttf'),
           'Montserrat-Regular': require('../../assets/fonts/Montserrat-Regular.ttf'),
         });
-
-        const net = await Network.getNetworkStateAsync();
-        setIsOffline(!net.isConnected);
       } catch (e) {
         console.warn("Erreur d'initialisation profil");
       } finally {
@@ -91,7 +84,6 @@ export default function ProfilAgriculteur() {
 
         <View style={styles.header}>
           <Text style={styles.brandText}>Mon Profil</Text>
-          {isOffline && <MaterialCommunityIcons name="cloud-off-outline" size={20} color="#FFCDD2" />}
         </View>
 
         <View style={styles.body}>
@@ -106,14 +98,12 @@ export default function ProfilAgriculteur() {
               {user.org_name ? <Text style={styles.metaLine}>{user.org_name}</Text> : null}
               {user.gps_location ? <Text style={styles.metaLine}>GPS : {user.gps_location}</Text> : null}
               {user.field_surface ? <Text style={styles.metaLine}>Surface : {user.field_surface}</Text> : null}
-              {isOffline && <Text style={styles.offlineTag}>Mode consultation hors-ligne</Text>}
             </View>
 
             <View style={styles.actionRow}>
               <TouchableOpacity
-                style={[styles.editBtn, isOffline && { opacity: 0.6 }]}
-                disabled={isOffline}
-                onPress={() => Alert.alert('Infos', 'La modification requiert une connexion.')}
+                style={styles.editBtn}
+                onPress={() => Alert.alert('Infos', 'La modification sera disponible dans une prochaine version.')}
               >
                 <MaterialCommunityIcons name="pencil" size={18} color="white" />
                 <Text style={styles.btnText}>Modifier</Text>
@@ -170,7 +160,6 @@ const styles = StyleSheet.create({
   userPhone: { fontSize: 14, fontFamily: 'Montserrat-Regular', color: '#666', marginTop: 4 },
   roleLine: { fontSize: 13, fontFamily: 'Montserrat-Regular', color: '#444', marginTop: 6 },
   metaLine: { fontSize: 12, fontFamily: 'Montserrat-Regular', color: '#666', marginTop: 4 },
-  offlineTag: { fontSize: 10, color: '#C62828', fontFamily: 'Montserrat-Bold', marginTop: 5, textTransform: 'uppercase' },
   actionRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 20, gap: 12 },
   editBtn: { flex: 1, backgroundColor: '#2E7D32', flexDirection: 'row', height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', gap: 8 },
   logoutBtn: { flex: 1, backgroundColor: 'transparent', flexDirection: 'row', height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: '#C62828' },

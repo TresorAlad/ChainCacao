@@ -29,7 +29,7 @@ export default function LotsRecusScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [offlineMode, setOfflineMode] = useState(false);
+  const [offlineMode] = useState(false); // Mode offline désactivé
 
   const loadPending = useCallback(async () => {
     const list = await listPendingCoopReceptions(user?.id);
@@ -40,26 +40,23 @@ export default function LotsRecusScreen() {
     setError(null);
     await loadPending();
     try {
+      console.log('[LotsRecus] Appel API myLotsApi.list()');
       const { data } = await myLotsApi.list();
       const list = data.lots ?? [];
+      console.log('[LotsRecus] Réponse API:', list.length, 'lots');
       setLots(list);
-      setOfflineMode(false);
       await writeCoopLotsCache(user?.id, list);
     } catch (e) {
-      if (isNetworkError(e)) {
-        const cached = await readCoopLotsCache(user?.id);
-        setLots(cached);
-        setOfflineMode(true);
-        setError(cached.length === 0 ? 'Hors ligne — aucun cache local.' : null);
-      } else {
-        setError(getApiError(e));
-        setLots([]);
-      }
+      console.warn('[LotsRecus] Erreur API:', e);
+      setError(getApiError(e));
+      // Fallback cache silencieux (sans bannière hors-ligne)
+      const cached = await readCoopLotsCache(user?.id);
+      if (cached.length > 0) setLots(cached);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loadPending]);
+  }, [loadPending, user?.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -92,12 +89,7 @@ export default function LotsRecusScreen() {
       </View>
 
       <View style={styles.body}>
-        {offlineMode ? (
-          <View style={styles.offlineBanner}>
-            <MaterialCommunityIcons name="cloud-off-outline" size={18} color="#E65100" />
-            <Text style={styles.offlineBannerText}>Mode hors ligne — données en cache</Text>
-          </View>
-        ) : null}
+
         {pending.length > 0 ? (
           <View style={styles.queueBanner}>
             <MaterialCommunityIcons name="clock-outline" size={18} color="#1565C0" />

@@ -36,6 +36,12 @@ export function isAdminRole(role: string | undefined): boolean {
   return normalizeUserRole(role) === 'admin'
 }
 
+/** Comptes avec login web renforcé (mot de passe) : pas de seconde étape PIN globale sur le navigateur. */
+export function isWebPinGateExempt(role: string | undefined): boolean {
+  const r = normalizeUserRole(role)
+  return r === 'admin' || r === 'ministere'
+}
+
 export function getRoleBasedRedirect(role: UserRole | string | undefined): string {
   if (!role) return '/login'
   const r = normalizeUserRole(role) ?? role

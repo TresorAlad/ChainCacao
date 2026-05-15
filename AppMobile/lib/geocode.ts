@@ -22,12 +22,28 @@ export async function reverseGeocodeCoords(
   latitude: number,
   longitude: number
 ): Promise<string> {
+  const r = await reverseGeocodeCoordsWithRegion(latitude, longitude);
+  return r.lieu;
+}
+
+/** Adresse + région pour les champs API (aligné web). */
+export async function reverseGeocodeCoordsWithRegion(
+  latitude: number,
+  longitude: number
+): Promise<{ lieu: string; region: string }> {
   try {
     const results = await Location.reverseGeocodeAsync({ latitude, longitude });
     const formatted = formatReverseGeocode(results);
-    if (formatted) return formatted;
+    const g = results[0];
+    const region = (g?.region || g?.subregion || '').trim();
+    const lieu =
+      formatted.trim() || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+    return { lieu, region };
   } catch {
     /* ignore */
   }
-  return `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+  return {
+    lieu: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
+    region: '',
+  };
 }

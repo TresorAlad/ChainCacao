@@ -1,23 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
   StatusBar,
   ActivityIndicator,
-  Dimensions
+  Dimensions,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router'; 
 import * as Font from 'expo-font';
 import Svg, { Circle } from 'react-native-svg';
-
-// Modules pour le mode hors-ligne
-import * as Network from 'expo-network';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { myLotsApi, getApiError } from '@/services/api';
 
 const { width } = Dimensions.get('window');
@@ -26,8 +24,6 @@ export default function AccueilAgriculteur() {
   const router = useRouter();
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<'Semaine' | 'Mois'>('Semaine'); 
-  const [isOffline, setIsOffline] = useState(false);
-  
   // Données dynamiques
   const [stats, setStats] = useState({ production: 840, revenus: 450000 });
   const objectifPourcentage = 68;
@@ -42,32 +38,25 @@ export default function AccueilAgriculteur() {
           'Montserrat-Regular': require('../../assets/fonts/Montserrat-Regular.ttf'),
         });
 
-        // 2. Vérifier la connexion
-        const network = await Network.getNetworkStateAsync();
-        setIsOffline(!(network.isConnected && network.isInternetReachable));
-
-        // 3. Charger le cache local
         const cachedData = await AsyncStorage.getItem('user_stats');
         if (cachedData) {
           setStats(JSON.parse(cachedData));
         }
 
-        if (network.isConnected && network.isInternetReachable) {
-          try {
-            const { data } = await myLotsApi.list();
-            const lots = data.lots ?? [];
-            const production = lots.reduce((s, b) => s + (b.quantite ?? 0), 0);
-            setStats((prev) => {
-              const next = {
-                production: Math.round(production) || prev.production,
-                revenus: prev.revenus,
-              };
-              void AsyncStorage.setItem('user_stats', JSON.stringify(next));
-              return next;
-            });
-          } catch (e) {
-            console.warn(getApiError(e));
-          }
+        try {
+          const { data } = await myLotsApi.list();
+          const lots = data.lots ?? [];
+          const production = lots.reduce((s, b) => s + (b.quantite ?? 0), 0);
+          setStats((prev) => {
+            const next = {
+              production: Math.round(production) || prev.production,
+              revenus: prev.revenus,
+            };
+            void AsyncStorage.setItem('user_stats', JSON.stringify(next));
+            return next;
+          });
+        } catch (e) {
+          console.warn(getApiError(e));
         }
       } catch (e) {
         console.warn("Erreur lors de l'initialisation :", e);
@@ -95,14 +84,6 @@ export default function AccueilAgriculteur() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <Stack.Screen options={{ headerShown: false }} />
         <StatusBar barStyle="light-content" />
-        
-        {/* BANNIÈRE HORS-LIGNE */}
-        {isOffline && (
-          <View style={styles.offlineBanner}>
-            <MaterialCommunityIcons name="wifi-off" size={14} color="white" />
-            <Text style={styles.offlineText}> Mode hors-ligne - Données locales</Text>
-          </View>
-        )}
 
         <View style={styles.header}>
           <Text style={styles.brandText}>Chaincacao</Text>
@@ -225,8 +206,6 @@ const TabItem = ({ icon, label, active = false, isMain = false, onPress }: any) 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1B5E20' },
   loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F5F5' },
-  offlineBanner: { backgroundColor: '#E64A19', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 4 },
-  offlineText: { color: 'white', fontSize: 11, fontWeight: 'bold' },
   header: { height: 60, justifyContent: 'center', paddingHorizontal: 20 },
   brandText: { color: 'white', fontSize: 22, fontFamily: 'Montserrat-Bold' },
   body: { flex: 1, backgroundColor: '#F5F5F5', borderTopLeftRadius: 20, borderTopRightRadius: 20 },

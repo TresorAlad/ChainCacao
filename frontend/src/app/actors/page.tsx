@@ -21,6 +21,17 @@ type ActorStats = {
   par_statut: Record<string, number>
 }
 
+function deriveActorStatsFromLots(lots: Batch[]): ActorStats {
+  let poids_total = 0
+  const par_statut: Record<string, number> = {}
+  for (const lot of lots) {
+    poids_total += Number(lot.quantite) || 0
+    const st = (lot.statut || 'inconnu').trim().toLowerCase() || 'inconnu'
+    par_statut[st] = (par_statut[st] || 0) + 1
+  }
+  return { nb_lots: lots.length, poids_total, par_statut }
+}
+
 export default function ActorsPage() {
   const router = useRouter()
   const { isAuthenticated, loading: authLoading, user } = useAuth()
@@ -81,10 +92,12 @@ export default function ActorsPage() {
       const res = await api.get<{
         success: boolean
         lots: Batch[]
-        stats: ActorStats
+        stats?: ActorStats
       }>(`/actors/${encodeURIComponent(actor.id)}/lots`)
-      setSelectedLots(res.data.lots || [])
-      setSelectedStats(res.data.stats || null)
+      const lots = res.data.lots || []
+      setSelectedLots(lots)
+      const bodyStats = res.data.stats
+      setSelectedStats(bodyStats != null ? bodyStats : deriveActorStatsFromLots(lots))
     } catch {
       toast.error('Impossible de charger les statistiques de cet acteur')
       setSelectedId(null)
@@ -262,17 +275,21 @@ export default function ActorsPage() {
                       </div>
                     ) : null}
 
-                    {selectedStats && Object.keys(selectedStats.par_statut || {}).length > 0 ? (
+                    {selectedStats ? (
                       <div>
                         <p className="text-xs font-black text-gray-400 uppercase mb-2">Par statut</p>
-                        <ul className="space-y-1 text-sm">
-                          {Object.entries(selectedStats.par_statut).map(([st, n]) => (
-                            <li key={st} className="flex justify-between">
-                              <span className="capitalize">{st}</span>
-                              <strong>{n}</strong>
-                            </li>
-                          ))}
-                        </ul>
+                        {Object.keys(selectedStats.par_statut || {}).length > 0 ? (
+                          <ul className="space-y-1 text-sm">
+                            {Object.entries(selectedStats.par_statut).map(([st, n]) => (
+                              <li key={st} className="flex justify-between">
+                                <span className="capitalize">{st}</span>
+                                <strong>{n}</strong>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-gray-500">Aucune répartition (tous les lots sans statut ou liste vide).</p>
+                        )}
                       </div>
                     ) : null}
 

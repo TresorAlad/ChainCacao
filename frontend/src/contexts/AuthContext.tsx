@@ -26,6 +26,8 @@ interface User {
   actor_id?: string
   role?: string
   email?: string
+  /** Organisation (JWT `org_id`) — utile pour « ma coopérative » sur le web. */
+  org_id?: string
   clientChannel?: SignupChannel | null
 }
 
@@ -34,7 +36,7 @@ type LoginMode = 'email' | 'actor'
 interface AuthResponse {
   success?: boolean
   token?: string
-  actor?: { id?: string; email?: string; role?: string }
+  actor?: { id?: string; email?: string; role?: string; org_id?: string }
   wallet_balance?: number
   wallet_credit_warning?: string
   error?: string
@@ -82,11 +84,13 @@ function userFromToken(token: string, actorRole?: string): User | null {
   if (!payload) return null
   const actorId = (payload.actor_id || payload.sub) as string | undefined
   const role = resolveUserRole(payload.role as string | undefined, actorRole)
+  const orgId = typeof payload.org_id === 'string' ? payload.org_id : undefined
   return {
     token,
     actor_id: actorId,
     role,
     email: payload.email as string | undefined,
+    org_id: orgId,
     clientChannel: getSignupChannel(actorId),
   }
 }
@@ -133,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             ...u,
             actor_id: u.actor_id || data.actor?.id,
             role: resolveUserRole(u.role, data.actor?.role),
+            org_id: data.actor?.org_id || u.org_id,
           })
         }
       } catch {
@@ -201,6 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...base,
       role: resolveUserRole(base.role, actorRole),
       email: base.email || emailFromActor,
+      org_id: base.org_id,
       clientChannel: getSignupChannel(base.actor_id),
     }
     setUser(u)
@@ -278,11 +284,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       pref === 'mobile' || pref === 'web' ? pref : getSignupChannel(actorId)
 
     const resolvedRole = (jwtPayload?.role || data.actor?.role || 'user') as string
+    const orgFromJwt =
+      typeof jwtPayload?.org_id === 'string'
+        ? jwtPayload.org_id
+        : typeof data.actor === 'object' && data.actor && typeof data.actor.org_id === 'string'
+          ? data.actor.org_id
+          : undefined
     setUser({
       token,
       actor_id: actorId,
       role: resolvedRole,
       email: (jwtPayload?.email as string) || emailFromActor || email.trim().toLowerCase(),
+      org_id: orgFromJwt,
       clientChannel,
     })
     const walletBalance =

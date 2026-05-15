@@ -215,7 +215,7 @@ const ROUTE_ACCESS: Record<string, UserRole[]> = {
   '/accueil-ministere': ['ministere', 'admin'],
   '/dashboard-ministere': ['ministere', 'admin'],
   '/blockchain': ['admin', 'ministere'],
-  '/actors': ['cooperative', 'ministere'],
+  '/actors': ['cooperative', 'ministere', 'admin'],
   '/portefeuille': ['cooperative', 'transformateur', 'exportateur', 'admin'],
   '/admin': ['admin'],
   '/admin/utilisateurs': ['admin'],

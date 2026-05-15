@@ -44,8 +44,14 @@ export default function AdminMargesPage() {
       const res = await api.get<{ margin?: number; margin_pct?: number }>(`/admin/marge?org_id=${encodeURIComponent(oid)}`)
       const m = res.data.margin_pct ?? res.data.margin ?? 0
       setCurrentMargin(m)
-    } catch {
+      if (process.env.NODE_ENV === 'development') {
+        console.info('[admin/marges] marge courante chargée', { org_id: oid, margin_pct: m })
+      }
+    } catch (e) {
       setCurrentMargin(null)
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[admin/marges] lecture marge impossible', oid, e)
+      }
     }
   }, [])
 
@@ -62,13 +68,26 @@ export default function AdminMargesPage() {
     }
     setSubmitting(true)
     try {
-      const res = await api.post<{ success: boolean; tx_hash?: string; message?: string }>(
+      const res = await api.post<{ success: boolean; tx_hash?: string; message?: string; margin_pct?: number }>(
         '/admin/marge',
         { org_id: orgId.trim(), margin: m }
       )
-      setLastTx(res.data.tx_hash || null)
-      setCurrentMargin(m)
-      toast.success(res.data.message || 'Marge enregistrée sur la blockchain')
+      const tx = res.data.tx_hash || ''
+      const msg =
+        res.data.message ||
+        `Marge enregistrée avec succès : ${m} % pour ${orgId.trim()}.`
+      setLastTx(tx || null)
+      setCurrentMargin(res.data.margin_pct ?? m)
+      await loadCurrentMargin(orgId.trim())
+      toast.success(msg, { duration: 5000 })
+      if (process.env.NODE_ENV === 'development') {
+        console.info('[admin/marges] marge sauvegardée', {
+          org_id: orgId.trim(),
+          margin_pct: m,
+          tx_hash: tx || null,
+          api: res.data,
+        })
+      }
     } catch (err) {
       toast.error(getErrorMessage(err, 'Impossible d’enregistrer la marge'))
     } finally {
@@ -103,7 +122,7 @@ export default function AdminMargesPage() {
             <label className="form-label">Coopérative</label>
             <select className="form-input" value={orgId} onChange={(e) => setOrgId(e.target.value)} required>
               {coops.map((c) => (
-                <option key={c.org_id} value={c.org_id}>
+                <option key={`${c.id}-${c.org_id}`} value={c.org_id}>
                   {c.nom} ({c.org_id})
                 </option>
               ))}

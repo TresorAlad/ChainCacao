@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import NetInfo from '@react-native-community/netinfo';
-import { isDeviceOnline } from '@/lib/device-online';
+// NetInfo retiré — plus de listener réseau dans la sync (faux positifs Android).
 import { DeviceEventEmitter } from 'react-native';
 import { useEffect, useRef, useCallback } from 'react';
 import {
@@ -270,12 +269,9 @@ async function syncPendingLots(): Promise<void> {
   }
 }
 
-/** Lance la synchro des lots / file d’attente si le réseau est disponible. */
+/** Lance la synchro des lots / file d’attente (toujours tenter ; échecs gérés dans syncPendingLots). */
 export async function runPendingSync(): Promise<void> {
-  const state = await NetInfo.fetch();
-  if (isDeviceOnline(state)) {
-    await syncPendingLots();
-  }
+  await syncPendingLots();
 }
 
 export function useSync() {
@@ -290,15 +286,11 @@ export function useSync() {
 
     intervalRef.current = setInterval(triggerSync, SYNC_INTERVAL_MS);
 
-    const unsubscribe = NetInfo.addEventListener((state) => {
-      if (isDeviceOnline(state)) {
-        syncPendingLots();
-      }
-    });
+    // NetInfo.addEventListener retiré — sync déclenchée uniquement par l'intervalle
+    // pour éviter les faux positifs de détection réseau Android (Vodafone / 4G).
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
-      unsubscribe();
     };
   }, [triggerSync]);
 

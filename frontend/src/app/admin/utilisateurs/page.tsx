@@ -98,14 +98,26 @@ export default function AdminUtilisateursPage() {
   }
 
   const resetPin = async (actor: ActorDTO) => {
-    if (!confirm(`Réinitialiser le PIN de ${actor.nom} ?`)) return
+    const ok = window.confirm(
+      `Réinitialiser le PIN de « ${actor.nom} » ?\n\n` +
+        `Un nouveau code à 4 chiffres sera généré immédiatement et affiché ensuite : transmettez-le à l’utilisateur par un canal sécurisé (pas par e-mail en clair si possible).`
+    )
+    if (!ok) return
     try {
-      const res = await api.post<{ success: boolean; pin: string }>(
+      const res = await api.post<{ success: boolean; pin: string; message?: string }>(
         `/admin/actors/${actor.id}/reset-pin`
       )
-      toast.success(`Nouveau PIN : ${res.data.pin}`, { duration: 8000 })
+      const pin = res.data.pin
+      const serverMsg = res.data.message || 'PIN réinitialisé avec succès.'
+      toast.success(`${serverMsg} — Nouveau PIN : ${pin}`, { duration: 14000 })
+      if (process.env.NODE_ENV === 'development') {
+        console.info('[admin/utilisateurs] PIN réinitialisé', { actor_id: actor.id, nom: actor.nom })
+      }
     } catch (err) {
       toast.error(getErrorMessage(err, 'Réinitialisation impossible'))
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[admin/utilisateurs] reset-pin erreur', actor.id, err)
+      }
     }
   }
 

@@ -38,22 +38,27 @@ export function setSessionInvalidateHandler(fn: (() => Promise<void>) | null) {
 // Instance Axios centrale
 export const api = axios.create({
   baseURL: API_BASE,
-  timeout: 60000,
+  timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Injecter le token JWT sur chaque requête
+// Injecter le token JWT + LOG de chaque requête
 api.interceptors.request.use(async (config) => {
   const token = await AsyncStorage.getItem(TOKEN_KEY);
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  console.log(`[API] ➤ ${config.method?.toUpperCase()} ${config.baseURL ?? ''}${config.url ?? ''}`);
   return config;
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`[API] ✔ ${response.status} ${response.config?.url ?? ''}`);
+    return response;
+  },
   async (error: AxiosError) => {
+    console.warn(`[API] ✘ ${error.code ?? 'ERR'} ${error.config?.url ?? ''} — ${error.message}`);
     const hadToken = Boolean(await AsyncStorage.getItem(TOKEN_KEY));
     if (error.response?.status === 401 && hadToken && sessionInvalidateHandler) {
       try {
@@ -75,19 +80,29 @@ export function getApiError(e: unknown, kind: GetApiErrorKind = 'default'): stri
   if (err.response?.data?.error) return err.response.data.error;
   if (err.response?.data?.message) return err.response.data.message;
   if (err.code === 'ECONNABORTED') {
-    return `Délai dépassé — API : ${API_BASE}`;
+    if (kind === 'auth') {
+      return `Le serveur met trop de temps à répondre. Vérifiez que le serveur ChainCacao est démarré et accessible (${API_BASE}).`;
+    }
+    return `Délai de connexion dépassé — serveur : ${API_BASE}`;
   }
   if (err.code === 'ERR_NETWORK' || !err.response) {
     if (API_BASE.includes('127.0.0.1') || API_BASE.includes('localhost')) {
-      return `URL API incorrecte (${API_BASE}) — ce build pointe vers localhost et ne peut pas joindre le serveur depuis un téléphone réel. Rebuilder avec : eas build --profile preview`;
+      return `Configuration incorrecte : l'URL de l'API pointe vers localhost (${API_BASE}), ce qui ne fonctionne pas sur un téléphone réel. Vérifiez EXPO_PUBLIC_API_URL.`;
     }
     if (kind === 'auth') {
-      return `Impossible de joindre le serveur (${API_BASE}). Vérifiez la connexion internet.`;
+      return (
+        `Connexion au serveur impossible (${API_BASE}).\n\n` +
+        `Causes probables :\n` +
+        `• Le serveur ChainCacao est arrêté ou en cours de démarrage\n` +
+        `• L'URL du serveur a changé (vérifiez EXPO_PUBLIC_API_URL)\n` +
+        `• Le port 8080 est bloqué par un pare-feu\n\n` +
+        `Votre connexion Wi-Fi/4G fonctionne normalement.`
+      );
     }
     if (kind === 'lots_offline') {
-      return `Serveur injoignable (${API_BASE}). Les lots peuvent être enregistrés sur l’appareil et envoyés à la reconnexion.`;
+      return `Le serveur (${API_BASE}) n'a pas répondu. Le lot sera enregistré localement et envoyé automatiquement dès que le serveur sera disponible.`;
     }
-    return `Impossible de joindre le serveur (${API_BASE}). Vérifiez la connexion.`;
+    return `Impossible de joindre le serveur (${API_BASE}).`;
   }
   return err.message || 'Erreur inconnue';
 }
@@ -218,6 +233,8 @@ export interface BatchResponse {
   statut?: string;
   timestamp?: string;
   notes?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 /** Événement renvoyé par Fabric dans `timeline` / `events` (verify & history). */

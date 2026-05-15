@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -40,8 +40,43 @@ export default function TransfertScreen() {
   const [step, setStep] = useState<'lot' | 'acteur' | 'confirm'>('lot');
   const [lotSearch, setLotSearch] = useState('');
 
+  const roleLower = (user?.role || '').toLowerCase();
+
+  const filteredActors = useMemo(() => {
+    let list = actors.filter(a => {
+      if (!a.id || a.id === user?.id) return false;
+      const ar = (a.role || '').toLowerCase();
+      return ar !== 'admin' && ar !== 'ministere';
+    });
+    if (roleLower === 'agriculteur') {
+      list = list.filter(a => (a.role || '').toLowerCase() === 'cooperative');
+    } else if (roleLower === 'cooperative') {
+      list = list.filter(a =>
+        ['transformateur', 'exportateur'].includes((a.role || '').toLowerCase())
+      );
+    } else if (roleLower === 'transformateur') {
+      list = list.filter(a => (a.role || '').toLowerCase() === 'exportateur');
+    }
+    return list;
+  }, [actors, user?.id, roleLower]);
+
+  const myCoopActor = useMemo(() => {
+    const oid = user?.org_id || user?.orgID;
+    if (!oid) return undefined;
+    return filteredActors.find(
+      a =>
+        (a.role || '').toLowerCase() === 'cooperative' &&
+        (a.org_id === oid || a.orgID === oid)
+    );
+  }, [filteredActors, user?.org_id, user?.orgID]);
+
+  const actorsListStep2 = useMemo(() => {
+    if (roleLower !== 'agriculteur' || !myCoopActor) return filteredActors;
+    return filteredActors.filter(a => a.id !== myCoopActor.id);
+  }, [filteredActors, myCoopActor, roleLower]);
+
   const foundLot = lots.find(l => l.id === selectedLotId || l.title === selectedLotId);
-  const selectedActor = actors.find(a => a.id === selectedActorId);
+  const selectedActor = filteredActors.find(a => a.id === selectedActorId);
 
   // Charger la liste des acteurs depuis l'API
   useEffect(() => {
@@ -244,7 +279,32 @@ export default function TransfertScreen() {
               <ActivityIndicator color="#2E7D32" style={{ marginVertical: 15 }} />
             )}
 
-            {!loadingActors && actors.map(actor => (
+            {!loadingActors && roleLower === 'agriculteur' && myCoopActor ? (
+              <TouchableOpacity
+                style={[styles.actorCard, styles.myCoopHighlight]}
+                onPress={() => setSelectedActorId(myCoopActor.id)}
+              >
+                <MaterialCommunityIcons name="bank" size={22} color="#1565C0" />
+                <View style={{ marginLeft: 12, flex: 1 }}>
+                  <Text style={styles.actorName}>Ma coopérative</Text>
+                  <Text style={styles.actorRole}>{myCoopActor.nom || myCoopActor.name || myCoopActor.id}</Text>
+                </View>
+                <MaterialCommunityIcons
+                  name={selectedActorId === myCoopActor.id ? 'check-circle' : 'circle-outline'}
+                  size={22}
+                  color={selectedActorId === myCoopActor.id ? '#2E7D32' : '#CCC'}
+                />
+              </TouchableOpacity>
+            ) : null}
+
+            {!loadingActors && filteredActors.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <Text style={styles.emptyText}>Aucun destinataire pour votre rôle.</Text>
+              </View>
+            ) : null}
+
+            {!loadingActors &&
+              actorsListStep2.map(actor => (
               <TouchableOpacity
                 key={actor.id}
                 style={[styles.actorCard, selectedActorId === actor.id && styles.actorCardSelected]}
@@ -411,6 +471,7 @@ const styles = StyleSheet.create({
   lotCardSub: { fontSize: 12, color: '#999', marginTop: 2 },
   actorCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 14, padding: 15, marginBottom: 10, borderWidth: 2, borderColor: 'transparent', elevation: 1 },
   actorCardSelected: { borderColor: '#2E7D32' },
+  myCoopHighlight: { borderColor: '#1565C0', backgroundColor: '#E3F2FD' },
   actorName: { fontSize: 15, fontWeight: 'bold', color: '#333' },
   actorRole: { fontSize: 12, color: '#999', marginTop: 2 },
   fieldLabel: { fontSize: 12, fontWeight: 'bold', color: '#666', textTransform: 'uppercase', marginTop: 15, marginBottom: 8 },

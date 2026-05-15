@@ -1,24 +1,51 @@
 'use client'
 
-import { Suspense, useState, useEffect } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowRightIcon, ShieldCheckIcon } from '@heroicons/react/24/outline'
-import api, { ActorDTO } from '@/lib/api'
+import {
+  ArrowRightIcon,
+  ShieldCheckIcon,
+  BuildingOffice2Icon,
+  TruckIcon,
+} from '@heroicons/react/24/outline'
+import api, { ActorDTO, Batch } from '@/lib/api'
 import toast from 'react-hot-toast'
+import { getErrorMessage } from '@/lib/error-utils'
 
 const TRANSFER_ALLOWED_ROLES = ['agriculteur', 'cooperative', 'transformateur', 'exportateur', 'admin']
+
+function filterRecipientActors(all: ActorDTO[], userRole: string | undefined, selfId: string): ActorDTO[] {
+  const self = selfId.trim()
+  const r = (userRole || '').toLowerCase()
+  let out = all.filter((a) => {
+    if (!a.id || a.id === self) return false
+    const role = (a.role || '').toLowerCase()
+    return role !== 'admin' && role !== 'ministere'
+  })
+  if (r === 'agriculteur') {
+    out = out.filter((a) => (a.role || '').toLowerCase() === 'cooperative')
+  } else if (r === 'cooperative') {
+    out = out.filter((a) => ['transformateur', 'exportateur'].includes((a.role || '').toLowerCase()))
+  } else if (r === 'transformateur') {
+    out = out.filter((a) => (a.role || '').toLowerCase() === 'exportateur')
+  }
+  return out.sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr'))
+}
 
 function TransferContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { isAuthenticated, loading, user } = useAuth()
-  const [formData, setFormData] = useState({
-    batch_id: '',
-    to_actor_id: '',
-    commentaire: ''
-  })
+
+  const [step, setStep] = useState<'lot' | 'destinataire' | 'confirm'>('lot')
+  const [myLots, setMyLots] = useState<Batch[]>([])
+  const [lotsLoading, setLotsLoading] = useState(false)
   const [actors, setActors] = useState<ActorDTO[]>([])
+  const [batchId, setBatchId] = useState('')
+  const [toActorId, setToActorId] = useState('')
+  const [commentaire, setCommentaire] = useState('')
+  const [lotSearch, setLotSearch] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
@@ -27,34 +54,76 @@ function TransferContent() {
 
   useEffect(() => {
     const lot = searchParams.get('lot')
-    if (lot) {
-      setFormData((prev) => ({ ...prev, batch_id: lot.trim() }))
-    }
+    if (lot?.trim()) setBatchId(lot.trim())
   }, [searchParams])
 
   useEffect(() => {
-    if (isAuthenticated) {
-      api
-        .get<{ success: boolean; actors: ActorDTO[] }>('/actors')
-        .then((res) => setActors(res.data.actors || []))
-        .catch(() => setActors([]))
-    }
+    if (!isAuthenticated) return
+    setLotsLoading(true)
+    api
+      .get<{ success: boolean; lots: Batch[] }>('/actors/me/lots', { params: { limit: 200, page: 1 } })
+      .then((res) => setMyLots(res.data.lots || []))
+      .catch(() => setMyLots([]))
+      .finally(() => setLotsLoading(false))
   }, [isAuthenticated])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  useEffect(() => {
+    if (!isAuthenticated) return
+    api
+      .get<{ success: boolean; actors: ActorDTO[] }>('/actors', { params: { limit: 500 } })
+      .then((res) => setActors(res.data.actors || []))
+      .catch(() => setActors([]))
+  }, [isAuthenticated])
+
+  const selfId = user?.actor_id || ''
+
+  const recipients = useMemo(
+    () => filterRecipientActors(actors, user?.role, selfId),
+    [actors, user?.role, selfId]
+  )
+
+  const myCoop = useMemo(() => {
+    if (!user?.org_id) return undefined
+    return recipients.find((a) => a.org_id === user.org_id)
+  }, [recipients, user?.org_id])
+
+  const selectedLot = useMemo(
+    () => myLots.find((b) => b.id === batchId) ?? null,
+    [myLots, batchId]
+  )
+
+  const selectedRecipient = useMemo(
+    () => recipients.find((a) => a.id === toActorId) ?? null,
+    [recipients, toActorId]
+  )
+
+  const filteredLots = useMemo(() => {
+    const q = lotSearch.trim().toLowerCase()
+    if (!q) return myLots
+    return myLots.filter(
+      (b) =>
+        (b.id || '').toLowerCase().includes(q) ||
+        (b.culture || '').toLowerCase().includes(q) ||
+        (b.statut || '').toLowerCase().includes(q)
+    )
+  }, [myLots, lotSearch])
+
+  const handleSubmit = async () => {
+    if (!batchId.trim() || !toActorId.trim()) {
+      toast.error('Choisissez un lot et un destinataire.')
+      return
+    }
     setIsSubmitting(true)
     try {
       await api.post('/transfer', {
-        batch_id: formData.batch_id,
-        to_actor_id: formData.to_actor_id,
-        commentaire: formData.commentaire,
+        batch_id: batchId.trim(),
+        to_actor_id: toActorId.trim(),
+        commentaire: commentaire.trim() || undefined,
       })
-      toast.success('Transfert effectué avec succès')
+      toast.success('Transfert enregistré sur la blockchain')
       router.push('/lots')
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erreur lors du transfert'
-      toast.error(message)
+      toast.error(getErrorMessage(err, 'Erreur lors du transfert'))
     } finally {
       setIsSubmitting(false)
     }
@@ -75,154 +144,237 @@ function TransferContent() {
       <div className="w-full py-6 sm:py-8">
         <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center">
           <p className="text-red-700 font-bold text-lg">Accès non autorisé</p>
-          <p className="text-red-600 mt-2 text-sm">Votre rôle ({user.role}) n&apos;est pas autorisé à effectuer des transferts.</p>
+          <p className="text-red-600 mt-2 text-sm">
+            Votre rôle ({user.role}) n&apos;est pas autorisé à effectuer des transferts.
+          </p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="w-full py-6 sm:py-8">
-      {/* Header Section */}
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
+    <div className="w-full py-6 sm:py-8 max-w-5xl mx-auto">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight text-[var(--color-primary)]">
-            Transfert de Propriété
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-[var(--color-primary)]">
+            Transférer un lot
           </h1>
-          <p className="text-lg mt-2 font-medium opacity-60 text-[var(--color-muted)]">
-            Initier un changement de détenteur pour un lot de cacao sur la blockchain.
+          <p className="text-lg mt-2 font-medium opacity-70 text-[var(--color-muted)]">
+            Choisissez un lot parmi les vôtres, puis une coopérative ou partenaire — même parcours que sur mobile.
           </p>
         </div>
       </header>
 
-      <div className="flex flex-wrap gap-3 mb-8">
+      <div className="flex flex-wrap gap-2 mb-8">
         {[
-          { step: 1, label: 'Lot', done: !!formData.batch_id },
-          { step: 2, label: 'Destinataire', done: !!formData.to_actor_id },
-          { step: 3, label: 'Commentaire', done: !!formData.commentaire },
+          { key: 'lot' as const, label: 'Lot', active: step === 'lot', done: step !== 'lot' },
+          { key: 'destinataire' as const, label: 'Destinataire', active: step === 'destinataire', done: step === 'confirm' },
+          { key: 'confirm' as const, label: 'Confirmation', active: step === 'confirm', done: false },
         ].map((s) => (
-          <div
-            key={s.step}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase ${
-              s.done ? 'bg-[#E8F5E9] text-[#2E7D32]' : 'bg-gray-100 text-gray-400'
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => {
+              if (s.key === 'lot') setStep('lot')
+              if (s.key === 'destinataire' && batchId) setStep('destinataire')
+              if (s.key === 'confirm' && batchId && toActorId) setStep('confirm')
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-colors ${
+              s.done ? 'bg-[#E8F5E9] text-[#2E7D32]' : s.active ? 'bg-[#1B5E20] text-white' : 'bg-gray-100 text-gray-400'
             }`}
           >
-            <span className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-[10px]">{s.step}</span>
+            <span className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-[10px]">
+              {s.done ? '✓' : s.key === 'lot' ? '1' : s.key === 'destinataire' ? '2' : '3'}
+            </span>
             {s.label}
-          </div>
+          </button>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Form Column */}
-        <div className="lg:col-span-7">
-          <div className="bg-white rounded-[2rem] p-10 shadow-sm border border-[var(--color-border)]">
-            <h2 className="text-2xl font-black text-[var(--color-primary)] mb-8">Détails de la Transaction</h2>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">ID du Lot</label>
-                <input
-                  type="text"
-                  className="w-full px-6 py-4 bg-gray-50 border border-[var(--color-border)] rounded-2xl text-sm font-bold text-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)] outline-none transition-all placeholder:text-gray-300"
-                  placeholder="Ex: 4CB-3409-A45"
-                  value={formData.batch_id}
-                  onChange={(e) => setFormData({ ...formData, batch_id: e.target.value })}
-                  required
-                />
-              </div>
+        <div className="lg:col-span-7 space-y-6">
+          {step === 'lot' && (
+            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)]">
+              <h2 className="text-xl font-black text-[var(--color-primary)] mb-4">1. Quel lot transférer ?</h2>
+              <input
+                type="search"
+                className="form-input mb-4"
+                placeholder="Rechercher par ID, culture…"
+                value={lotSearch}
+                onChange={(e) => setLotSearch(e.target.value)}
+              />
+              {lotsLoading ? (
+                <p className="text-gray-400 py-8 text-center">Chargement de vos lots…</p>
+              ) : filteredLots.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-gray-200 p-8 text-center text-[var(--color-muted)]">
+                  <p className="font-bold mb-2">Aucun lot disponible</p>
+                  <p className="text-sm mb-4">Créez un lot ou vérifiez que vous êtes bien connecté.</p>
+                  <button type="button" className="btn btn-primary text-sm" onClick={() => router.push('/nouveau-lot')}>
+                    Nouveau lot
+                  </button>
+                </div>
+              ) : (
+                <ul className="space-y-2 max-h-[420px] overflow-y-auto">
+                  {filteredLots.map((b) => (
+                    <li key={b.id}>
+                      <button
+                        type="button"
+                        onClick={() => setBatchId(b.id)}
+                        className={`w-full text-left rounded-2xl border-2 px-4 py-3 transition-colors ${
+                          batchId === b.id
+                            ? 'border-[#2E7D32] bg-[#F1F8E9]'
+                            : 'border-transparent bg-gray-50 hover:bg-gray-100'
+                        }`}
+                      >
+                        <p className="font-mono text-sm font-black text-[var(--color-primary)]">{b.id}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {b.culture || '—'} · {b.quantite ?? '—'} kg · {b.statut || '—'}
+                        </p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button
+                type="button"
+                className="btn btn-primary w-full mt-6 justify-center gap-2"
+                disabled={!batchId}
+                onClick={() => batchId && setStep('destinataire')}
+              >
+                Suivant <ArrowRightIcon className="w-5 h-5" />
+              </button>
+            </div>
+          )}
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Acteur Destinataire</label>
-                {actors.length > 0 ? (
-                  <select
-                    className="w-full px-6 py-4 bg-gray-50 border border-[var(--color-border)] rounded-2xl text-sm font-bold text-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)] outline-none transition-all"
-                    value={formData.to_actor_id}
-                    onChange={(e) => setFormData({ ...formData, to_actor_id: e.target.value })}
-                    required
-                  >
-                    <option value="">Sélectionner un acteur certifié</option>
-                    {actors.map((actor) => (
-                      <option key={actor.id} value={actor.id}>
-                        {actor.nom} ({actor.role?.toUpperCase() || '—'})
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    className="w-full px-6 py-4 bg-gray-50 border border-[var(--color-border)] rounded-2xl text-sm font-bold text-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)] outline-none transition-all"
-                    placeholder="Identifiant acteur destinataire"
-                    value={formData.to_actor_id}
-                    onChange={(e) => setFormData({ ...formData, to_actor_id: e.target.value })}
-                    required
-                  />
-                )}
-              </div>
+          {step === 'destinataire' && (
+            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)]">
+              <h2 className="text-xl font-black text-[var(--color-primary)] mb-4">2. Destinataire</h2>
+              {selectedLot && (
+                <div className="rounded-xl bg-[#E8F5E9] px-4 py-3 mb-4 text-sm font-bold text-[#1B5E20] flex items-center gap-2">
+                  <TruckIcon className="w-5 h-5 shrink-0" />
+                  <span className="font-mono">{selectedLot.id}</span>
+                  <span className="text-gray-600 font-normal">
+                    · {selectedLot.quantite} kg · {selectedLot.statut || '—'}
+                  </span>
+                </div>
+              )}
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Commentaire de transfert</label>
-                <textarea
-                  className="w-full px-6 py-4 bg-gray-50 border border-[var(--color-border)] rounded-2xl text-sm font-bold text-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)] outline-none transition-all placeholder:text-gray-300"
-                  rows={4}
-                  placeholder="Précisez les conditions de transport ou de réception..."
-                  value={formData.commentaire}
-                  onChange={(e) => setFormData({ ...formData, commentaire: e.target.value })}
-                />
-              </div>
-
-              <div className="pt-6">
-                <button 
-                  type="submit" 
-                  className="w-full py-4 bg-[#1B3A0F] text-white rounded-[1.5rem] text-sm font-black shadow-lg hover:brightness-110 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-                  disabled={isSubmitting}
+              {(user?.role || '').toLowerCase() === 'agriculteur' && myCoop && (
+                <button
+                  type="button"
+                  className="mb-4 w-full flex items-center justify-center gap-2 rounded-2xl border-2 border-[#1565C0] bg-[#E3F2FD] px-4 py-3 text-sm font-black text-[#1565C0]"
+                  onClick={() => setToActorId(myCoop.id)}
                 >
-                  {isSubmitting ? (
-                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                  ) : (
-                    <>
-                      <ArrowRightIcon className="w-5 h-5" />
-                      Confirmer & Enregistrer Blockchain
-                    </>
-                  )}
+                  <BuildingOffice2Icon className="w-6 h-6" />
+                  Transférer vers ma coopérative ({myCoop.nom})
+                </button>
+              )}
+
+              {recipients.length === 0 ? (
+                <p className="text-gray-500 text-sm">Aucun destinataire compatible pour votre rôle.</p>
+              ) : (
+                <ul className="space-y-2 max-h-[340px] overflow-y-auto mb-4">
+                  {recipients.map((a) => (
+                    <li key={a.id}>
+                      <button
+                        type="button"
+                        onClick={() => setToActorId(a.id)}
+                        className={`w-full text-left rounded-2xl border-2 px-4 py-3 transition-colors ${
+                          toActorId === a.id
+                            ? 'border-[#2E7D32] bg-[#F1F8E9]'
+                            : 'border-transparent bg-gray-50 hover:bg-gray-100'
+                        }`}
+                      >
+                        <p className="font-bold text-[var(--color-primary)]">{a.nom}</p>
+                        <p className="text-xs text-gray-500 uppercase mt-1">
+                          {a.role} · {a.org_name || a.org_id}
+                        </p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                Commentaire (optionnel)
+              </label>
+              <textarea
+                className="form-input mt-2 mb-6"
+                rows={3}
+                placeholder="Ex. : Livraison prévue lundi…"
+                value={commentaire}
+                onChange={(e) => setCommentaire(e.target.value)}
+              />
+
+              <div className="flex gap-3">
+                <button type="button" className="btn btn-outline flex-1" onClick={() => setStep('lot')}>
+                  Retour
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary flex-1 justify-center gap-2"
+                  disabled={!toActorId}
+                  onClick={() => toActorId && setStep('confirm')}
+                >
+                  Suivant <ArrowRightIcon className="w-5 h-5" />
                 </button>
               </div>
-            </form>
-          </div>
+            </div>
+          )}
+
+          {step === 'confirm' && selectedLot && selectedRecipient && (
+            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)]">
+              <h2 className="text-xl font-black text-[var(--color-primary)] mb-6">3. Confirmation</h2>
+              <dl className="space-y-3 text-sm mb-8">
+                <div className="flex justify-between gap-4 border-b border-gray-100 pb-3">
+                  <dt className="text-gray-500 font-bold">Lot</dt>
+                  <dd className="font-mono font-black text-right">{selectedLot.id}</dd>
+                </div>
+                <div className="flex justify-between gap-4 border-b border-gray-100 pb-3">
+                  <dt className="text-gray-500 font-bold">Quantité</dt>
+                  <dd className="font-bold">{selectedLot.quantite} kg</dd>
+                </div>
+                <div className="flex justify-between gap-4 border-b border-gray-100 pb-3">
+                  <dt className="text-gray-500 font-bold">Vers</dt>
+                  <dd className="font-bold text-right">{selectedRecipient.nom}</dd>
+                </div>
+                {commentaire.trim() ? (
+                  <div className="flex justify-between gap-4 pt-1">
+                    <dt className="text-gray-500 font-bold">Commentaire</dt>
+                    <dd className="text-right max-w-[60%]">{commentaire.trim()}</dd>
+                  </div>
+                ) : null}
+              </dl>
+
+              <div className="flex gap-3">
+                <button type="button" className="btn btn-outline flex-1" onClick={() => setStep('destinataire')}>
+                  Retour
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary flex-1 justify-center"
+                  disabled={isSubmitting}
+                  onClick={() => void handleSubmit()}
+                >
+                  {isSubmitting ? 'Envoi…' : 'Confirmer le transfert'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Info Column */}
-        <div className="lg:col-span-5 flex flex-col gap-8">
-           <div className="bg-[#FAFDF7] rounded-[2rem] p-8 border border-[#33691E]/10 flex flex-col items-center text-center">
-              <div className="w-20 h-20 rounded-3xl bg-white shadow-sm flex items-center justify-center mb-6">
-                 <ShieldCheckIcon className="w-10 h-10 text-[#33691E]" />
-              </div>
-              <h3 className="text-xl font-black text-[var(--color-primary)] mb-4">Sécurité Immuable</h3>
-              <p className="text-sm font-medium text-gray-500 leading-relaxed">
-                Ce transfert utilise une preuve de possession cryptographique. Une fois validé, il sera visible sur l'explorateur public et ne pourra être modifié.
-              </p>
-           </div>
-
-           <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)]">
-              <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2 mb-6">Étapes du Processus</h3>
-              <div className="space-y-6">
-                 {[
-                   { step: '1', title: 'Vérification du Lot', desc: 'Contrôle de disponibilité' },
-                   { step: '2', title: 'Signature Numérique', desc: 'Preuve de consentement' },
-                   { step: '3', title: 'Minage Blockchain', desc: 'Validation par les nœuds' },
-                   { step: '4', title: 'Mise à jour Registre', desc: 'Transfert effectif' },
-                 ].map((s, idx) => (
-                   <div key={idx} className="flex gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0 text-xs font-black text-[#33691E] border border-gray-100">
-                         {s.step}
-                      </div>
-                      <div>
-                         <p className="text-sm font-black text-[var(--color-primary)]">{s.title}</p>
-                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{s.desc}</p>
-                      </div>
-                   </div>
-                 ))}
-              </div>
-           </div>
+        <div className="lg:col-span-5 flex flex-col gap-6">
+          <div className="bg-[#FAFDF7] rounded-[2rem] p-8 border border-[#33691E]/10 flex flex-col items-center text-center">
+            <div className="w-16 h-16 rounded-3xl bg-white shadow-sm flex items-center justify-center mb-4">
+              <ShieldCheckIcon className="w-9 h-9 text-[#33691E]" />
+            </div>
+            <h3 className="text-lg font-black text-[var(--color-primary)] mb-2">Traçabilité</h3>
+            <p className="text-sm text-gray-500 leading-relaxed">
+              Le transfert est signé avec votre session et enregistré sur la chaîne. Les agriculteurs ne voient que les
+              coopératives comme destinataires ; utilisez « Ma coopérative » si votre compte est rattaché à la même
+              organisation qu&apos;une coopérative du réseau.
+            </p>
+          </div>
         </div>
       </div>
     </div>

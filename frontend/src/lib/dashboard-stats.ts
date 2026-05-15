@@ -7,6 +7,8 @@ export interface DashboardStats {
   eudr_conformes?: number
   eudr_compliance_pct?: number
   total_actors?: number
+  /** Lots distincts présents dans sync_dedup (PostgreSQL). */
+  lots_synchronises?: number
   total_weight?: number
   fraud_alerts?: number
   active_lots?: number

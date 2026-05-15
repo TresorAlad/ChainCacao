@@ -63,7 +63,7 @@ export default function MinistereDashboardPage() {
         setActors(filterAnnuaireActors(actorsRes.data.actors || []))
       })
       .finally(() => setStatsLoading(false))
-  }, [isAuthenticated, user])
+  }, [isAuthenticated, canAccess])
 
   const runAudit = async () => {
     const id = searchId.trim()

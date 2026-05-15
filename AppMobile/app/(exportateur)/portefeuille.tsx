@@ -32,7 +32,7 @@ export default function PortefeuilleExportateurScreen() {
   const [solde, setSolde] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
+  // isOffline supprimé — mode offline désactivé
 
   // Dépôt / retrait
   const [pin, setPin] = useState('');
@@ -51,16 +51,12 @@ export default function PortefeuilleExportateurScreen() {
 
   const fetchSolde = useCallback(async () => {
     try {
+      console.log('[Portefeuille] Appel API solde');
       const { data } = await portefeuilleApi.solde();
       if (typeof data.balance === 'number') setSolde(data.balance);
-      setIsOffline(false);
+      console.log('[Portefeuille] Solde:', data.balance);
     } catch (e) {
-      if (isNetworkError(e)) {
-        setIsOffline(true);
-      } else {
-        setIsOffline(false);
-        console.warn(getApiError(e));
-      }
+      console.warn('[Portefeuille] Erreur solde:', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -149,12 +145,6 @@ export default function PortefeuilleExportateurScreen() {
               <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchSolde(); }} />
             }
           >
-            {isOffline && (
-              <View style={styles.offlineBanner}>
-                <MaterialCommunityIcons name="wifi-off" size={16} color="#C62828" />
-                <Text style={styles.offlineText}>Serveur injoignable — le solde peut être incomplet</Text>
-              </View>
-            )}
 
             {/* Carte solde principal */}
             <View style={styles.soldeCard}>

@@ -43,7 +43,9 @@ export default function PinUnlockPage() {
         <BrandLogo className="w-14 h-14 mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-[var(--color-primary)] text-center mb-2">Code PIN</h1>
         <p className="text-[var(--color-muted)] text-center text-sm mb-6">
-          Saisissez le code PIN défini à l&apos;inscription pour accéder à ChainCacao.
+          Saisissez le code PIN défini à l&apos;inscription pour accéder à ChainCacao (mobile ou filière).
+          Les comptes <strong>administrateur</strong> et <strong>ministère</strong> sur le web utilisent uniquement le mot de passe :
+          ils ne sont pas concernés par cette étape.
         </p>
 
         {error && <div className="alert alert-error mb-4 text-sm">{error}</div>}

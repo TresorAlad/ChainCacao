@@ -150,10 +150,7 @@ export default function RegisterScreen() {
       );
     } catch (e) {
       const detail = getApiError(e, 'auth');
-      Alert.alert(
-        'Inscription impossible',
-        `${detail}\n\nAPI utilisée : ${API_BASE}\n\nSi le navigateur web fonctionne, vérifiez EXPO_PUBLIC_API_URL (même backend que le site).`
-      );
+      Alert.alert('Inscription impossible', detail);
     } finally {
       setIsLoading(false);
     }
@@ -207,7 +204,13 @@ export default function RegisterScreen() {
                   {role === 'agriculteur' ? (
                     <>
                       <Text style={styles.label}>Surface du champ (Hectares)</Text>
-                      <TextInput style={styles.input} placeholder="Ex: 2.5" keyboardType="numeric" value={fieldSurface} onChangeText={setFieldSurface} />
+                      <TextInput
+                        style={formInputStyle}
+                        placeholder="Ex: 2.5"
+                        keyboardType="numeric"
+                        value={fieldSurface}
+                        onChangeText={setFieldSurface}
+                      />
                     </>
                   ) : (
                     <>

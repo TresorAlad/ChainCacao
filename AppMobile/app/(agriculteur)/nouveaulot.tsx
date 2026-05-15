@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,23 +12,24 @@ import {
   Modal,
   Image,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
 import { Picker } from '@react-native-picker/picker';
-import NetInfo from '@react-native-community/netinfo';
+// NetInfo retiré — pas de pré-vérification réseau (faux positifs fréquents).
 import * as Location from 'expo-location';
 import { Paths, File, Directory } from 'expo-file-system';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
 import { useLots, type Lot } from '@/hooks/use-storage';
 import { useAuth } from '@/hooks/use-auth';
-import { API_BASE, batchApi, getApiError, isNetworkError } from '@/services/api';
-import { isDeviceOnline } from '@/lib/device-online';
+import { batchApi, getApiError, isNetworkError } from '@/services/api';
+// device-online retiré — l'app tente toujours l'API directement.
 import { signLotPayload } from '@/lib/lot-crypto';
-import { reverseGeocodeCoords } from '@/lib/geocode';
+import { reverseGeocodeCoordsWithRegion } from '@/lib/geocode';
 import type { LotSignPayload } from '@/lib/lot-payload';
 import { runPendingSync } from '@/hooks/use-sync';
 import {
@@ -44,14 +45,6 @@ function frDateToIso(fr: string): string {
   return new Date().toISOString().split('T')[0];
 }
 
-function safeApiHostLabel(): string {
-  try {
-    const u = new URL(API_BASE);
-    return `${u.protocol}//${u.host}`;
-  } catch {
-    return API_BASE;
-  }
-}
 
 export default function NouveauLot() {
   const router = useRouter();
@@ -61,16 +54,17 @@ export default function NouveauLot() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitHint, setSubmitHint] = useState<string | null>(null);
   const [pendingBanner, setPendingBanner] = useState<string | null>(null);
-  /** Dernière raison technique (affichée à l’écran — pas de secrets). */
-  const [offlineDiag, setOfflineDiag] = useState<string | null>(null);
 
   const [typeProduit, setTypeProduit] = useState<'Cacao' | 'Café'>('Cacao');
   const [variete, setVariete] = useState('');
   const [poids, setPoids] = useState('');
-  const [parcelle, setParcelle] = useState('');
   const [dateRecolte] = useState(new Date().toLocaleDateString('fr-FR'));
   /** Aperçu immédiat après capture (fichier temporaire ou copié). */
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+
+  const [gpsLat, setGpsLat] = useState<number | null>(null);
+  const [gpsLon, setGpsLon] = useState<number | null>(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
 
   const [showCamera, setShowCamera] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
@@ -95,6 +89,35 @@ export default function NouveauLot() {
     }
     loadFonts();
   }, []);
+
+  const refreshGpsPosition = useCallback(async () => {
+    setGpsLoading(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        return;
+      }
+      try {
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        setGpsLat(pos.coords.latitude);
+        setGpsLon(pos.coords.longitude);
+      } catch {
+        const last = await Location.getLastKnownPositionAsync({ maxAge: 86_400_000 });
+        if (last?.coords) {
+          setGpsLat(last.coords.latitude);
+          setGpsLon(last.coords.longitude);
+        }
+      }
+    } finally {
+      setGpsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshGpsPosition();
+  }, [refreshGpsPosition]);
 
   const openCameraModal = async () => {
     const cam = await requestCameraPermission();
@@ -123,12 +146,15 @@ export default function NouveauLot() {
   };
 
   const handleValider = async () => {
-    if (!variete || !poids || !parcelle) {
-      Alert.alert('Champs manquants', 'Veuillez remplir toutes les informations.');
+    if (!variete || !poids) {
+      Alert.alert('Champs manquants', 'Sélectionnez une variété et indiquez le poids.');
       return;
     }
     if (!photoUri) {
-      Alert.alert('Photo obligatoire', 'Prenez une photo du lot : la position est lue dans les métadonnées de l’image.');
+      Alert.alert(
+        'Photo obligatoire',
+        'Prenez une photo du lot : elle est exigée pour la traçabilité (CDC). La position est fournie automatiquement par le GPS.'
+      );
       return;
     }
 
@@ -140,11 +166,7 @@ export default function NouveauLot() {
     setIsSubmitting(true);
     setSubmitHint(null);
     setPendingBanner(null);
-    setOfflineDiag(null);
     try {
-      const network = await NetInfo.fetch();
-      const canTryApi = isDeviceOnline(network);
-
       const localId = `local_${Date.now()}`;
       const culture = typeProduit === 'Cacao' ? 'Cacao' : 'Cafe';
       const dateIso = frDateToIso(dateRecolte);
@@ -157,43 +179,44 @@ export default function NouveauLot() {
       srcFile.copy(destFile);
       const storedPhoto = destFile.uri;
 
-      // Position du téléphone (secours si la photo n’a pas d’EXIF GPS) — pas de saisie manuelle.
-      let lat: number | undefined;
-      let lon: number | undefined;
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          try {
-            const pos = await Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.Balanced,
-            });
-            lat = pos.coords.latitude;
-            lon = pos.coords.longitude;
-          } catch {
-            /* ignore */
-          }
-          if (lat == null || lon == null) {
-            const last = await Location.getLastKnownPositionAsync({ maxAge: 86_400_000 });
-            if (last?.coords) {
-              lat = last.coords.latitude;
-              lon = last.coords.longitude;
+      let lat = gpsLat ?? undefined;
+      let lon = gpsLon ?? undefined;
+      if (lat == null || lon == null) {
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            try {
+              const pos = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+              });
+              lat = pos.coords.latitude;
+              lon = pos.coords.longitude;
+            } catch {
+              /* ignore */
+            }
+            if (lat == null || lon == null) {
+              const last = await Location.getLastKnownPositionAsync({ maxAge: 86_400_000 });
+              if (last?.coords) {
+                lat = last.coords.latitude;
+                lon = last.coords.longitude;
+              }
             }
           }
+        } catch {
+          /* ignore */
         }
-      } catch {
-        /* l’API peut encore accepter le lot si l’EXIF contient le GPS */
       }
 
       if (lat == null || lon == null) {
         Alert.alert(
           'Position requise',
-          'Activez la localisation ou reprenez une photo avec GPS dans les métadonnées EXIF.'
+          'Activez la localisation pour cet écran ou touchez « Actualiser la position » après avoir accordé la permission.'
         );
         setIsSubmitting(false);
         return;
       }
 
-      const adresseLieu = await reverseGeocodeCoords(lat, lon);
+      const { lieu: adresseLieu, region } = await reverseGeocodeCoordsWithRegion(lat, lon);
 
       const fields = {
         culture,
@@ -202,7 +225,7 @@ export default function NouveauLot() {
         date_recolte: dateIso,
         notes: variete,
         variete,
-        parcelle,
+        region,
         client_lot_id: localId,
         latitude: lat,
         longitude: lon,
@@ -216,21 +239,20 @@ export default function NouveauLot() {
         lieu: adresseLieu,
         latitude: lat,
         longitude: lon,
-        parcelle,
         date_recolte: dateIso,
         notes: variete,
         actor_id: user.id,
       };
       const { signature, payload_hash, signer_pubkey } = await signLotPayload(signBase);
 
+      const lotTitle = `${typeProduit} — ${variete}`;
       const lotRow: Lot = {
         id: localId,
-        title: `${typeProduit} — ${parcelle}`,
+        title: lotTitle,
         status: 'En cours',
         date: dateRecolte,
         poids,
         destination: adresseLieu,
-        parcelle,
         culture,
         variete,
         typeCacao: variete,
@@ -244,62 +266,44 @@ export default function NouveauLot() {
         signer_pubkey,
       };
 
-      let fallbackReason: 'netinfo' | 'api_network' | null = null;
-      if (!canTryApi) {
-        fallbackReason = 'netinfo';
-      }
-
-      if (canTryApi) {
-        setSubmitHint('Envoi au serveur en cours… (photo + GPS, jusqu’à 1 min)');
-        try {
-          const { data } = await batchApi.createWithPhoto(storedPhoto, fields);
-          const serverId = data.batch?.id ?? localId;
-          await destFile.delete();
-          await saveLot({
-            ...lotRow,
-            id: serverId,
-            photoUri: undefined,
-            synced: true,
-            status: 'Terminé',
-          });
-          Alert.alert('Succès', 'Lot enregistré sur la blockchain.', [
-            {
-              text: 'Voir le QR',
-              onPress: () =>
-                router.replace(`/(agriculteur)/qr-lot?lotId=${encodeURIComponent(serverId)}` as any),
-            },
-          ]);
+      setSubmitHint('Envoi au serveur en cours…');
+      try {
+        const { data } = await batchApi.createWithPhoto(storedPhoto, fields);
+        const serverId = data.batch?.id ?? localId;
+        await destFile.delete();
+        await saveLot({
+          ...lotRow,
+          id: serverId,
+          photoUri: undefined,
+          synced: true,
+          status: 'Terminé',
+        });
+        Alert.alert('Succès', 'Lot enregistré sur la blockchain.', [
+          {
+            text: 'Voir le QR',
+            onPress: () =>
+              router.replace(`/(agriculteur)/qr-lot?lotId=${encodeURIComponent(serverId)}` as any),
+          },
+        ]);
+        return;
+      } catch (e) {
+        if (!isNetworkError(e)) {
+          // Erreur métier du serveur — ne pas sauvegarder localement.
+          Alert.alert('Erreur serveur', getApiError(e, 'lots_offline'));
           return;
-        } catch (e) {
-          const netErr = isNetworkError(e);
-          if (!netErr) {
-            Alert.alert('Erreur API', getApiError(e, 'lots_offline'));
-            return;
-          }
-          fallbackReason = 'api_network';
-          setSubmitHint('Serveur injoignable — enregistrement local…');
         }
-      } else {
-        setSubmitHint('Hors ligne — enregistrement sur l’appareil…');
+        // Serveur injoignable → sauvegarde locale + sync auto.
+        setSubmitHint('Serveur non disponible — enregistrement local…');
       }
-
-      const diagLines =
-        fallbackReason === 'netinfo'
-          ? `Réseau signalé indisponible (connected=${String(network.isConnected)}, internet=${String(network.isInternetReachable)}). API : ${safeApiHostLabel()}`
-          : fallbackReason === 'api_network'
-            ? `L’API ${safeApiHostLabel()} est injoignable (timeout ou pas de réponse). Le web peut fonctionner via un autre chemin (proxy HTTPS).`
-            : 'Raison inconnue.';
-
-      setOfflineDiag(diagLines);
 
       await saveLot(lotRow);
       setPendingBanner(
-        'Lot enregistré sur cet appareil · en attente réseau pour la blockchain. Consultez « Mes lots » (badge orange).'
+        'Lot enregistré sur cet appareil. Il sera envoyé à la blockchain automatiquement dès que le serveur sera disponible.'
       );
       void runPendingSync();
       Alert.alert(
-        'En attente réseau',
-        `Lot signé et sauvegardé localement. Il sera envoyé automatiquement dès que l’API sera joignable. Vous pouvez déjà afficher le QR code.\n\n— Diagnostic —\n${diagLines}`,
+        'Enregistré localement',
+        `Le lot a été sauvegardé sur cet appareil.\nIl sera envoyé automatiquement à la blockchain dès que le serveur sera disponible.`,
         [
           {
             text: 'Voir le QR',
@@ -377,9 +381,8 @@ export default function NouveauLot() {
         <View style={styles.body}>
           <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             <Text style={styles.instructionText}>
-              Prenez une photo du lot : le serveur lit la position dans les métadonnées EXIF (pas de saisie GPS dans
-              l’app). Si le serveur refuse la photo, vérifiez dans les réglages du téléphone que la caméra ou les photos
-              peuvent enregistrer la position — ChainCacao ne demande pas la localisation sur cet écran.
+              Autorisez la localisation au démarrage : votre position est affichée sur la carte et envoyée avec le lot (sans
+              saisie manuelle des coordonnées), comme sur le web. Une photo du lot reste obligatoire pour la traçabilité.
             </Text>
 
             <TouchableOpacity style={styles.photoBtn} onPress={openCameraModal}>
@@ -392,6 +395,41 @@ export default function NouveauLot() {
                 <Image source={{ uri: photoUri }} style={styles.previewImg} resizeMode="cover" />
               </View>
             ) : null}
+
+            <View style={styles.mapCard}>
+              <View style={styles.mapCardHeader}>
+                <MaterialCommunityIcons name="crosshairs-gps" size={22} color="#1B5E20" />
+                <Text style={styles.mapCardTitle}>Position du lot</Text>
+              </View>
+              {gpsLoading ? (
+                <View style={styles.mapLoading}>
+                  <ActivityIndicator color="#2E7D32" />
+                  <Text style={styles.mapLoadingText}>Localisation…</Text>
+                </View>
+              ) : gpsLat != null && gpsLon != null ? (
+                <TouchableOpacity
+                  activeOpacity={0.92}
+                  onPress={() => Linking.openURL(`geo:${gpsLat},${gpsLon}?q=${gpsLat},${gpsLon}`)}
+                >
+                  <Image
+                    source={{
+                      uri: `https://staticmap.openstreetmap.de/staticmap.php?center=${gpsLat},${gpsLon}&zoom=14&size=380x180&markers=${gpsLat},${gpsLon},lightblue1`,
+                    }}
+                    style={styles.mapPreview}
+                    resizeMode="cover"
+                  />
+                  <Text style={styles.mapHint}>Toucher pour ouvrir dans l’application cartes · {gpsLat.toFixed(5)}, {gpsLon.toFixed(5)}</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.mapFallbackText}>
+                  Activez la localisation dans les réglages du téléphone, puis « Actualiser ».
+                </Text>
+              )}
+              <TouchableOpacity style={styles.gpsRefreshBtn} onPress={() => void refreshGpsPosition()}>
+                <MaterialCommunityIcons name="navigation-variant" size={20} color="#fff" />
+                <Text style={styles.gpsRefreshText}>Actualiser la position</Text>
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.typeSelectionRow}>
               <TouchableOpacity
@@ -424,12 +462,6 @@ export default function NouveauLot() {
               </View>
             ) : null}
 
-            {offlineDiag ? (
-              <View style={styles.diagBox} accessibilityLabel="diagnostic-reseau">
-                <Text style={styles.diagTitle}>Diagnostic réseau / API</Text>
-                <Text style={styles.diagText}>{offlineDiag}</Text>
-              </View>
-            ) : null}
 
             <View style={styles.form}>
               <Text style={styles.inputLabel}>Variété de {typeProduit}</Text>
@@ -461,17 +493,6 @@ export default function NouveauLot() {
                   keyboardType="numeric"
                   value={poids}
                   onChangeText={setPoids}
-                />
-              </View>
-
-              <Text style={styles.inputLabel}>Parcelle d'origine</Text>
-              <View style={styles.inputFrame}>
-                <MaterialCommunityIcons name="map-marker-radius" size={20} color="#2E7D32" style={styles.iconInput} />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Nom de la parcelle"
-                  value={parcelle}
-                  onChangeText={setParcelle}
                 />
               </View>
 
@@ -561,6 +582,44 @@ const styles = StyleSheet.create({
     borderColor: '#E0E0E0',
   },
   previewImg: { width: '100%', height: 180, backgroundColor: '#EEE' },
+  mapCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    padding: 12,
+    marginBottom: 16,
+  },
+  mapCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  mapCardTitle: { fontFamily: 'Montserrat-Bold', fontSize: 14, color: '#1B5E20' },
+  mapPreview: { width: '100%', height: 160, borderRadius: 10, backgroundColor: '#EEE' },
+  mapHint: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 11,
+    color: '#666',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  mapLoading: { alignItems: 'center', paddingVertical: 24 },
+  mapLoadingText: { marginTop: 8, fontFamily: 'Montserrat-Regular', fontSize: 13, color: '#666' },
+  mapFallbackText: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 13,
+    color: '#666',
+    textAlign: 'center',
+    paddingVertical: 16,
+  },
+  gpsRefreshBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#2E7D32',
+    borderRadius: 10,
+    paddingVertical: 12,
+    marginTop: 12,
+  },
+  gpsRefreshText: { color: 'white', fontFamily: 'Montserrat-Bold', fontSize: 14 },
   typeSelectionRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
   typeFrame: {
     width: '48%',
