@@ -48,6 +48,25 @@ USE_INMEMORY_FABRIC=true go run ./cmd/api
 
 Sans `DATABASE_URL` → acteurs en **mémoire** ; sans `REDIS_URL` → rate limit `/verify` en mémoire.
 
+## Développement : éviter `docker compose up --build` à chaque modification
+
+Chaque `up --build` **recompile l’image** (`Dockerfile`) → lent. Pour le quotidien :
+
+1. **Go sur la machine + Postgres/Redis en Docker** (le plus rapide : recompile typiquement en 1–3 s) :
+   ```bash
+   cd tracabilite-api
+   ./scripts/dev-api-local.sh
+   ```
+   Lance `postgres` + `redis` si besoin, puis `go run ./cmd/api` (rechargez le terminal après changement de `.env`).
+
+2. **Tout en Docker mais sans rebuild d’image** : service `api_dev` qui monte le code et utilise `go run` ([`docker-compose.dev.yml`](docker-compose.dev.yml)) :
+   ```bash
+   docker compose stop api
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d api_dev
+   ```
+
+Pour une **release** ou la prod : reconstruire l’image comme d’habitude (`docker compose up -d --build api`).
+
 ## Variables d’environnement
 
 | Variable | Description |
