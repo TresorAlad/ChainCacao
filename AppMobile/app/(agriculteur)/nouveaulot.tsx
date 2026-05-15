@@ -253,7 +253,7 @@ export default function NouveauLot() {
           {
             text: 'Voir le QR',
             onPress: () =>
-              router.replace(`/(agriculteur)/qr-lot?lotId=${encodeURIComponent(serverId)}` as any),
+              router.replace(`/qr-lot?lotId=${encodeURIComponent(serverId)}` as any),
           },
         ]);
         return;
@@ -463,18 +463,18 @@ export default function NouveauLot() {
         </View>
 
         <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
-          <TabItem icon="home-outline" label="Accueil" onPress={() => router.replace('/(agriculteur)/accueil' as any)} />
-          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => router.replace('/(agriculteur)/meslots' as any)} />
+          <TabItem icon="home-outline" label="Accueil" onPress={() => router.replace('/accueil' as any)} />
+          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => router.replace('/meslots' as any)} />
           <TabItem icon="plus-circle" label="Nouveau" active isMain />
           <TabItem
             icon="wallet-outline"
             label="Wallet"
-            onPress={() => router.replace('/(agriculteur)/portefeuille' as any)}
+            onPress={() => router.replace('/portefeuille' as any)}
           />
           <TabItem
             icon="account-circle-outline"
             label="Profil"
-            onPress={() => router.replace('/(agriculteur)/profil' as any)}
+            onPress={() => router.replace('/profil' as any)}
           />
         </View>
       </SafeAreaView>

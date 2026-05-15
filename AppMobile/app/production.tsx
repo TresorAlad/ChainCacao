@@ -59,7 +59,7 @@ export default function ProductionScreen() {
   // 2. RENVOYER LES DONNÉES À L'ACCUEIL
   const retournerAccueil = () => {
     router.push({
-      pathname: '/(agriculteur)/accueil',
+      pathname: '/accueil',
       params: { data: JSON.stringify(productions) },
     });
   };
@@ -81,7 +81,7 @@ export default function ProductionScreen() {
         
         <Text style={styles.headerTitle}>Productions</Text>
         
-        <TouchableOpacity onPress={() => router.push('/(agriculteur)/profil' as any)}>
+        <TouchableOpacity onPress={() => router.push('/profil' as any)}>
           <MaterialCommunityIcons name="account-circle" size={28} color="white" />
         </TouchableOpacity>
       </LinearGradient>
@@ -149,7 +149,7 @@ export default function ProductionScreen() {
         />
       </View>
 
-      <TouchableOpacity style={styles.fab} onPress={() => router.push('/(agriculteur)/nouveaulot' as any)}>
+      <TouchableOpacity style={styles.fab} onPress={() => router.push('/nouveaulot' as any)}>
         <MaterialCommunityIcons name="plus" size={35} color="white" />
       </TouchableOpacity>
     </SafeAreaView>

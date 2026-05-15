@@ -106,9 +106,9 @@ export default function MesLots() {
     <TouchableOpacity
       style={styles.lotCard}
       activeOpacity={0.8}
-      onPress={() => router.push(`/(agriculteur)/qr-lot?lotId=${encodeURIComponent(item.id)}` as any)}
+      onPress={() => router.push(`/qr-lot?lotId=${encodeURIComponent(item.id)}` as any)}
       onLongPress={() =>
-        router.push(`/(agriculteur)/paiement-lot?lotId=${encodeURIComponent(item.id)}` as any)
+        router.push(`/paiement-lot?lotId=${encodeURIComponent(item.id)}` as any)
       }
     >
       <View style={styles.lotMainInfo}>
@@ -191,15 +191,15 @@ export default function MesLots() {
         </View>
 
         <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
-          <TabItem icon="home-outline" label="Accueil" onPress={() => handleNavigation('/(agriculteur)/accueil')} />
+          <TabItem icon="home-outline" label="Accueil" onPress={() => handleNavigation('/accueil')} />
           <TabItem icon="archive" label="Mes Lots" active onPress={() => {}} />
-          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => handleNavigation('/(agriculteur)/nouveaulot')} />
+          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => handleNavigation('/nouveaulot')} />
           <TabItem
             icon="wallet-outline"
             label="Portefeuille"
-            onPress={() => handleNavigation('/(agriculteur)/portefeuille')}
+            onPress={() => handleNavigation('/portefeuille')}
           />
-          <TabItem icon="account-circle-outline" label="Profil" onPress={() => handleNavigation('/(agriculteur)/profil')} />
+          <TabItem icon="account-circle-outline" label="Profil" onPress={() => handleNavigation('/profil')} />
         </View>
       </SafeAreaView>
     </SafeAreaProvider>

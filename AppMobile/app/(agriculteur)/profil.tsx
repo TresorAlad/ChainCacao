@@ -121,10 +121,10 @@ export default function ProfilAgriculteur() {
         </View>
 
         <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
-          <TabItem icon="home-outline" label="Accueil" onPress={() => navigateTo('/(agriculteur)/accueil')} />
-          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => navigateTo('/(agriculteur)/meslots')} />
-          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => navigateTo('/(agriculteur)/nouveaulot')} />
-          <TabItem icon="wallet-outline" label="Wallet" onPress={() => navigateTo('/(agriculteur)/portefeuille')} />
+          <TabItem icon="home-outline" label="Accueil" onPress={() => navigateTo('/accueil')} />
+          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => navigateTo('/meslots')} />
+          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => navigateTo('/nouveaulot')} />
+          <TabItem icon="wallet-outline" label="Wallet" onPress={() => navigateTo('/portefeuille')} />
           <TabItem icon="account-circle" label="Profil" active />
         </View>
       </SafeAreaView>

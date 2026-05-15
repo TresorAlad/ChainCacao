@@ -263,11 +263,11 @@ export default function Portefeuille() {
         </View>
 
         <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
-          <TabItem icon="home-outline" label="Accueil" onPress={() => navigateTo('/(agriculteur)/accueil')} />
-          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => navigateTo('/(agriculteur)/meslots')} />
-          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => navigateTo('/(agriculteur)/nouveaulot')} />
+          <TabItem icon="home-outline" label="Accueil" onPress={() => navigateTo('/accueil')} />
+          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => navigateTo('/meslots')} />
+          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => navigateTo('/nouveaulot')} />
           <TabItem icon="wallet" label="Portefeuille" active />
-          <TabItem icon="account-circle-outline" label="Profil" onPress={() => navigateTo('/(agriculteur)/profil')} />
+          <TabItem icon="account-circle-outline" label="Profil" onPress={() => navigateTo('/profil')} />
         </View>
       </SafeAreaView>
     </SafeAreaProvider>

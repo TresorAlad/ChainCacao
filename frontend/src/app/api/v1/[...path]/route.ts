@@ -32,14 +32,27 @@ async function proxy(request: NextRequest, pathSegments: string[]) {
     init.body = await request.arrayBuffer()
   }
 
-  const upstream = await fetch(target, init)
-  const resHeaders = new Headers(upstream.headers)
-  resHeaders.delete('transfer-encoding')
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 8000)
+  init.signal = controller.signal
 
-  return new NextResponse(upstream.body, {
-    status: upstream.status,
-    headers: resHeaders,
-  })
+  try {
+    const upstream = await fetch(target, init)
+    clearTimeout(timeoutId)
+    const resHeaders = new Headers(upstream.headers)
+    resHeaders.delete('transfer-encoding')
+
+    return new NextResponse(upstream.body, {
+      status: upstream.status,
+      headers: resHeaders,
+    })
+  } catch (error) {
+    clearTimeout(timeoutId)
+    return new NextResponse(
+      JSON.stringify({ success: false, error: 'Délai d\'attente dépassé (timeout) ou erreur réseau du serveur.' }),
+      { status: 504, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
 }
 
 type RouteCtx = { params: Promise<{ path: string[] }> }

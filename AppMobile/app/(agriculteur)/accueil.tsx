@@ -181,10 +181,10 @@ export default function AccueilAgriculteur() {
         {/* NAVIGATION BASSE */}
         <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
           <TabItem icon="home" label="Accueil" active onPress={() => {}} />
-          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => handleNavigation('/(agriculteur)/meslots')} />
-          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => handleNavigation('/(agriculteur)/nouveaulot')} />
-          <TabItem icon="wallet-outline" label="Portefeuille" onPress={() => handleNavigation('/(agriculteur)/portefeuille')} />
-          <TabItem icon="account-circle-outline" label="Profil" onPress={() => handleNavigation('/(agriculteur)/profil')} />
+          <TabItem icon="archive-outline" label="Mes Lots" onPress={() => handleNavigation('/meslots')} />
+          <TabItem icon="plus-circle" label="Nouveau" isMain onPress={() => handleNavigation('/nouveaulot')} />
+          <TabItem icon="wallet-outline" label="Portefeuille" onPress={() => handleNavigation('/portefeuille')} />
+          <TabItem icon="account-circle-outline" label="Profil" onPress={() => handleNavigation('/profil')} />
         </View>
       </SafeAreaView>
     </SafeAreaProvider>
