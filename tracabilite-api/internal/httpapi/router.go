@@ -109,6 +109,7 @@ func NewRouter(handler *Handler, jwt *auth.JWTService, rdb *redis.Client) *gin.E
 			protected.GET("/actors", handler.ListActors)
 			// Lots appartenant à l'acteur connecté (propriétaire courant).
 			protected.GET("/actors/me/lots", handler.GetMyLots)
+			protected.GET("/actors/:id/lots", auth.RequireAnyRole(models.RoleMinistere, models.RoleAdmin, models.RoleCooperative), handler.GetActorLots)
 		}
 	}
 	return r

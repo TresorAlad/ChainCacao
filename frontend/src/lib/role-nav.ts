@@ -38,7 +38,11 @@ export const NAV_ITEMS: NavItemDef[] = [
     id: 'home',
     icon: HomeIcon,
     label: 'Accueil',
-    href: (role) => getRoleBasedRedirect(role),
+    href: (role) => {
+      const r = normalizeUserRole(role)
+      if (r === 'ministere') return '/accueil-ministere'
+      return getRoleBasedRedirect(role)
+    },
     roles: ['admin', 'agriculteur', 'cooperative', 'exportateur', 'transformateur', 'ministere'],
     section: 'ops',
   },
@@ -208,6 +212,7 @@ const ROUTE_ACCESS: Record<string, UserRole[]> = {
   '/transfer': ['agriculteur', 'cooperative', 'transformateur', 'exportateur', 'admin'],
   '/liste-groupee': ['cooperative', 'admin'],
   '/lots': ['agriculteur', 'cooperative', 'transformateur', 'exportateur', 'admin'],
+  '/accueil-ministere': ['ministere', 'admin'],
   '/dashboard-ministere': ['ministere', 'admin'],
   '/blockchain': ['admin', 'ministere'],
   '/actors': ['cooperative', 'ministere'],

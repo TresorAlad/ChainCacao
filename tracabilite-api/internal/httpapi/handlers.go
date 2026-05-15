@@ -633,6 +633,52 @@ func (h *Handler) AlertsCount(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "alerts": alerts})
 }
 
+func (h *Handler) GetActorLots(c *gin.Context) {
+	actorID := strings.TrimSpace(c.Param("id"))
+	if actorID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "identifiant acteur requis"})
+		return
+	}
+	target, err := h.actors.FindByID(c.Request.Context(), actorID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "acteur introuvable"})
+		return
+	}
+	r := strings.ToLower(strings.TrimSpace(string(target.Role)))
+	if r == string(models.RoleAdmin) || r == string(models.RoleMinistere) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "profil non consultable dans l'annuaire"})
+		return
+	}
+	lots, err := h.batch.GetMyLots(c.Request.Context(), actorID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if lots == nil {
+		lots = []models.Batch{}
+	}
+	totalKg := 0.0
+	byStatus := map[string]int{}
+	for _, lot := range lots {
+		totalKg += lot.Quantite
+		st := strings.ToLower(strings.TrimSpace(lot.Statut))
+		if st == "" {
+			st = "inconnu"
+		}
+		byStatus[st]++
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"actor":   target,
+		"lots":    lots,
+		"stats": gin.H{
+			"nb_lots":     len(lots),
+			"poids_total": totalKg,
+			"par_statut":  byStatus,
+		},
+	})
+}
+
 func (h *Handler) GetMyLots(c *gin.Context) {
 	actorID := c.GetString(auth.ContextActorID)
 	lots, err := h.batch.GetMyLots(c.Request.Context(), actorID)
@@ -654,12 +700,25 @@ func (h *Handler) GetMyLots(c *gin.Context) {
 	})
 }
 
+func filterAnnuaireActors(list []models.Actor) []models.Actor {
+	out := make([]models.Actor, 0, len(list))
+	for _, a := range list {
+		r := strings.ToLower(strings.TrimSpace(string(a.Role)))
+		if r == string(models.RoleAdmin) || r == string(models.RoleMinistere) {
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
 func (h *Handler) ListActors(c *gin.Context) {
 	list, err := h.actors.List(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	list = filterAnnuaireActors(list)
 	p := parsePagination(c, 50, 500)
 	pageItems, total := paginateSlice(list, p.Page, p.Limit)
 	c.JSON(http.StatusOK, gin.H{

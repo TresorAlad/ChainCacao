@@ -52,7 +52,7 @@ export function getRoleBasedRedirect(role: UserRole | string | undefined): strin
     case 'exportateur':
       return '/dashboard-exportateur'
     case 'ministere':
-      return '/dashboard-ministere'
+      return '/accueil-ministere'
     default:
       return '/dashboard'
   }

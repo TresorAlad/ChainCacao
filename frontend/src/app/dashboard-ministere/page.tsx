@@ -20,6 +20,7 @@ import {
   MapIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
+import { filterAnnuaireActors } from '@/lib/actors-utils'
 
 export default function MinistereDashboardPage() {
   const { isAuthenticated, loading, user } = useAuth()
@@ -59,7 +60,7 @@ export default function MinistereDashboardPage() {
         setStats(statsRes.data.stats || {})
         const alerts = alertsRes?.data?.alerts as { total?: number; count?: number } | undefined
         setAlertsCount(alerts?.total ?? alerts?.count ?? null)
-        setActors(actorsRes.data.actors || [])
+        setActors(filterAnnuaireActors(actorsRes.data.actors || []))
       })
       .finally(() => setStatsLoading(false))
   }, [isAuthenticated, user])
