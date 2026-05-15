@@ -42,6 +42,8 @@ type Client interface {
 	GetCooperativeMargin(ctx context.Context, orgID string) (float64, error)
 	// ExecutePayment debite le payeur (total brut) et credite vendeurs (net) + coop (marge).
 	ExecutePayment(ctx context.Context, in PaymentCreditInput) (txHash string, err error)
+	// RecordPaymentOnLedger marque les lots payes sans mouvement portefeuille (soldes geres en PostgreSQL).
+	RecordPaymentOnLedger(ctx context.Context, in PaymentCreditInput) (txHash string, err error)
 	GetWalletBalance(ctx context.Context, actorID string) (float64, error)
 	DepositWallet(ctx context.Context, actorID string, amount float64) (txHash string, err error)
 	WithdrawWallet(ctx context.Context, actorID string, amount float64) (txHash string, err error)
@@ -493,6 +495,47 @@ func (c *InMemoryClient) ExecutePayment(_ context.Context, in PaymentCreditInput
 		}
 		if b.Statut == "paye" {
 			c.refundPaymentLocked(in)
+			return "", fmt.Errorf("lot %s deja paye", ln.BatchID)
+		}
+		b.Statut = "paye"
+		b.Timestamp = now
+		c.batches[ln.BatchID] = b
+		c.payments[ln.BatchID] = "paye"
+		pct := marginPctFromAmounts(ln.Brut, ln.Marge)
+		c.history[ln.BatchID] = append(c.history[ln.BatchID], models.BatchHistoryEvent{
+			BatchID:      ln.BatchID,
+			Type:         evtType,
+			ActorID:      in.PayerID,
+			TxHash:       txHash,
+			CreatedAtISO: now,
+			Commentaire:  fmt.Sprintf(`{"montant_brut":%.2f,"marge_fcfa":%.2f,"marge_pct":%.2f,"montant_net":%.2f}`, ln.Brut, ln.Marge, pct, ln.Net),
+			Payload:      b,
+		})
+	}
+	return txHash, nil
+}
+
+func (c *InMemoryClient) RecordPaymentOnLedger(_ context.Context, in PaymentCreditInput) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if in.PayerID == "" || len(in.Lines) == 0 {
+		return "", errors.New("paiement invalide")
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	txHash := newTxHash()
+	evtType := in.EventType
+	if evtType == "" {
+		evtType = "paiement"
+	}
+	for _, ln := range in.Lines {
+		b, ok := c.batches[ln.BatchID]
+		if !ok {
+			return "", fmt.Errorf("lot introuvable: %s", ln.BatchID)
+		}
+		if b.Statut == "en_transit" {
+			return "", fmt.Errorf("lot %s en transit: reception non confirmee", ln.BatchID)
+		}
+		if b.Statut == "paye" {
 			return "", fmt.Errorf("lot %s deja paye", ln.BatchID)
 		}
 		b.Statut = "paye"

@@ -518,6 +518,21 @@ func (g *GatewayClient) ExecutePayment(ctx context.Context, in PaymentCreditInpu
 	return lastTx, nil
 }
 
+func (g *GatewayClient) RecordPaymentOnLedger(ctx context.Context, in PaymentCreditInput) (string, error) {
+	var lastTx string
+	for _, ln := range in.Lines {
+		tx, err := g.ConfirmBatchReceipt(ctx, ln.BatchID, in.PayerID)
+		if err != nil {
+			return lastTx, err
+		}
+		lastTx = tx
+	}
+	if lastTx == "" {
+		return newTxHash(), nil
+	}
+	return lastTx, nil
+}
+
 func (g *GatewayClient) GetWalletBalance(ctx context.Context, actorID string) (float64, error) {
 	data, err := g.contract.EvaluateTransaction("GetWalletBalance", actorID)
 	if err != nil {

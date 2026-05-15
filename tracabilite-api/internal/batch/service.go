@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"tracabilite-api/internal/fabric"
+	"tracabilite-api/internal/wallet"
 	"tracabilite-api/pkg/models"
 )
 
@@ -52,6 +53,7 @@ type UpdateWeightInput struct {
 type Service struct {
 	fabricClient fabric.Client
 	actors       ActorLookup
+	wallets      *wallet.Store // optionnel : soldes persistants PostgreSQL
 }
 
 func NewService(fabricClient fabric.Client, actors ActorLookup) *Service {
@@ -59,6 +61,12 @@ func NewService(fabricClient fabric.Client, actors ActorLookup) *Service {
 		fabricClient: fabricClient,
 		actors:       actors,
 	}
+}
+
+// WithWalletStore active les opérations portefeuille sur PostgreSQL (demo persistante).
+func (s *Service) WithWalletStore(store *wallet.Store) *Service {
+	s.wallets = store
+	return s
 }
 
 func (s *Service) Create(ctx context.Context, input CreateBatchInput, actorID, orgID string) (string, models.Batch, error) {
@@ -227,6 +235,9 @@ func (s *Service) SetCooperativeMargin(ctx context.Context, orgID string, margin
 }
 
 func (s *Service) GetWalletBalance(ctx context.Context, actorID string) (float64, error) {
+	if s.wallets != nil {
+		return s.wallets.GetBalance(ctx, actorID)
+	}
 	return s.fabricClient.GetWalletBalance(ctx, actorID)
 }
 
@@ -234,12 +245,24 @@ func (s *Service) DepositWallet(ctx context.Context, actorID string, amount floa
 	if amount <= 0 {
 		return "", errors.New("montant de depot invalide")
 	}
+	if s.wallets != nil {
+		if err := s.wallets.Deposit(ctx, actorID, amount); err != nil {
+			return "", err
+		}
+		return "pg-wallet-deposit", nil
+	}
 	return s.fabricClient.DepositWallet(ctx, actorID, amount)
 }
 
 func (s *Service) WithdrawWallet(ctx context.Context, actorID string, amount float64) (string, error) {
 	if amount <= 0 {
 		return "", errors.New("montant de retrait invalide")
+	}
+	if s.wallets != nil {
+		if err := s.wallets.Withdraw(ctx, actorID, amount); err != nil {
+			return "", err
+		}
+		return "pg-wallet-withdraw", nil
 	}
 	return s.fabricClient.WithdrawWallet(ctx, actorID, amount)
 }

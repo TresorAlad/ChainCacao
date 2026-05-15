@@ -227,20 +227,8 @@ func (h *Handler) Signup(c *gin.Context) {
 		}
 	}
 
-	// Crédit démo portefeuille (même règle que cmd/api au démarrage) : les nouveaux comptes
-	// exportateur / transformateur n’étaient pas crédités avant le prochain redémarrage.
-	if os.Getenv("DEMO_INITIAL_CREDIT") != "false" && (role == models.RoleExportateur || role == models.RoleTransformateur) {
-		initial := 2000000.0
-		if v := os.Getenv("DEMO_INITIAL_CREDIT_AMOUNT"); v != "" {
-			if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
-				initial = f
-			}
-		}
-		ctx := c.Request.Context()
-		if bal, err := h.batch.GetWalletBalance(ctx, actor.ID); err == nil && bal < initial {
-			_, _ = h.batch.DepositWallet(ctx, actor.ID, initial-bal)
-		}
-	}
+	// Crédit démo 2M FCFA (exportateur / transformateur), persistant si PostgreSQL actif.
+	h.batch.EnsureDemoWalletCredit(c.Request.Context(), actor.ID, role)
 
 	// Auto-login: retourner un JWT directement
 	token, err := h.jwt.Generate(actor.ID, actor.OrgID, actor.Role)
@@ -1315,6 +1303,7 @@ func (h *Handler) AdminCreateActor(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	h.batch.EnsureDemoWalletCredit(c.Request.Context(), actor.ID, actor.Role)
 	c.JSON(http.StatusCreated, gin.H{"success": true, "actor": actor})
 }
 

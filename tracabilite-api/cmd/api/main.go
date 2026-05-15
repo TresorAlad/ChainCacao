@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"os"
-	"strconv"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -21,6 +20,8 @@ import (
 	"tracabilite-api/internal/media"
 	"tracabilite-api/internal/notifications"
 	"tracabilite-api/internal/syncdedup"
+	"tracabilite-api/internal/wallet"
+	"tracabilite-api/pkg/models"
 )
 
 func main() {
@@ -90,24 +91,15 @@ func main() {
 	}
 
 	batchService := batch.NewService(fc, actorService)
+	if pgPool != nil {
+		batchService = batchService.WithWalletStore(wallet.NewPGStore(pgPool))
+	}
 
-	// DEMO: credit initial wallets (sans opérateurs) pour transformateur/exportateur.
-	if os.Getenv("DEMO_INITIAL_CREDIT") != "false" {
-		initial := 2000000.0
-		if v := os.Getenv("DEMO_INITIAL_CREDIT_AMOUNT"); v != "" {
-			if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
-				initial = f
-			}
-		}
-		actorsList, _ := actorService.List(ctx)
-		for _, a := range actorsList {
-			if a.Role != "transformateur" && a.Role != "exportateur" {
-				continue
-			}
-			bal, err := batchService.GetWalletBalance(ctx, a.ID)
-			if err == nil && bal < initial {
-				_, _ = batchService.DepositWallet(ctx, a.ID, initial-bal)
-			}
+	// DEMO: crédit initial 2M FCFA pour transformateur / exportateur existants.
+	actorsList, _ := actorService.List(ctx)
+	for _, a := range actorsList {
+		if a.Role == models.RoleTransformateur || a.Role == models.RoleExportateur {
+			batchService.EnsureDemoWalletCredit(ctx, a.ID, a.Role)
 		}
 	}
 

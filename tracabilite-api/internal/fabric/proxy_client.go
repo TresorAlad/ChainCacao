@@ -255,6 +255,21 @@ func (c *ProxyClient) ExecutePayment(ctx context.Context, in PaymentCreditInput)
 	return out.TxHash, err
 }
 
+func (c *ProxyClient) RecordPaymentOnLedger(ctx context.Context, in PaymentCreditInput) (string, error) {
+	var lastTx string
+	for _, ln := range in.Lines {
+		tx, err := c.ConfirmBatchReceipt(ctx, ln.BatchID, in.PayerID)
+		if err != nil {
+			return lastTx, err
+		}
+		lastTx = tx
+	}
+	if lastTx == "" {
+		return "proxy-payment-ledger", nil
+	}
+	return lastTx, nil
+}
+
 func (c *ProxyClient) GetWalletBalance(ctx context.Context, actorID string) (float64, error) {
 	var out struct {
 		Balance float64 `json:"balance"`

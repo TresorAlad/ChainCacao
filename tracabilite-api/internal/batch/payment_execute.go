@@ -6,6 +6,7 @@ import (
 
 	"tracabilite-api/internal/fabric"
 	"tracabilite-api/internal/groupedlist"
+	"tracabilite-api/internal/wallet"
 )
 
 func (s *Service) GetCooperativeMargin(ctx context.Context, orgID string) (float64, error) {
@@ -30,6 +31,9 @@ func (s *Service) ExecutePaymentSummary(ctx context.Context, payerID string, coo
 	if summary.MontantBrut <= 0 {
 		return "", errors.New("montant invalide")
 	}
+	if s.wallets != nil {
+		return s.executePaymentSummaryPG(ctx, payerID, coop, summary, eventType, listID)
+	}
 	bal, err := s.fabricClient.GetWalletBalance(ctx, payerID)
 	if err != nil {
 		return "", err
@@ -42,6 +46,34 @@ func (s *Service) ExecutePaymentSummary(ctx context.Context, payerID string, coo
 		coopActor = "actor-coop-001"
 	}
 	return s.fabricClient.ExecutePayment(ctx, fabric.PaymentCreditInput{
+		PayerID:     payerID,
+		CoopActorID: coopActor,
+		TotalBrut:   summary.MontantBrut,
+		TotalMarge:  summary.MargeFCFA,
+		Lines:       paymentLinesToFabric(summary.Lines),
+		EventType:   eventType,
+		ListID:      listID,
+	})
+}
+
+func (s *Service) executePaymentSummaryPG(ctx context.Context, payerID string, coop CooperativeContext, summary PaymentSummary, eventType, listID string) (string, error) {
+	coopActor := coop.CoopActorID
+	if coopActor == "" {
+		coopActor = "actor-coop-001"
+	}
+	credits := make([]wallet.CreditLine, 0, len(summary.Lines)+1)
+	for _, ln := range summary.Lines {
+		if ln.MontantNet > 0 && ln.SellerID != "" {
+			credits = append(credits, wallet.CreditLine{ActorID: ln.SellerID, Amount: ln.MontantNet})
+		}
+	}
+	if summary.MargeFCFA > 0 && coopActor != "" {
+		credits = append(credits, wallet.CreditLine{ActorID: coopActor, Amount: summary.MargeFCFA})
+	}
+	if err := s.wallets.ApplyPayment(ctx, payerID, summary.MontantBrut, credits); err != nil {
+		return "", err
+	}
+	return s.fabricClient.RecordPaymentOnLedger(ctx, fabric.PaymentCreditInput{
 		PayerID:     payerID,
 		CoopActorID: coopActor,
 		TotalBrut:   summary.MontantBrut,
