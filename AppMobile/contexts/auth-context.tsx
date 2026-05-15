@@ -230,7 +230,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       void registerForPushNotifications();
       return true;
     } catch (e) {
-      setError(getApiError(e));
+      setError(getApiError(e, 'auth'));
       return false;
     } finally {
       setLoading(false);
@@ -264,7 +264,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setPinUnlockError('Réseau indisponible — connectez-vous une fois en ligne pour activer le déverrouillage hors-ligne.');
         return false;
       }
-      setPinUnlockError(getApiError(e));
+      setPinUnlockError(getApiError(e, 'auth'));
       return false;
     } finally {
       setPinUnlockLoading(false);

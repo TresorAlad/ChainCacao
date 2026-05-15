@@ -92,13 +92,13 @@ export default function MesLots() {
       const byId = new Map<string, DisplayLot>();
       localMapped.forEach((l) => byId.set(l.id, l));
 
-      if (connected && user?.id) {
+      if (isDeviceOnline(state) && user?.id) {
         try {
           const { data } = await myLotsApi.list();
           const remote = (data.lots ?? []).map(mapServerLot);
           remote.forEach((l) => byId.set(l.id, l));
         } catch (e) {
-          console.warn('API mes lots:', getApiError(e));
+          console.warn('API mes lots:', getApiError(e, 'lots_offline'));
         }
       }
 

@@ -149,7 +149,7 @@ export default function RegisterScreen() {
         [{ text: 'OK', onPress: () => router.replace(homePathForActor(enriched)) }]
       );
     } catch (e) {
-      const detail = getApiError(e);
+      const detail = getApiError(e, 'auth');
       Alert.alert(
         'Inscription impossible',
         `${detail}\n\nAPI utilisée : ${API_BASE}\n\nSi le navigateur web fonctionne, vérifiez EXPO_PUBLIC_API_URL (même backend que le site).`

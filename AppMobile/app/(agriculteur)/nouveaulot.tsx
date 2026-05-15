@@ -273,7 +273,7 @@ export default function NouveauLot() {
         } catch (e) {
           const netErr = isNetworkError(e);
           if (!netErr) {
-            Alert.alert('Erreur API', getApiError(e));
+            Alert.alert('Erreur API', getApiError(e, 'lots_offline'));
             return;
           }
           fallbackReason = 'api_network';

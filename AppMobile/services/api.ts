@@ -66,8 +66,11 @@ api.interceptors.response.use(
   }
 );
 
+/** Contexte d’erreur : évite d’associer connexion/inscription à un « mode hors-ligne lots ». */
+export type GetApiErrorKind = 'default' | 'auth' | 'lots_offline';
+
 // Normaliser les erreurs API
-export function getApiError(e: unknown): string {
+export function getApiError(e: unknown, kind: GetApiErrorKind = 'default'): string {
   const err = e as AxiosError<{ error?: string; message?: string }>;
   if (err.response?.data?.error) return err.response.data.error;
   if (err.response?.data?.message) return err.response.data.message;
@@ -78,7 +81,13 @@ export function getApiError(e: unknown): string {
     if (API_BASE.includes('127.0.0.1') || API_BASE.includes('localhost')) {
       return `URL API incorrecte (${API_BASE}) — ce build pointe vers localhost et ne peut pas joindre le serveur depuis un téléphone réel. Rebuilder avec : eas build --profile preview`;
     }
-    return `Réseau indisponible — mode hors-ligne activé`;
+    if (kind === 'auth') {
+      return `Impossible de joindre le serveur (${API_BASE}). Vérifiez la connexion internet.`;
+    }
+    if (kind === 'lots_offline') {
+      return `Serveur injoignable (${API_BASE}). Les lots peuvent être enregistrés sur l’appareil et envoyés à la reconnexion.`;
+    }
+    return `Impossible de joindre le serveur (${API_BASE}). Vérifiez la connexion.`;
   }
   return err.message || 'Erreur inconnue';
 }

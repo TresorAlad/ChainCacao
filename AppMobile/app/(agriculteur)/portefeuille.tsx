@@ -14,7 +14,6 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
-import * as Network from 'expo-network';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { walletApi, getApiError } from '@/services/api';
@@ -43,16 +42,17 @@ export default function Portefeuille() {
         const savedTxs = await AsyncStorage.getItem('user_transactions');
         if (savedTxs) setTransactions(JSON.parse(savedTxs));
 
-        const net = await Network.getNetworkStateAsync();
-        if (net.isConnected && net.isInternetReachable) {
-          try {
-            const { data } = await walletApi.solde();
-            if (typeof data.balance === 'number') setSolde(data.balance);
-          } catch (e) {
-            const savedSolde = await AsyncStorage.getItem('user_solde');
-            if (savedSolde) setSolde(JSON.parse(savedSolde));
+        let balanceLoaded = false;
+        try {
+          const { data } = await walletApi.solde();
+          if (typeof data.balance === 'number') {
+            setSolde(data.balance);
+            balanceLoaded = true;
           }
-        } else {
+        } catch {
+          /* serveur ou réseau : repli cache local ci-dessous */
+        }
+        if (!balanceLoaded) {
           const savedSolde = await AsyncStorage.getItem('user_solde');
           if (savedSolde) setSolde(JSON.parse(savedSolde));
         }

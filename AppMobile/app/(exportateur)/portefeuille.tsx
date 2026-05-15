@@ -15,10 +15,8 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
-import NetInfo from '@react-native-community/netinfo';
 
-import { portefeuilleApi, walletApi, getApiError } from '@/services/api';
-import { isDeviceOnline } from '@/lib/device-online';
+import { portefeuilleApi, walletApi, getApiError, isNetworkError } from '@/services/api';
 import { useAuth } from '@/hooks/use-auth';
 
 function fmt(n: number) {
@@ -52,19 +50,17 @@ export default function PortefeuilleExportateurScreen() {
   }, []);
 
   const fetchSolde = useCallback(async () => {
-    const state = await NetInfo.fetch();
-    if (!isDeviceOnline(state)) {
-      setIsOffline(true);
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
-    setIsOffline(false);
     try {
       const { data } = await portefeuilleApi.solde();
       if (typeof data.balance === 'number') setSolde(data.balance);
+      setIsOffline(false);
     } catch (e) {
-      console.warn(getApiError(e));
+      if (isNetworkError(e)) {
+        setIsOffline(true);
+      } else {
+        setIsOffline(false);
+        console.warn(getApiError(e));
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -156,7 +152,7 @@ export default function PortefeuilleExportateurScreen() {
             {isOffline && (
               <View style={styles.offlineBanner}>
                 <MaterialCommunityIcons name="wifi-off" size={16} color="#C62828" />
-                <Text style={styles.offlineText}>Réseau indisponible — solde affiché en cache</Text>
+                <Text style={styles.offlineText}>Serveur injoignable — le solde peut être incomplet</Text>
               </View>
             )}
 
