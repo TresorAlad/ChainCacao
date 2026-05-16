@@ -38,6 +38,10 @@ tmp/
 .gomodcache/
 .cache/
 
+# Archives toolchain Go (téléchargements locaux / EC2 — ne pas committer)
+go*.linux-amd64.tar.gz
+go*.linux-arm64.tar.gz
+
 # --- Certificats / clés ---
 *.pem
 *.key
