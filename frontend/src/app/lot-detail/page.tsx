@@ -18,7 +18,7 @@ import {
   FileCheckIcon
 } from 'lucide-react'
 import Link from 'next/link'
-import api, { Batch, BatchHistoryEvent, unwrapLotFromResponse } from '@/lib/api'
+import api, { Batch, BatchHistoryEvent, mergeLotDetail, unwrapLotFromResponse } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { LocationMap } from '@/components/maps/LocationMapDynamic'
@@ -44,18 +44,25 @@ function LotDetailContent() {
     const fetchData = async () => {
       setDataLoading(true)
       try {
-        const [lotRes, histRes] = await Promise.all([
+        const [lotRes, histRes, myRes] = await Promise.all([
           api.get(`/lot/${lotId}`),
           api.get<{ success: boolean; events: BatchHistoryEvent[] }>(`/lot/${lotId}/history`),
+          api
+            .get<{ success: boolean; lots: Batch[] }>('/actors/me/lots')
+            .catch(() => ({ data: { success: false, lots: [] as Batch[] } })),
         ])
-        const lotBody = unwrapLotFromResponse(lotRes.data)
+        const events = histRes.data.events || []
+        const fromList = (myRes.data.lots || []).find((l) => l.id === lotId) ?? null
+        const primary = unwrapLotFromResponse(lotRes.data)
+        const lotBody = mergeLotDetail(lotId, primary, fromList, events)
         if (!lotBody) {
-          toast.error('Réponse lot invalide')
+          toast.error('Impossible de charger les détails de ce lot')
           setLot(null)
+          setHistory(events)
           return
         }
         setLot(lotBody)
-        setHistory(histRes.data.events || [])
+        setHistory(events)
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Erreur lors du chargement du lot'))
       } finally {
@@ -252,7 +259,9 @@ function LotDetailContent() {
                       {history.map((event, i) => (
                         <tr key={i} className="border-b border-[var(--color-border)]/50 hover:bg-[var(--color-bg)]/50 transition-all">
                           <td className="px-6 py-4 text-body-sm text-[var(--color-earth)]">
-                            {new Date(event.created_at).toLocaleString('fr-FR')}
+                            {event.created_at
+                              ? new Date(event.created_at).toLocaleString('fr-FR')
+                              : '—'}
                           </td>
                           <td className="px-6 py-4 font-medium text-[var(--color-primary)]">{event.type}</td>
                           <td className="px-6 py-4 text-[var(--color-earth)]">{event.actor_id || '—'}</td>

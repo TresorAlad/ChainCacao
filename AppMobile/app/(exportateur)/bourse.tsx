@@ -106,7 +106,7 @@ export default function BourseScreen() {
 
         <View style={styles.walletCard}>
           <View style={styles.walletTop}>
-            <Text style={styles.walletLabel}>Solde total disponible</Text>
+            <Text style={styles.walletLabel}>Solde disponible</Text>
             <MaterialCommunityIcons name="wallet-outline" size={24} color="white" />
           </View>
           {loading ? (
@@ -117,8 +117,8 @@ export default function BourseScreen() {
             </Text>
           )}
           <View style={styles.walletActions}>
-            <ActionBtn icon="plus-circle-outline" label="Dépôt" onPress={() => { setAmountStr('10000'); setModal('depot'); }} />
-            <ActionBtn icon="minus-circle-outline" label="Retrait" onPress={() => { setAmountStr('5000'); setModal('retrait'); }} />
+            <ActionBtn icon="plus-circle-outline" label="Dépôt" onPress={() => { setAmountStr(''); setPinInput(''); setModal('depot'); }} />
+            <ActionBtn icon="minus-circle-outline" label="Retrait" onPress={() => { setAmountStr(''); setPinInput(''); setModal('retrait'); }} />
             <ActionBtn icon="swap-horizontal" label="Échange" onPress={() => Alert.alert('Bientôt', 'Fonctionnalité à venir.')} />
           </View>
         </View>
@@ -160,7 +160,7 @@ export default function BourseScreen() {
 
         <View style={styles.historySection}>
           <View style={styles.historyHeader}>
-            <Text style={styles.sectionTitle}>Transactions Récentes</Text>
+            <Text style={styles.sectionTitle}>Historique des transactions</Text>
             <TouchableOpacity>
               <Text style={styles.seeMore}>Voir tout</Text>
             </TouchableOpacity>

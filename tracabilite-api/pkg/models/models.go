@@ -24,6 +24,7 @@ type Batch struct {
 	Parcelle      string  `json:"parcelle,omitempty"`
 	DateRecolte   string  `json:"date_recolte"`
 	Proprietaire  string  `json:"proprietaire_id"`
+	CreateurID    string  `json:"createur_id,omitempty"`
 	OrgID         string  `json:"org_id"`
 	Statut        string  `json:"statut"`
 	Timestamp     string  `json:"timestamp"`

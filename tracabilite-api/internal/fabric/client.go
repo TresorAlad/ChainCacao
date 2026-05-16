@@ -20,7 +20,7 @@ type Client interface {
 	MarkBatchExported(ctx context.Context, batchID, actorID string) (txHash string, updated models.Batch, err error)
 	GetBatch(ctx context.Context, batchID string) (models.Batch, error)
 	GetHistory(ctx context.Context, batchID string) ([]models.BatchHistoryEvent, error)
-	// GetBatchesByOwner retourne tous les lots dont Proprietaire == actorID.
+	// GetBatchesByOwner retourne les lots en possession de l'acteur et ceux auxquels il a participé (traçabilité).
 	GetBatchesByOwner(ctx context.Context, actorID string) ([]models.Batch, error)
 	GetStats(ctx context.Context) map[string]any
 	GetRecentTransfers(ctx context.Context) ([]map[string]any, error)
@@ -63,6 +63,8 @@ type InMemoryClient struct {
 	// sellers: dernier vendeur connu pour un lot (acteur qui a transfere vers le proprietaire actuel).
 	// Permet de crediter le bon compte au paiement (le proprietaire courant est l'acheteur).
 	sellers map[string]string // batchID -> actorID du vendeur
+	// actorLots: lots auxquels un acteur a participé (traçabilité après transfert).
+	actorLots map[string]map[string]struct{}
 }
 
 func NewInMemoryClient() *InMemoryClient {
@@ -75,7 +77,48 @@ func NewInMemoryClient() *InMemoryClient {
 		prices:       make(map[string]float64),
 		payments:     make(map[string]string),
 		sellers:      make(map[string]string),
+		actorLots:    make(map[string]map[string]struct{}),
 	}
+}
+
+func (c *InMemoryClient) indexActorLot(actorID, batchID string) {
+	actorID = strings.TrimSpace(actorID)
+	batchID = strings.TrimSpace(batchID)
+	if actorID == "" || batchID == "" {
+		return
+	}
+	if c.actorLots[actorID] == nil {
+		c.actorLots[actorID] = make(map[string]struct{})
+	}
+	c.actorLots[actorID][batchID] = struct{}{}
+}
+
+func actorParticipatedInHistory(events []models.BatchHistoryEvent, actorID string) bool {
+	actorID = strings.TrimSpace(actorID)
+	if actorID == "" {
+		return false
+	}
+	for _, e := range events {
+		if strings.TrimSpace(e.ActorID) == actorID {
+			return true
+		}
+		if strings.TrimSpace(e.FromActorID) == actorID {
+			return true
+		}
+		if strings.TrimSpace(e.ToActorID) == actorID {
+			return true
+		}
+	}
+	return false
+}
+
+func resolveCreateurIDFromHistory(events []models.BatchHistoryEvent) string {
+	for _, e := range events {
+		if e.Type == "creation" && strings.TrimSpace(e.ActorID) != "" {
+			return strings.TrimSpace(e.ActorID)
+		}
+	}
+	return ""
 }
 
 func (c *InMemoryClient) CreateBatch(_ context.Context, batch models.Batch, actorID string) (string, models.Batch, error) {
@@ -88,8 +131,15 @@ func (c *InMemoryClient) CreateBatch(_ context.Context, batch models.Batch, acto
 	now := time.Now().UTC().Format(time.RFC3339)
 	batch.Timestamp = now
 	batch.Statut = "cree"
+	if strings.TrimSpace(batch.CreateurID) == "" {
+		batch.CreateurID = strings.TrimSpace(actorID)
+	}
 	c.batches[batch.ID] = batch
 	c.sellers[batch.ID] = actorID // createur = beneficiaire du paiement si aucun transfert
+	c.indexActorLot(actorID, batch.ID)
+	if owner := strings.TrimSpace(batch.Proprietaire); owner != "" {
+		c.indexActorLot(owner, batch.ID)
+	}
 
 	txHash := newTxHash()
 	c.history[batch.ID] = append(c.history[batch.ID], models.BatchHistoryEvent{
@@ -121,6 +171,8 @@ func (c *InMemoryClient) TransferBatch(_ context.Context, batchID, fromActorID, 
 	batch.Timestamp = now
 	c.batches[batchID] = batch
 	c.sellers[batchID] = fromActorID // vendeur = precedent proprietaire
+	c.indexActorLot(fromActorID, batchID)
+	c.indexActorLot(toActorID, batchID)
 
 	txHash := newTxHash()
 	c.history[batchID] = append(c.history[batchID], models.BatchHistoryEvent{
@@ -185,6 +237,7 @@ func (c *InMemoryClient) MarkBatchExported(_ context.Context, batchID, actorID s
 	batch.Statut = "exporte"
 	batch.Timestamp = now
 	c.batches[batchID] = batch
+	c.indexActorLot(actorID, batchID)
 	txHash := newTxHash()
 	c.history[batchID] = append(c.history[batchID], models.BatchHistoryEvent{
 		BatchID:      batchID,
@@ -200,10 +253,43 @@ func (c *InMemoryClient) MarkBatchExported(_ context.Context, batchID, actorID s
 func (c *InMemoryClient) GetBatchesByOwner(_ context.Context, actorID string) ([]models.Batch, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	actorID = strings.TrimSpace(actorID)
+	if actorID == "" {
+		return []models.Batch{}, nil
+	}
+	seen := make(map[string]struct{})
 	var result []models.Batch
+	add := func(b models.Batch) {
+		if _, ok := seen[b.ID]; ok {
+			return
+		}
+		seen[b.ID] = struct{}{}
+		result = append(result, b)
+	}
+	if ids, ok := c.actorLots[actorID]; ok {
+		for id := range ids {
+			if b, exists := c.batches[id]; exists {
+				add(b)
+			}
+		}
+	}
 	for _, b := range c.batches {
-		if b.Proprietaire == actorID {
-			result = append(result, b)
+		if _, ok := seen[b.ID]; ok {
+			continue
+		}
+		if strings.TrimSpace(b.CreateurID) == "" {
+			if hist, ok := c.history[b.ID]; ok {
+				b.CreateurID = resolveCreateurIDFromHistory(hist)
+			}
+		}
+		include := strings.TrimSpace(b.Proprietaire) == actorID || strings.TrimSpace(b.CreateurID) == actorID
+		if !include {
+			if hist, ok := c.history[b.ID]; ok {
+				include = actorParticipatedInHistory(hist, actorID)
+			}
+		}
+		if include {
+			add(b)
 		}
 	}
 	return result, nil
@@ -390,6 +476,7 @@ func (c *InMemoryClient) ConfirmPhysicalReceipt(_ context.Context, batchID, acto
 	batch.Statut = "recu"
 	batch.Timestamp = now
 	c.batches[batchID] = batch
+	c.indexActorLot(actorID, batchID)
 
 	txHash := newTxHash()
 	c.history[batchID] = append(c.history[batchID], models.BatchHistoryEvent{

@@ -302,6 +302,7 @@ func (s *Service) MarkExported(ctx context.Context, batchID, actorID string) (st
 	return txHash, updated, nil
 }
 
+// GetMyLots renvoie les lots en possession de l'acteur et ceux auxquels il a participé (traçabilité après transfert).
 func (s *Service) GetMyLots(ctx context.Context, actorID string) ([]models.Batch, error) {
 	batches, err := s.fabricClient.GetBatchesByOwner(ctx, actorID)
 	if err != nil {

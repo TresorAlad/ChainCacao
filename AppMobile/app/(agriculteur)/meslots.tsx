@@ -31,19 +31,23 @@ type DisplayLot = {
   statutColor: string;
   statutTextColor: string;
   cdcColor: 'red' | 'orange' | 'green' | 'blue' | 'grey';
+  isTransferredAway: boolean;
 };
 
-function mapServerLot(b: BatchResponse): DisplayLot {
+function mapServerLot(b: BatchResponse, actorId?: string): DisplayLot {
   const cdc = mapCdcLotDisplay({ synced: true, chainStatut: b.statut });
+  const ownerId = (b.proprietaire_id ?? (b as { proprietaire?: string }).proprietaire ?? '').trim();
+  const isTransferredAway = Boolean(actorId && ownerId && ownerId !== actorId);
   return {
     id: b.id,
     nom: `${b.culture ?? 'Lot'} — ${b.lieu ?? ''}`.trim(),
     poids: String(b.quantite ?? 0),
     date: b.date_recolte ?? b.timestamp ?? '',
-    statut: cdc.label,
+    statut: isTransferredAway ? `${cdc.label} · Transféré` : cdc.label,
     statutColor: cdc.color,
     statutTextColor: cdc.textColor,
     cdcColor: b.statut === 'paye' || b.statut === 'transfere' ? 'green' : 'orange',
+    isTransferredAway,
   };
 }
 
@@ -65,7 +69,7 @@ export default function MesLots() {
         return;
       }
       const { data } = await myLotsApi.list();
-      const remote = (data.lots ?? []).map(mapServerLot);
+      const remote = (data.lots ?? []).map((b) => mapServerLot(b, user?.id));
       setLots(remote.sort((a, b) => (a.date < b.date ? 1 : -1)));
     } catch (e) {
       setListError(getApiError(e));
@@ -107,18 +111,20 @@ export default function MesLots() {
     <TouchableOpacity
       style={styles.lotCard}
       activeOpacity={0.8}
-      onPress={() => router.push(AG.qrLot(item.id) as any)}
-      onLongPress={() => router.push(AG.paiementLot(item.id) as any)}
+      onPress={() => router.push(AG.lotDetail(item.id) as any)}
+      onLongPress={() => router.push(AG.qrLot(item.id) as any)}
     >
       <View style={styles.lotMainInfo}>
-        <View style={styles.syncIndicator}>
-          <MaterialCommunityIcons
-            name={item.cdcColor === 'green' ? 'cloud-check' : 'cloud-outline'}
-            size={14}
-            color={item.statutTextColor}
-          />
-          <Text style={[styles.syncText, { color: item.statutTextColor }]}>Serveur</Text>
-        </View>
+            <View style={styles.syncIndicator}>
+              <MaterialCommunityIcons
+                name={item.isTransferredAway ? 'truck-check' : item.cdcColor === 'green' ? 'cloud-check' : 'cloud-outline'}
+                size={14}
+                color={item.statutTextColor}
+              />
+              <Text style={[styles.syncText, { color: item.statutTextColor }]}>
+                {item.isTransferredAway ? 'Traçabilité' : 'Serveur'}
+              </Text>
+            </View>
 
         <View style={styles.rowBetween}>
           <View style={{ flex: 1 }}>
@@ -127,6 +133,7 @@ export default function MesLots() {
           </View>
 
           <View style={styles.rightInfo}>
+            <MaterialCommunityIcons name="chevron-right" size={22} color="#CCC" style={{ marginBottom: 4 }} />
             <Text style={styles.weightText}>{item.poids} Kg</Text>
             <View style={[styles.statusBadge, { backgroundColor: item.statutColor }]}>
               <Text style={[styles.statusText, { color: item.statutTextColor }]}>{item.statut}</Text>

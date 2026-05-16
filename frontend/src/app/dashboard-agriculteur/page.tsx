@@ -110,6 +110,11 @@ export default function AgriculteurDashboardPage() {
     try { return new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) } catch { return d }
   }
 
+  const totalProductionKg = useMemo(
+    () => myLots.reduce((sum, { lot }) => sum + (Number(lot.quantite) || 0), 0),
+    [myLots]
+  )
+
   const lotMarkers = useMemo<MapMarker[]>(() => {
     const markers: MapMarker[] = []
     for (const { lot } of myLots) {
@@ -164,8 +169,14 @@ export default function AgriculteurDashboardPage() {
               </div>
               <span className="text-sm font-bold text-gray-500 uppercase tracking-wider">Production Totale</span>
             </div>
-            <div className="text-4xl font-black text-[var(--color-primary)]">—</div>
-            <p className="mt-3 text-xs font-medium text-gray-400">Recherchez un lot par ID ci-dessous</p>
+            <div className="text-4xl font-black text-[var(--color-primary)]">
+              {lotsLoading ? '…' : `${totalProductionKg.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} kg`}
+            </div>
+            <p className="mt-3 text-xs font-medium text-gray-400">
+              {lotsLoading
+                ? 'Calcul en cours…'
+                : `${myLots.length} lot${myLots.length > 1 ? 's' : ''} enregistré${myLots.length > 1 ? 's' : ''}`}
+            </p>
           </div>
 
           <div className="bg-[#33691E] rounded-[2rem] p-8 shadow-lg relative overflow-hidden">

@@ -248,6 +248,27 @@ export interface BatchResponse {
   notes?: string;
   latitude?: number;
   longitude?: number;
+  region?: string;
+  photo_url?: string;
+}
+
+function asBatchResponse(raw: unknown): BatchResponse | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const id = r.id ?? r.batch_id;
+  if (typeof id !== 'string' || !id.trim()) return null;
+  return { ...(raw as BatchResponse), id: id.trim() };
+}
+
+/** GET /lot/:id ou /batch/:id → `{ success, lot }` ou `{ success, batch }`. */
+export function unwrapLotFromResponse(data: unknown): BatchResponse | null {
+  if (!data || typeof data !== 'object') return null;
+  const o = data as Record<string, unknown>;
+  const fromLot = asBatchResponse(o.lot);
+  if (fromLot) return fromLot;
+  const fromBatch = asBatchResponse(o.batch);
+  if (fromBatch) return fromBatch;
+  return asBatchResponse(o);
 }
 
 /** Événement renvoyé par Fabric dans `timeline` / `events` (verify & history). */
@@ -310,13 +331,31 @@ export interface GetBatchApiResponse {
   lot?: BatchResponse;
 }
 
+/** Laisse Axios / RN définir le boundary multipart (ne pas caster le corps en string). */
+function multipartAxiosConfig() {
+  return {
+    timeout: 120000,
+    transformRequest: [
+      (data: unknown, headers: Record<string, unknown>) => {
+        if (typeof FormData !== 'undefined' && data instanceof FormData) {
+          delete headers['Content-Type'];
+        }
+        return data;
+      },
+    ],
+  };
+}
+
 export const batchApi = {
+  /** Création JSON — même route que le web (`POST /lot`), fiable sur mobile (pas de multipart). */
+  createLot: (payload: CreateBatchPayload) =>
+    api.post<CreateBatchResponse>('/api/v1/lot', payload, { timeout: 120000 }),
+
   create: (payload: CreateBatchPayload) =>
     api.post<CreateBatchResponse>('/api/v1/batch/create', payload),
 
   /**
-   * Création lot avec photo : le serveur lit latitude/longitude dans les EXIF du fichier.
-   * Ne pas fixer `Content-Type` à `application/json` (instance Axios) : boundary multipart.
+   * Création lot + photo en une requête multipart (secours ; préférer createLot + uploadPhoto).
    */
   createWithPhoto: (imageUri: string, fields: CreateBatchMultipartFields) => {
     const form = new FormData();
@@ -325,13 +364,43 @@ export const batchApi = {
     const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
     form.append('file', { uri: imageUri, name: `lot_${Date.now()}.${ext}`, type: mime } as any);
     appendBatchMultipartFields(form, fields);
-    return api.post<CreateBatchResponse>('/api/v1/batch/create', form, {
-      timeout: 120000,
-      transformRequest: (data, headers) => {
-        delete (headers as Record<string, unknown>)['Content-Type'];
-        return data as string;
-      },
-    });
+    return api.post<CreateBatchResponse>('/api/v1/batch/create', form, multipartAxiosConfig());
+  },
+
+  /**
+   * Création alignée web : JSON puis photo (2 requêtes). Évite ERR_NETWORK sur POST multipart lourd.
+   */
+  createLotWithPhoto: async (
+    imageUri: string,
+    fields: CreateBatchMultipartFields
+  ): Promise<CreateBatchResponse & { photoUploaded?: boolean }> => {
+    const payload: CreateBatchPayload = {
+      culture: fields.culture,
+      quantite: fields.quantite,
+      lieu: fields.lieu,
+      date_recolte: fields.date_recolte,
+      notes: fields.notes,
+      variete: fields.variete,
+      parcelle: fields.parcelle,
+      region: fields.region,
+      village: fields.village,
+      client_lot_id: fields.client_lot_id,
+      latitude: fields.latitude,
+      longitude: fields.longitude,
+    };
+    const { data } = await batchApi.createLot(payload);
+    const lotId = data.batch?.id;
+    if (!lotId) {
+      throw new Error('Réponse serveur sans identifiant de lot');
+    }
+    let photoUploaded = false;
+    try {
+      await batchApi.uploadPhoto(lotId, imageUri);
+      photoUploaded = true;
+    } catch (photoErr) {
+      console.warn('[batchApi] upload photo après création lot', photoErr);
+    }
+    return { ...data, photoUploaded };
   },
 
   transfer: (payload: TransferPayload) =>
@@ -356,13 +425,7 @@ export const batchApi = {
     return api.post<{ success?: boolean; secure_url?: string }>(
       `/api/v1/lot/${encodeURIComponent(lotId)}/photo`,
       form,
-      {
-        timeout: 120000,
-        transformRequest: (data, headers) => {
-          delete (headers as Record<string, unknown>)['Content-Type'];
-          return data as string;
-        },
-      }
+      multipartAxiosConfig()
     );
   },
 };

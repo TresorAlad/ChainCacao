@@ -84,10 +84,85 @@ export function unwrapLotFromResponse(data: unknown): Batch | null {
   const o = data as Record<string, unknown>
   const lot = o.lot
   const batch = o.batch
-  if (lot && typeof lot === 'object' && typeof (lot as Batch).id === 'string') return lot as Batch
+  if (lot && typeof lot === 'object') {
+    const b = lot as Record<string, unknown>
+    const id = (b.id ?? b.batch_id) as string | undefined
+    if (typeof id === 'string' && id) return { ...(lot as Batch), id }
+  }
   if (batch && typeof batch === 'object' && typeof (batch as Batch).id === 'string') return batch as Batch
   if (typeof (o as Batch).id === 'string') return o as Batch
+  const batchId = o.batch_id
+  if (typeof batchId === 'string' && batchId) {
+    return { ...(o as Batch), id: batchId }
+  }
   return null
+}
+
+function pickLotField<T>(...values: (T | undefined | null)[]): T | undefined {
+  for (const v of values) {
+    if (v === undefined || v === null) continue
+    if (typeof v === 'string' && v.trim() === '') continue
+    if (typeof v === 'number' && !Number.isFinite(v)) continue
+    return v
+  }
+  return undefined
+}
+
+/** Fusionne GET /lot, liste « mes lots » et payload d’historique (GetBatch parfois incomplet sur le ledger). */
+export function mergeLotDetail(
+  lotId: string,
+  primary: Batch | null,
+  fromList?: Batch | null,
+  history?: BatchHistoryEvent[]
+): Batch | null {
+  const events = history ?? []
+  const creation =
+    events.find((e) => String(e.type || '').toLowerCase().includes('creat')) ??
+    events[0]
+  const fromHistory = creation?.payload?.id ? creation.payload : null
+
+  const id = lotId || primary?.id || fromList?.id || fromHistory?.id
+  if (!id) return null
+
+  const merged: Batch = {
+    id,
+    culture: pickLotField(primary?.culture, fromList?.culture, fromHistory?.culture) ?? '',
+    variete: pickLotField(primary?.variete, fromList?.variete, fromHistory?.variete),
+    quantite:
+      pickLotField(primary?.quantite, fromList?.quantite, fromHistory?.quantite) ?? 0,
+    lieu: pickLotField(primary?.lieu, fromList?.lieu, fromHistory?.lieu) ?? '',
+    latitude: pickLotField(primary?.latitude, fromList?.latitude, fromHistory?.latitude),
+    longitude: pickLotField(primary?.longitude, fromList?.longitude, fromHistory?.longitude),
+    region: pickLotField(primary?.region, fromList?.region, fromHistory?.region),
+    village: pickLotField(primary?.village, fromList?.village, fromHistory?.village),
+    parcelle: pickLotField(primary?.parcelle, fromList?.parcelle, fromHistory?.parcelle),
+    date_recolte:
+      pickLotField(primary?.date_recolte, fromList?.date_recolte, fromHistory?.date_recolte) ?? '',
+    proprietaire_id:
+      pickLotField(primary?.proprietaire_id, fromList?.proprietaire_id, fromHistory?.proprietaire_id) ??
+      '',
+    org_id: pickLotField(primary?.org_id, fromList?.org_id, fromHistory?.org_id) ?? '',
+    statut: pickLotField(primary?.statut, fromList?.statut, fromHistory?.statut),
+    eudr_conforme:
+      primary?.eudr_conforme ?? fromList?.eudr_conforme ?? fromHistory?.eudr_conforme ?? false,
+    timestamp: pickLotField(primary?.timestamp, fromList?.timestamp, fromHistory?.timestamp),
+    certificat_url: pickLotField(
+      primary?.certificat_url,
+      fromList?.certificat_url,
+      fromHistory?.certificat_url
+    ),
+    photo_url: pickLotField(primary?.photo_url, fromList?.photo_url, fromHistory?.photo_url),
+    notes: pickLotField(primary?.notes, fromList?.notes, fromHistory?.notes),
+  }
+
+  const hasBody =
+    merged.culture ||
+    merged.quantite > 0 ||
+    merged.lieu ||
+    merged.date_recolte ||
+    merged.proprietaire_id
+
+  return hasBody || events.length > 0 ? merged : null
 }
 
 export interface BatchHistoryEvent {

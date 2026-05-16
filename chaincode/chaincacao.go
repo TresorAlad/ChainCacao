@@ -26,6 +26,7 @@ type Batch struct {
 	Parcelle      string  `json:"parcelle"`
 	DateRecolte   string  `json:"date_recolte"`
 	Proprietaire  string  `json:"proprietaire_id"`
+	CreateurID    string  `json:"createur_id"`
 	OrgID         string  `json:"org_id"`
 	Statut        string  `json:"statut"`
 	EUDRConforme  bool    `json:"eudr_conforme"`
@@ -85,6 +86,48 @@ func walletKey(actorID string) string {
 
 func sellerKey(batchID string) string {
 	return "SELLER:" + batchID
+}
+
+// actorLotIndexKey indexe les lots auxquels un acteur a participé (création, transfert, réception…).
+func actorLotIndexKey(actorID, batchID string) string {
+	return "ALOT:" + strings.TrimSpace(actorID) + ":" + strings.TrimSpace(batchID)
+}
+
+func indexActorLot(ctx contractapi.TransactionContextInterface, actorID, batchID string) error {
+	actorID = strings.TrimSpace(actorID)
+	batchID = strings.TrimSpace(batchID)
+	if actorID == "" || batchID == "" {
+		return nil
+	}
+	return ctx.GetStub().PutState(actorLotIndexKey(actorID, batchID), []byte("1"))
+}
+
+func actorParticipatedInHistory(events []BatchHistoryEvent, actorID string) bool {
+	actorID = strings.TrimSpace(actorID)
+	if actorID == "" {
+		return false
+	}
+	for _, e := range events {
+		if strings.TrimSpace(e.ActorID) == actorID {
+			return true
+		}
+		if strings.TrimSpace(e.FromActorID) == actorID {
+			return true
+		}
+		if strings.TrimSpace(e.ToActorID) == actorID {
+			return true
+		}
+	}
+	return false
+}
+
+func resolveCreateurIDFromHistory(events []BatchHistoryEvent) string {
+	for _, e := range events {
+		if e.Type == "creation" && strings.TrimSpace(e.ActorID) != "" {
+			return strings.TrimSpace(e.ActorID)
+		}
+	}
+	return ""
 }
 
 func putSellerTrack(ctx contractapi.TransactionContextInterface, batchID, sellerActorID string) error {
@@ -337,6 +380,9 @@ func (s *SmartContract) CreateBatch(ctx contractapi.TransactionContextInterface,
 	now := time.Now().UTC().Format(time.RFC3339)
 	batch.Timestamp = now
 	batch.Statut = "cree"
+	if strings.TrimSpace(batch.CreateurID) == "" {
+		batch.CreateurID = strings.TrimSpace(actorID)
+	}
 
 	raw, err := json.Marshal(batch)
 	if err != nil {
@@ -347,6 +393,14 @@ func (s *SmartContract) CreateBatch(ctx contractapi.TransactionContextInterface,
 	}
 	if err := putSellerTrack(ctx, batch.ID, actorID); err != nil {
 		return err
+	}
+	if err := indexActorLot(ctx, actorID, batch.ID); err != nil {
+		return err
+	}
+	if owner := strings.TrimSpace(batch.Proprietaire); owner != "" && owner != strings.TrimSpace(actorID) {
+		if err := indexActorLot(ctx, owner, batch.ID); err != nil {
+			return err
+		}
 	}
 	txID := ctx.GetStub().GetTxID()
 	return s.appendHistory(ctx, BatchHistoryEvent{
@@ -392,6 +446,12 @@ func (s *SmartContract) TransferBatch(ctx contractapi.TransactionContextInterfac
 	if err := putSellerTrack(ctx, batchID, fromActorID); err != nil {
 		return err
 	}
+	if err := indexActorLot(ctx, fromActorID, batchID); err != nil {
+		return err
+	}
+	if err := indexActorLot(ctx, toActorID, batchID); err != nil {
+		return err
+	}
 	txID := ctx.GetStub().GetTxID()
 	return s.appendHistory(ctx, BatchHistoryEvent{
 		BatchID:      batchID,
@@ -433,6 +493,9 @@ func (s *SmartContract) ConfirmPhysicalReceipt(ctx contractapi.TransactionContex
 		return err
 	}
 	if err := ctx.GetStub().PutState(batchID, newRaw); err != nil {
+		return err
+	}
+	if err := indexActorLot(ctx, actorID, batchID); err != nil {
 		return err
 	}
 	txID := ctx.GetStub().GetTxID()
@@ -516,6 +579,9 @@ func (s *SmartContract) MarkBatchExported(ctx contractapi.TransactionContextInte
 	if err := ctx.GetStub().PutState(batchID, newRaw); err != nil {
 		return err
 	}
+	if err := indexActorLot(ctx, actorID, batchID); err != nil {
+		return err
+	}
 	txID := ctx.GetStub().GetTxID()
 	return s.appendHistory(ctx, BatchHistoryEvent{
 		BatchID:      batchID,
@@ -548,18 +614,49 @@ func (s *SmartContract) GetHistory(ctx contractapi.TransactionContextInterface, 
 	return s.readHistory(ctx, batchID)
 }
 
-// GetBatchesByOwner retourne tous les lots dont le proprietaire courant est actorID (scan LevelDB TC-…).
+// GetBatchesByOwner retourne les lots en possession de l'acteur ET ceux auxquels il a participé
+// (création, transfert, réception…) pour conserver la traçabilité après transfert.
 func (s *SmartContract) GetBatchesByOwner(ctx contractapi.TransactionContextInterface, actorID string) ([]Batch, error) {
 	actorID = strings.TrimSpace(actorID)
 	if actorID == "" {
 		return []Batch{}, nil
 	}
+	seen := make(map[string]struct{})
+	var batchIDs []string
+
+	addID := func(id string) {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return
+		}
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		batchIDs = append(batchIDs, id)
+	}
+
+	idxIter, err := ctx.GetStub().GetStateByRange("ALOT:"+actorID+":", "ALOT:"+actorID+":~")
+	if err != nil {
+		return nil, err
+	}
+	defer idxIter.Close()
+	for idxIter.HasNext() {
+		res, err := idxIter.Next()
+		if err != nil {
+			return nil, err
+		}
+		parts := strings.SplitN(res.Key, ":", 3)
+		if len(parts) >= 3 {
+			addID(parts[2])
+		}
+	}
+
 	iter, err := ctx.GetStub().GetStateByRange("TC-", "TC~")
 	if err != nil {
 		return nil, err
 	}
 	defer iter.Close()
-	var result []Batch
 	for iter.HasNext() {
 		res, err := iter.Next()
 		if err != nil {
@@ -569,9 +666,35 @@ func (s *SmartContract) GetBatchesByOwner(ctx contractapi.TransactionContextInte
 		if err := json.Unmarshal(res.Value, &b); err != nil {
 			continue
 		}
-		if b.Proprietaire == actorID {
-			result = append(result, b)
+		if strings.TrimSpace(b.ID) == "" {
+			continue
 		}
+		if _, ok := seen[b.ID]; ok {
+			continue
+		}
+		if strings.TrimSpace(b.CreateurID) == "" {
+			if hist, err := s.readHistory(ctx, b.ID); err == nil {
+				b.CreateurID = resolveCreateurIDFromHistory(hist)
+			}
+		}
+		include := strings.TrimSpace(b.Proprietaire) == actorID || strings.TrimSpace(b.CreateurID) == actorID
+		if !include {
+			hist, err := s.readHistory(ctx, b.ID)
+			if err == nil {
+				include = actorParticipatedInHistory(hist, actorID)
+			}
+		}
+		if include {
+			addID(b.ID)
+		}
+	}
+	var result []Batch
+	for _, id := range batchIDs {
+		b, err := s.GetBatch(ctx, id)
+		if err != nil || b == nil {
+			continue
+		}
+		result = append(result, *b)
 	}
 	if result == nil {
 		result = []Batch{}

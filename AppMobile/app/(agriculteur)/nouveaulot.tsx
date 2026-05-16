@@ -262,9 +262,9 @@ export default function NouveauLot() {
         longitude: lon,
       };
 
-      setSubmitHint('Envoi au serveur en cours…');
+      setSubmitHint('Enregistrement du lot…');
       try {
-        const { data } = await batchApi.createWithPhoto(uploadPhotoUri, fields);
+        const data = await batchApi.createLotWithPhoto(uploadPhotoUri, fields);
         const serverId = data.batch?.id ?? localId;
         if (pendingCopy) {
           try {
@@ -274,7 +274,10 @@ export default function NouveauLot() {
           }
         }
         await saveLot();
-        Alert.alert('Succès', 'Lot enregistré sur la blockchain.', [
+        const photoNote = data.photoUploaded
+          ? ''
+          : '\n\nLa photo n’a pas pu être envoyée ; le lot est tout de même créé.';
+        Alert.alert('Succès', `Lot enregistré sur la blockchain.${photoNote}`, [
           {
             text: 'Voir le QR',
             onPress: () => router.replace(AG.qrLot(serverId) as any),
