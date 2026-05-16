@@ -44,7 +44,8 @@ export default function QrLotScreen() {
         {!loading && loadError ? (
           <>
             <Text style={styles.errText}>{loadError}</Text>
-            <Text style={styles.hintSmall}>Lien de vérification (si disponible) :</Text>
+            <Text style={styles.hintSmall}>QR généré localement (même lien que le serveur) :</Text>
+            <LocalQrCode lotId={String(lotId)} />
           </>
         ) : null}
         {!loading && !loadError && uri && (
@@ -53,9 +54,9 @@ export default function QrLotScreen() {
             <Image source={{ uri }} style={styles.img} resizeMode="contain" />
           </>
         )}
-        {!loading && !loadError && !uri && verifyUrl ? (
+        {!loading && !loadError && !uri ? (
           <>
-            <Text style={styles.syncedHint}>Aperçu QR indisponible — lien de vérification</Text>
+            <Text style={styles.syncedHint}>QR généré localement</Text>
             <LocalQrCode lotId={String(lotId)} />
           </>
         ) : null}

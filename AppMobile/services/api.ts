@@ -83,6 +83,19 @@ api.interceptors.response.use(
 /** Contexte d’erreur : messages plus explicites pour l’auth. */
 export type GetApiErrorKind = 'default' | 'auth';
 
+/** Message utilisateur quand aucune réponse HTTP (réseau, pare-feu, HTTP bloqué, etc.). */
+function unreachableServerMessage(): string {
+  return (
+    `Impossible de joindre le serveur (${API_BASE}).\n\n` +
+    `Vérifications :\n` +
+    `• Sur le téléphone, ouvrez le navigateur : ${API_BASE}/health — vous devez voir une réponse (JSON ou « ok »).\n` +
+    `• Pare-feu / groupe de sécurité (AWS, etc.) : autoriser le port en entrée (ex. 8080/tcp) depuis Internet.\n` +
+    `• L’API doit écouter sur toutes les interfaces (Docker : publication du port, pas seulement localhost).\n` +
+    `• Si /health et la liste des lots répondent mais pas l’enregistrement avec photo : le serveur coupait souvent l’upload (timeout lecture HTTP trop court). Déployez l’API à jour ou définissez HTTP_READ_TIMEOUT_SEC=300 (voir .env.example).\n` +
+    `• En production, préférez HTTPS avec un nom de domaine.`
+  );
+}
+
 // Normaliser les erreurs API
 export function getApiError(e: unknown, kind: GetApiErrorKind = 'default'): string {
   const err = e as AxiosError<{ error?: string; message?: string }>;
@@ -99,16 +112,9 @@ export function getApiError(e: unknown, kind: GetApiErrorKind = 'default'): stri
       return `Configuration incorrecte : l'URL de l'API pointe vers localhost (${API_BASE}), ce qui ne fonctionne pas sur un téléphone réel. Vérifiez EXPO_PUBLIC_API_URL.`;
     }
     if (kind === 'auth') {
-      return (
-        `Connexion au serveur impossible (${API_BASE}).\n\n` +
-        `Causes probables :\n` +
-        `• Le serveur ChainCacao est arrêté ou en cours de démarrage\n` +
-        `• L'URL du serveur a changé (vérifiez EXPO_PUBLIC_API_URL)\n` +
-        `• Le port 8080 est bloqué par un pare-feu\n\n` +
-        `Votre connexion Wi-Fi/4G fonctionne normalement.`
-      );
+      return unreachableServerMessage();
     }
-    return `Impossible de joindre le serveur (${API_BASE}). Réessayez lorsque la connexion est disponible.`;
+    return unreachableServerMessage();
   }
   return err.message || 'Erreur inconnue';
 }

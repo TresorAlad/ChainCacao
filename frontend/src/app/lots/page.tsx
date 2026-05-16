@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { CubeIcon, PlusIcon, QrCodeIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
-import api, { type Batch } from '@/lib/api'
+import api, { type Batch, unwrapLotFromResponse } from '@/lib/api'
 import { canCreateLot } from '@/lib/role-nav'
 
 function statusLabel(statut?: string): { label: string; cls: string } {
@@ -39,17 +39,27 @@ export default function LotsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
   const filteredLots =
-    statusFilter === 'all' ? lots : lots.filter((l) => (l.statut || '').toLowerCase() === statusFilter)
+    statusFilter === 'all'
+      ? lots
+      : lots.filter((l) => {
+          const st = (l.statut || '').toLowerCase().trim()
+          if (statusFilter === 'transfere') return st === 'transfere' || st === 'en_transit'
+          return st === statusFilter
+        })
 
   const fetchLot = useCallback(async (id: string) => {
     if (!id.trim()) return
     setSearching(true)
     setSearchResult(null)
     try {
-      const res = await api.get<{ batch: Batch }>(`/lot/${id.trim()}`)
-      const batch = res.data.batch ?? res.data
-      setSearchResult(batch as Batch)
-      setSelectedLot(batch as Batch)
+      const res = await api.get(`/lot/${id.trim()}`)
+      const batch = unwrapLotFromResponse(res.data)
+      if (!batch) {
+        setSearchResult('not-found')
+        return
+      }
+      setSearchResult(batch)
+      setSelectedLot(batch)
     } catch {
       setSearchResult('not-found')
     } finally {
@@ -197,7 +207,7 @@ export default function LotsPage() {
                         </td>
                         <td className="py-5 text-sm font-bold text-[var(--color-primary)]">{lot.proprietaire_id}</td>
                         <td className="py-5 text-center">
-                          <span className="text-sm font-black text-[var(--color-primary)]">{lot.quantite.toFixed(2)}</span>
+                          <span className="text-sm font-black text-[var(--color-primary)]">{(Number(lot.quantite) || 0).toFixed(2)}</span>
                           <span className="text-[10px] font-bold text-gray-400 ml-1 uppercase">kg</span>
                         </td>
                         <td className="py-5 text-center">

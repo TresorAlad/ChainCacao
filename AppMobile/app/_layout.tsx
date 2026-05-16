@@ -66,17 +66,7 @@ export default function RootLayout() {
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <SessionInvalidateBridge />
           <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="login" />
-            <Stack.Screen name="pin-unlock" />
-            <Stack.Screen name="register" />
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-            <Stack.Screen name="historique" />
-            <Stack.Screen name="transfert" />
-            <Stack.Screen name="production" />
-            <Stack.Screen name="creationlot" />
-            <Stack.Screen name="caracteristiqueslot" />
-            <Stack.Screen name="confirmer-reception-lot" />
           </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>

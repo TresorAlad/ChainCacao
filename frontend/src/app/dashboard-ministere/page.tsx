@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { RoleLayout } from '@/components/RoleLayout'
 import { getRoleTheme } from '@/lib/role-themes'
 import { getRoleBasedRedirect, isAdminRole, isMinistereRole } from '@/lib/role-utils'
-import api, { type ActorDTO, type Batch, type BatchHistoryEvent } from '@/lib/api'
+import api, { type ActorDTO, type Batch, type BatchHistoryEvent, unwrapLotFromResponse } from '@/lib/api'
 import { LocationMap } from '@/components/maps/LocationMapDynamic'
 import { coordsFromLot, markersFromActors, SUPERVISION_ACTOR_MAP_PIN, SUPERVISION_AUDIT_LOT_MAP_PIN, type MapMarker } from '@/lib/geo-utils'
 import type { DashboardStats } from '@/lib/dashboard-stats'
@@ -79,10 +79,15 @@ function MinistereDashboardContent() {
     try {
       const enc = encodeURIComponent(id)
       const [lotRes, histRes] = await Promise.all([
-        api.get<Batch>(`/lot/${enc}`),
+        api.get(`/lot/${enc}`),
         api.get<{ success: boolean; events: BatchHistoryEvent[] }>(`/lot/${enc}/history`),
       ])
-      setAuditLot(lotRes.data as Batch)
+      const lotBody = unwrapLotFromResponse(lotRes.data)
+      if (!lotBody) {
+        toast.error('Réponse lot invalide')
+        return
+      }
+      setAuditLot(lotBody)
       setAuditHistory(histRes.data.events || [])
     } catch {
       toast.error('Lot introuvable')

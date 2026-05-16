@@ -18,7 +18,7 @@ import {
   FileCheckIcon
 } from 'lucide-react'
 import Link from 'next/link'
-import api, { Batch, BatchHistoryEvent } from '@/lib/api'
+import api, { Batch, BatchHistoryEvent, unwrapLotFromResponse } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { LocationMap } from '@/components/maps/LocationMapDynamic'
@@ -45,10 +45,16 @@ function LotDetailContent() {
       setDataLoading(true)
       try {
         const [lotRes, histRes] = await Promise.all([
-          api.get<Batch>(`/lot/${lotId}`),
+          api.get(`/lot/${lotId}`),
           api.get<{ success: boolean; events: BatchHistoryEvent[] }>(`/lot/${lotId}/history`),
         ])
-        setLot(lotRes.data)
+        const lotBody = unwrapLotFromResponse(lotRes.data)
+        if (!lotBody) {
+          toast.error('Réponse lot invalide')
+          setLot(null)
+          return
+        }
+        setLot(lotBody)
         setHistory(histRes.data.events || [])
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Erreur lors du chargement du lot'))

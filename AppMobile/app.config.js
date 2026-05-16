@@ -4,7 +4,9 @@
  * Doit être la racine http(s)://hôte:port sans suffixe /api/v1 (normalisé automatiquement).
  * Cleartext Android forcé via withAndroidManifest pour les URL http://.
  */
-const { withAndroidManifest } = require('@expo/config-plugins');
+const fs = require('fs');
+const path = require('path');
+const { withAndroidManifest, withDangerousMod } = require('@expo/config-plugins');
 
 /** Racine API uniquement (sans /api/v1) : les chemins dans services/api.ts ajoutent déjà /api/v1/... */
 function normalizeApiBaseUrl(url) {
@@ -13,21 +15,64 @@ function normalizeApiBaseUrl(url) {
   return u || 'http://127.0.0.1:8080';
 }
 
+function httpApiHostname(url) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
+}
+
 // Production par défaut (téléphone réel). En dev local : .env avec EXPO_PUBLIC_API_URL=http://10.0.2.2:8080
 const PRODUCTION_API_URL = 'http://13.60.214.56:8080';
 const apiUrl = normalizeApiBaseUrl(process.env.EXPO_PUBLIC_API_URL || PRODUCTION_API_URL);
 const usesCleartextTraffic = apiUrl.startsWith('http://');
+const cleartextHostname = httpApiHostname(apiUrl);
 
 /**
- * Plugin config : garantit android:usesCleartextTraffic="true" dans le manifest
- * lorsque l'API est en HTTP — expo prebuild seul ne l'injecte pas toujours.
+ * HTTP vers IP / LAN : OkHttp bloque parfois le cleartext même avec usesCleartextTraffic selon ROM / WebView.
+ * On ajoute res/xml/network_security_config.xml + référence manifest + usesCleartextTraffic.
  */
-const withCleartextPlugin = (config) => {
+const withAndroidHttpCleartextPlugin = (config) => {
   if (!usesCleartextTraffic) return config;
+
+  const domains = new Set(
+    [
+      cleartextHostname,
+      '10.0.2.2',
+      'localhost',
+      '127.0.0.1',
+    ].filter(Boolean)
+  );
+
+  const domainLines = [...domains]
+    .map((h) => `    <domain includeSubdomains="true">${h}</domain>`)
+    .join('\n');
+
+  const xml = `<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+  <domain-config cleartextTrafficPermitted="true">
+${domainLines}
+  </domain-config>
+</network-security-config>
+`;
+
+  config = withDangerousMod(config, [
+    'android',
+    async (cfg) => {
+      const root = cfg.modRequest.platformProjectRoot;
+      const dest = path.join(root, 'app/src/main/res/xml/network_security_config.xml');
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, xml, 'utf8');
+      return cfg;
+    },
+  ]);
+
   return withAndroidManifest(config, (c) => {
     const app = c.modResults.manifest.application?.[0];
     if (app) {
       app.$['android:usesCleartextTraffic'] = 'true';
+      app.$['android:networkSecurityConfig'] = '@xml/network_security_config';
     }
     return c;
   });
@@ -63,6 +108,13 @@ module.exports = {
           "Cette application nécessite l'accès à votre position pour certifier l'emplacement de votre champ ou de votre siège social.",
         NSFaceIDUsageDescription:
           "Cette application utilise FaceID pour sécuriser votre accès.",
+        ...(usesCleartextTraffic
+          ? {
+              NSAppTransportSecurity: {
+                NSAllowsArbitraryLoads: true,
+              },
+            }
+          : {}),
       },
     },
     android: {
@@ -87,7 +139,7 @@ module.exports = {
       favicon: './assets/images/app-icon.png',
     },
     plugins: [
-      withCleartextPlugin,
+      withAndroidHttpCleartextPlugin,
       'expo-secure-store',
       'expo-router',
       [

@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { RoleLayout } from '@/components/RoleLayout'
 import { getRoleTheme } from '@/lib/role-themes'
-import api, { type ActorDTO, type Batch, type BatchHistoryEvent } from '@/lib/api'
+import api, { type ActorDTO, type Batch, type BatchHistoryEvent, unwrapLotFromResponse } from '@/lib/api'
 import {
   CalendarIcon,
   CheckCircleIcon,
@@ -89,10 +89,15 @@ export default function CooperativeDashboardPage() {
     setDetailData(null)
     try {
       const [lotRes, histRes] = await Promise.all([
-        api.get<Batch>(`/lot/${lotId}`),
+        api.get(`/lot/${lotId}`),
         api.get<{ success: boolean; events: BatchHistoryEvent[] }>(`/lot/${lotId}/history`),
       ])
-      setDetailData({ lot: lotRes.data as Batch, history: histRes.data.events || [] })
+      const b = unwrapLotFromResponse(lotRes.data)
+      if (!b) {
+        toast.error('Réponse lot invalide')
+        return
+      }
+      setDetailData({ lot: b, history: histRes.data.events || [] })
     } catch {
       toast.error('Lot introuvable')
     } finally {
@@ -100,8 +105,23 @@ export default function CooperativeDashboardPage() {
     }
   }
 
-  const statusColor = (s?: string) => s === 'transfere' ? 'bg-blue-100 text-blue-700' : s === 'exporte' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'
-  const statusLabel = (s?: string) => s === 'transfere' ? 'Transféré' : s === 'exporte' ? 'Exporté' : s === 'cree' ? 'Reçu / Créé' : s || '—'
+  const statusColor = (s?: string) => {
+    const x = (s || '').toLowerCase()
+    if (x === 'en_transit') return 'bg-amber-100 text-amber-800'
+    if (x === 'transfere') return 'bg-blue-100 text-blue-700'
+    if (x === 'exporte') return 'bg-purple-100 text-purple-700'
+    if (x === 'recu') return 'bg-teal-100 text-teal-800'
+    return 'bg-green-100 text-green-700'
+  }
+  const statusLabel = (s?: string) => {
+    const x = (s || '').toLowerCase()
+    if (x === 'en_transit') return 'En transit'
+    if (x === 'transfere') return 'Transféré'
+    if (x === 'exporte') return 'Exporté'
+    if (x === 'recu') return 'Reçu'
+    if (x === 'cree') return 'Créé'
+    return s || '—'
+  }
   const fmt = (d?: string) => { try { return d ? new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—' } catch { return d || '—' } }
 
   if (!isAuthenticated || user?.role !== 'cooperative') return null

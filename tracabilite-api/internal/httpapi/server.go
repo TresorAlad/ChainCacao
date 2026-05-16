@@ -15,9 +15,11 @@ import (
 
 // RunHTTPServer démarre Gin avec timeouts, graceful shutdown et mode release en production.
 func RunHTTPServer(engine *gin.Engine, addr string) error {
-	readSec := envIntDefault("HTTP_READ_TIMEOUT_SEC", 30)
-	writeSec := envIntDefault("HTTP_WRITE_TIMEOUT_SEC", 60)
-	idleSec := envIntDefault("HTTP_IDLE_TIMEOUT_SEC", 120)
+	// Défauts élevés : POST multipart (photo lot) sur 4G peut dépasser 30s ; une coupure côté serveur
+	// se traduit côté mobile React Native par ERR_NETWORK sans corps de réponse.
+	readSec := envIntDefault("HTTP_READ_TIMEOUT_SEC", 300)
+	writeSec := envIntDefault("HTTP_WRITE_TIMEOUT_SEC", 300)
+	idleSec := envIntDefault("HTTP_IDLE_TIMEOUT_SEC", 180)
 
 	srv := &http.Server{
 		Addr:         addr,
@@ -29,7 +31,7 @@ func RunHTTPServer(engine *gin.Engine, addr string) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("API ChainCacao ecoute sur %s", addr)
+		log.Printf("API ChainCacao ecoute sur %s (timeouts HTTP read=%ds write=%ds idle=%ds)", addr, readSec, writeSec, idleSec)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errCh <- err
 		}

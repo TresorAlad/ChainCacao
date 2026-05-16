@@ -11,14 +11,12 @@ import {
   Alert,
   Modal,
   Image,
-  Platform,
   Linking,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
-import { Picker } from '@react-native-picker/picker';
 // NetInfo retiré — pas de pré-vérification réseau (faux positifs fréquents).
 import * as Location from 'expo-location';
 import { Paths, File, Directory } from 'expo-file-system';
@@ -29,11 +27,8 @@ import { useAuth } from '@/hooks/use-auth';
 import { batchApi, getApiError } from '@/services/api';
 // device-online retiré — l'app tente toujours l'API directement.
 import { AG } from '@/lib/agriculteur-routes';
-import { signLotPayload } from '@/lib/lot-crypto';
 import { reverseGeocodeCoordsWithRegion } from '@/lib/geocode';
-import type { LotSignPayload } from '@/lib/lot-payload';
 import {
-  FORM_PLACEHOLDER_COLOR,
   FORM_TEXT_COLOR,
 } from '@/constants/form-styles';
 
@@ -163,7 +158,7 @@ export default function NouveauLot() {
     if (!cameraRef.current || !cameraReady) return;
     try {
       const pic = await cameraRef.current.takePictureAsync({
-        quality: 0.88,
+        quality: 0.72,
         exif: true,
       });
       if (pic?.uri) {
@@ -201,12 +196,19 @@ export default function NouveauLot() {
       const dateIso = frDateToIso(dateRecolte);
       const qty = parseFloat(poids.replace(',', '.')) || 0;
 
-      const pendingDir = new Directory(Paths.document, 'pending-lots');
-      pendingDir.create({ intermediates: true, idempotent: true });
-      const destFile = new File(pendingDir, `${localId}.jpg`);
-      const srcFile = new File(photoUri);
-      await srcFile.copy(destFile);
-      const storedPhoto = destFile.uri;
+      /** Copie vers le répertoire documents si possible (URI content:// ou chemins exotiques sinon multipart direct sur photoUri). */
+      let uploadPhotoUri = photoUri;
+      let pendingCopy: InstanceType<typeof File> | null = null;
+      try {
+        const pendingDir = new Directory(Paths.document, 'pending-lots');
+        pendingDir.create({ intermediates: true, idempotent: true });
+        pendingCopy = new File(pendingDir, `${localId}.jpg`);
+        const srcFile = new File(photoUri);
+        srcFile.copy(pendingCopy);
+        uploadPhotoUri = pendingCopy.uri;
+      } catch (copyErr) {
+        console.warn('[nouveaulot] copie photo ignorée, envoi depuis URI caméra', copyErr);
+      }
 
       let lat = gpsLat ?? undefined;
       let lon = gpsLon ?? undefined;
@@ -260,25 +262,17 @@ export default function NouveauLot() {
         longitude: lon,
       };
 
-      const signBase: LotSignPayload = {
-        client_lot_id: localId,
-        culture,
-        variete,
-        quantite: qty,
-        lieu: adresseLieu,
-        latitude: lat,
-        longitude: lon,
-        date_recolte: dateIso,
-        notes: variete,
-        actor_id: user.id,
-      };
-      await signLotPayload(signBase);
-
       setSubmitHint('Envoi au serveur en cours…');
       try {
-        const { data } = await batchApi.createWithPhoto(storedPhoto, fields);
+        const { data } = await batchApi.createWithPhoto(uploadPhotoUri, fields);
         const serverId = data.batch?.id ?? localId;
-        await destFile.delete();
+        if (pendingCopy) {
+          try {
+            pendingCopy.delete();
+          } catch {
+            /* ignore */
+          }
+        }
         await saveLot();
         Alert.alert('Succès', 'Lot enregistré sur la blockchain.', [
           {
@@ -288,11 +282,23 @@ export default function NouveauLot() {
         ]);
         return;
       } catch (e) {
+        if (pendingCopy) {
+          try {
+            pendingCopy.delete();
+          } catch {
+            /* ignore */
+          }
+        }
         Alert.alert('Erreur', getApiError(e));
         return;
       }
-    } catch (error) {
-      Alert.alert('Erreur', 'Impossible de sauvegarder le lot.');
+    } catch (error: unknown) {
+      const detail =
+        error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : "Étape locale impossible (fichier photo, position ou réseau). Réessayez ou vérifiez l'espace disque.";
+      if (__DEV__) console.warn('[nouveaulot] handleValider', error);
+      Alert.alert('Erreur', detail);
     } finally {
       setIsSubmitting(false);
       setSubmitHint(null);
@@ -437,24 +443,24 @@ export default function NouveauLot() {
 
             <View style={styles.form}>
               <Text style={styles.inputLabel}>Variété de {typeProduit}</Text>
-              {variete ? (
-                <Text style={styles.pickerValue}>{variete}</Text>
-              ) : null}
-              <View style={styles.pickerFrame}>
-                <Picker
-                  selectedValue={variete}
-                  onValueChange={(v) => setVariete(v)}
-                  style={styles.picker}
-                  dropdownIconColor={FORM_TEXT_COLOR}
-                  mode={Platform.OS === 'android' ? 'dropdown' : 'dialog'}
-                  itemStyle={styles.pickerItemIOS}
-                >
-                  <Picker.Item label="Sélectionner une variété…" value="" color={FORM_PLACEHOLDER_COLOR} />
-                  {(typeProduit === 'Cacao' ? varietesCacao : varietesCafe).map((v) => (
-                    <Picker.Item key={v} label={v} value={v} color={FORM_TEXT_COLOR} />
-                  ))}
-                </Picker>
-              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.varieteChipRow}
+              >
+                {(typeProduit === 'Cacao' ? varietesCacao : varietesCafe).map((v) => (
+                  <TouchableOpacity
+                    key={v}
+                    style={[styles.varieteChip, variete === v && styles.varieteChipActive]}
+                    onPress={() => setVariete(v)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: variete === v }}
+                  >
+                    <Text style={[styles.varieteChipText, variete === v && styles.varieteChipTextActive]}>{v}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
 
               <Text style={styles.inputLabel}>Poids (Kg)</Text>
               <View style={styles.inputFrame}>
@@ -625,31 +631,33 @@ const styles = StyleSheet.create({
     height: 50,
     paddingHorizontal: 12,
   },
-  pickerFrame: {
+  varieteChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    gap: 8,
+    paddingVertical: 4,
+    marginBottom: 4,
+  },
+  varieteChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#CBD5E1',
-    marginBottom: 4,
-    overflow: 'hidden',
-    justifyContent: 'center',
-    minHeight: Platform.OS === 'ios' ? 52 : 48,
   },
-  pickerValue: {
-    fontFamily: 'Montserrat-Bold',
-    fontSize: 15,
-    color: FORM_TEXT_COLOR,
-    marginBottom: 6,
+  varieteChipActive: {
+    backgroundColor: '#E8F5E9',
+    borderColor: '#2E7D32',
   },
-  picker: {
-    width: '100%',
-    color: FORM_TEXT_COLOR,
-    ...(Platform.OS === 'android' ? { height: 48 } : {}),
-  },
-  pickerItemIOS: {
-    fontSize: 16,
-    color: FORM_TEXT_COLOR,
+  varieteChipText: {
     fontFamily: 'Montserrat-Regular',
+    fontSize: 14,
+    color: FORM_TEXT_COLOR,
+  },
+  varieteChipTextActive: {
+    fontFamily: 'Montserrat-Bold',
+    color: '#1B5E20',
   },
   diagBox: {
     marginBottom: 12,

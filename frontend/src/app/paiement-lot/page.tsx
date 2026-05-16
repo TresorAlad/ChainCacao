@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RoleLayout } from '@/components/RoleLayout'
 import { getRoleBasedRedirect } from '@/lib/role-utils'
-import api, { type Batch } from '@/lib/api'
+import api, { type Batch, unwrapLotFromResponse } from '@/lib/api'
 import { BanknotesIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
@@ -58,9 +58,12 @@ function PaiementLotContent() {
     setLot(null)
     setPreview(null)
     try {
-      const res = await api.get<Batch>(`/lot/${encodeURIComponent(trimmed)}`)
-      const data = res.data as Batch & { lot?: Batch }
-      const b = data.lot ?? data
+      const res = await api.get(`/lot/${encodeURIComponent(trimmed)}`)
+      const b = unwrapLotFromResponse(res.data)
+      if (!b) {
+        toast.error('Lot introuvable')
+        return
+      }
       setLot(b)
       setLotId(trimmed)
       const st = (b.statut || '').toLowerCase()

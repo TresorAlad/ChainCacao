@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RoleLayout } from '@/components/RoleLayout'
-import api, { type Batch } from '@/lib/api'
+import api, { type Batch, unwrapLotFromResponse } from '@/lib/api'
 import { TruckIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
@@ -43,9 +43,12 @@ function ReceptionLotContent() {
     setSearching(true)
     setLot(null)
     try {
-      const res = await api.get<{ lot?: Batch } | Batch>(`/lot/${encodeURIComponent(trimmed)}`)
-      const data = res.data as { lot?: Batch }
-      const b = data.lot ?? (res.data as Batch)
+      const res = await api.get(`/lot/${encodeURIComponent(trimmed)}`)
+      const b = unwrapLotFromResponse(res.data)
+      if (!b) {
+        toast.error('Lot introuvable')
+        return
+      }
       setLot(b)
       setLotId(trimmed)
       if (b.quantite != null) setPoidsConstate(String(b.quantite))

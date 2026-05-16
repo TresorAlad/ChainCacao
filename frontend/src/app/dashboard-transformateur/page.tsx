@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { RoleLayout } from '@/components/RoleLayout'
 import { getRoleTheme } from '@/lib/role-themes'
-import api, { type Batch } from '@/lib/api'
+import api, { type Batch, unwrapLotFromResponse } from '@/lib/api'
 import {
   BeakerIcon,
   ArchiveBoxIcon,
@@ -49,8 +49,14 @@ export default function TransformateurDashboardPage() {
     setSearching(true)
     setFoundLot(null)
     try {
-      const res = await api.get<Batch>(`/lot/${id.trim()}`)
-      setFoundLot(res.data as Batch)
+      const res = await api.get(`/lot/${id.trim()}`)
+      const b = unwrapLotFromResponse(res.data)
+      if (!b) {
+        setFoundLot('not-found')
+        toast.error('Lot introuvable')
+        return
+      }
+      setFoundLot(b)
     } catch {
       setFoundLot('not-found')
       toast.error('Lot introuvable')
@@ -59,8 +65,23 @@ export default function TransformateurDashboardPage() {
     }
   }
 
-  const statusColor = (s?: string) => s === 'transfere' ? 'bg-blue-100 text-blue-700' : s === 'exporte' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'
-  const statusLabel = (s?: string) => s === 'transfere' ? 'Transféré' : s === 'exporte' ? 'Exporté' : s === 'cree' ? 'Reçu / Créé' : s || '—'
+  const statusColor = (s?: string) => {
+    const x = (s || '').toLowerCase()
+    if (x === 'en_transit') return 'bg-amber-100 text-amber-800'
+    if (x === 'transfere') return 'bg-blue-100 text-blue-700'
+    if (x === 'exporte') return 'bg-purple-100 text-purple-700'
+    if (x === 'recu') return 'bg-teal-100 text-teal-800'
+    return 'bg-green-100 text-green-700'
+  }
+  const statusLabel = (s?: string) => {
+    const x = (s || '').toLowerCase()
+    if (x === 'en_transit') return 'En transit'
+    if (x === 'transfere') return 'Transféré'
+    if (x === 'exporte') return 'Exporté'
+    if (x === 'recu') return 'Reçu'
+    if (x === 'cree') return 'Créé'
+    return s || '—'
+  }
 
   if (loading) {
     return (

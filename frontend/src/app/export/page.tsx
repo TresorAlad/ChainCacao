@@ -9,7 +9,7 @@ import {
   ShieldCheckIcon, 
   CubeIcon as PackageIcon 
 } from '@heroicons/react/24/outline'
-import api from '@/lib/api'
+import api, { unwrapLotFromResponse } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { getErrorMessage } from '@/lib/error-utils'
 
@@ -45,13 +45,17 @@ export default function ExportPage() {
     const loaded: LotEntry[] = []
     for (const id of ids) {
       try {
-        const res = await api.get<any>(`/lot/${id}`)
-        const b = res.data
+        const res = await api.get(`/lot/${id}`)
+        const inner = unwrapLotFromResponse(res.data)
+        if (!inner) {
+          toast.error(`Réponse invalide pour : ${id}`)
+          continue
+        }
         loaded.push({
-          id: b.id || id,
-          culture: b.culture || '—',
-          quantite: b.quantite ?? 0,
-          statut: b.statut || '—',
+          id: inner.id || id,
+          culture: inner.culture || '—',
+          quantite: inner.quantite ?? 0,
+          statut: inner.statut || '—',
         })
       } catch {
         toast.error(`Lot introuvable : ${id}`)

@@ -78,6 +78,18 @@ export interface Batch {
   notes?: string
 }
 
+/** GET /lot/:id renvoie `{ success, lot }` côté API Go — utiliser pour axios.data. */
+export function unwrapLotFromResponse(data: unknown): Batch | null {
+  if (!data || typeof data !== 'object') return null
+  const o = data as Record<string, unknown>
+  const lot = o.lot
+  const batch = o.batch
+  if (lot && typeof lot === 'object' && typeof (lot as Batch).id === 'string') return lot as Batch
+  if (batch && typeof batch === 'object' && typeof (batch as Batch).id === 'string') return batch as Batch
+  if (typeof (o as Batch).id === 'string') return o as Batch
+  return null
+}
+
 export interface BatchHistoryEvent {
   batch_id: string
   type: string
