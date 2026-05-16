@@ -314,8 +314,8 @@ func (s *Service) GetMyLots(ctx context.Context, actorID string) ([]models.Batch
 	batches, err := s.fabricClient.GetBatchesByOwner(ctx, actorID)
 	if err != nil {
 		if IsLedgerTransportError(err) {
-			log.Printf("[batch.GetMyLots] ledger_indisponible actor_id=%s: %v — retour liste vide", actorID, err)
-			return []models.Batch{}, nil
+			log.Printf("[batch.GetMyLots] ledger_indisponible actor_id=%s: %v", actorID, err)
+			return nil, fmt.Errorf("ledger indisponible (Hyperledger Fabric injoignable) : %w", err)
 		}
 		return nil, err
 	}

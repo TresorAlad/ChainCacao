@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { CubeIcon, PlusIcon, QrCodeIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import api, { type Batch, type BatchHistoryEvent, unwrapLotFromResponse } from '@/lib/api'
+import toast from 'react-hot-toast'
+import { getErrorMessage } from '@/lib/error-utils'
 import { canCreateLot } from '@/lib/role-nav'
 import {
   historyActorSummary,
@@ -32,6 +34,7 @@ export default function LotsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [panelHistory, setPanelHistory] = useState<BatchHistoryEvent[]>([])
   const [panelHistoryLoading, setPanelHistoryLoading] = useState(false)
+  const [lotsError, setLotsError] = useState<string | null>(null)
 
   const filteredLots =
     statusFilter === 'all'
@@ -85,10 +88,19 @@ export default function LotsPage() {
     if (!isAuthenticated || !user?.role) return
     if (!['agriculteur', 'cooperative', 'transformateur', 'exportateur', 'admin'].includes(user.role)) return
     setFetching(true)
+    setLotsError(null)
     api
       .get<{ success: boolean; lots: Batch[] }>('/actors/me/lots')
-      .then((res) => setLots(res.data.lots || []))
-      .catch(() => setLots([]))
+      .then((res) => {
+        setLots(res.data.lots || [])
+        setLotsError(null)
+      })
+      .catch((err: unknown) => {
+        const msg = getErrorMessage(err, 'Impossible de charger vos lots')
+        setLotsError(msg)
+        setLots([])
+        toast.error(msg)
+      })
       .finally(() => setFetching(false))
   }, [isAuthenticated, user])
 
@@ -188,11 +200,24 @@ export default function LotsPage() {
             ))}
           </div>
 
+          {lotsError ? (
+            <div className="py-8 px-4 mb-4 rounded-2xl bg-red-50 border border-red-200 text-sm text-red-800">
+              <p className="font-bold mb-1">Erreur serveur / blockchain</p>
+              <p>{lotsError}</p>
+              <p className="text-xs mt-2 text-red-700">
+                Vérifiez que l&apos;API et Hyperledger Fabric tournent sur le serveur (redéploiement récent = ledger parfois vide).
+              </p>
+            </div>
+          ) : null}
           {filteredLots.length === 0 ? (
             <div className="py-16 flex flex-col items-center gap-4 text-center">
               <CubeIcon className="w-16 h-16 text-gray-200" />
-              <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Aucun lot disponible</p>
-              <p className="text-xs text-gray-400">Utilisez la recherche ci-dessus pour trouver un lot par ID,<br />ou créez un nouveau lot.</p>
+              <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Aucun lot sur ce serveur</p>
+              <p className="text-xs text-gray-500 max-w-md">
+                Les lots créés <strong>en local</strong> (localhost) ne sont pas sur Vercel / EC2.
+                Après un redéploiement, le ledger peut être vide : créez un nouveau lot ou recherchez un ID existant.
+              </p>
+              <p className="text-xs text-gray-400">Recherche par ID ci-dessus, ou créez un lot ci-dessous.</p>
               <Link href="/nouveau-lot" className="mt-2 px-5 py-2.5 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold hover:brightness-110 transition-all">
                 Créer un lot
               </Link>
