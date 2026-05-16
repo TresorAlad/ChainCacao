@@ -15,10 +15,16 @@ echo "== Smoke transfert / paiement (HTTP uniquement — erreurs Fabric attendue
 login_pin() {
   local actor_id="$1"
   local pin="${2:-1111}"
-  curl -s -X POST "$BASE/api/v1/auth/login" \
+  local code
+  code="$(curl -sS -o /tmp/smoke_login.json -w "%{http_code}" -X POST "$BASE/api/v1/auth/login" \
     -H "Content-Type: application/json" \
-    -d "{\"actor_id\":\"$actor_id\",\"pin\":\"$pin\"}" \
-    | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("token",""))'
+    -d "{\"actor_id\":\"$actor_id\",\"pin\":\"$pin\"}")"
+  if [[ "$code" != "200" ]]; then
+    echo "Login $actor_id HTTP $code:" >&2
+    cat /tmp/smoke_login.json >&2
+    echo "" >&2
+  fi
+  python3 -c 'import json; d=json.load(open("/tmp/smoke_login.json")); print(d.get("token",""))' 2>/dev/null || echo ""
 }
 
 if [[ -z "${AGRI_JWT:-}" ]]; then
@@ -36,26 +42,50 @@ if [[ -z "$AGRI_JWT" || "$AGRI_JWT" == "None" ]]; then
   exit 1
 fi
 
+# Date de récolte : hier UTC (évite rejet « date dans le futur » si l’horloge VM avance).
+if date -u -d yesterday +%Y-%m-%d >/dev/null 2>&1; then
+  DATE_RECOLTE="$(date -u -d yesterday +%Y-%m-%d)"
+else
+  DATE_RECOLTE="$(date -u +%Y-%m-%d)"
+fi
+
 echo "== Créer lot (JSON, sans photo — démo) =="
-CREATE_RESP="$(curl -s -X POST "$BASE/api/v1/lot" \
+CREATE_JSON="$(cat <<EOF
+{
+  "culture": "Cacao",
+  "variete": "Forastero",
+  "quantite": 10,
+  "lieu": "Smoke farm",
+  "latitude": 6.1319,
+  "longitude": 1.2228,
+  "region": "Maritime",
+  "village": "SmokeVillage",
+  "parcelle": "P-smoke-1",
+  "date_recolte": "${DATE_RECOLTE}",
+  "photo_url": "https://example.invalid/smoke-no-photo.jpg",
+  "notes": "smoke_transfer_payment"
+}
+EOF
+)"
+
+HTTP_CREATE="$(curl -s -S -o /tmp/smoke_create_lot.json -w "%{http_code}" -X POST "$BASE/api/v1/lot" \
   -H "Authorization: Bearer $AGRI_JWT" \
   -H "Content-Type: application/json" \
-  -d '{
-    "culture":"Cacao",
-    "variete":"Forastero",
-    "quantite": 10,
-    "lieu": "Smoke farm",
-    "latitude": 6.1319,
-    "longitude": 1.2228,
-    "region": "Maritime",
-    "date_recolte": "2026-05-01",
-    "notes": "smoke_transfer_payment"
-  }')"
-echo "$CREATE_RESP" | python3 -c 'import sys,json; d=json.load(sys.stdin); print("batch id:", d.get("batch",{}).get("id")); print("success:", d.get("success"))' || true
-LOT_ID="$(echo "$CREATE_RESP" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("batch",{}).get("id",""))')"
+  -d "$CREATE_JSON")"
+echo "HTTP création lot: $HTTP_CREATE"
+cat /tmp/smoke_create_lot.json | python3 -m json.tool 2>/dev/null || cat /tmp/smoke_create_lot.json
+echo ""
+
+CREATE_RESP="$(cat /tmp/smoke_create_lot.json)"
+python3 -c 'import sys,json; d=json.load(sys.stdin); print("batch id:", d.get("batch",{}).get("id")); print("success:", d.get("success")); print("error:", d.get("error"))' <<<"$CREATE_RESP" || true
+LOT_ID="$(python3 -c 'import sys,json; print(json.load(sys.stdin).get("batch",{}).get("id",""))' <<<"$CREATE_RESP")"
 
 if [[ -z "$LOT_ID" ]]; then
-  echo "Création lot refusée — arrêt (vérifier Fabric / validations)."
+  echo ""
+  echo "Création lot refusée — causes fréquentes :"
+  echo "  • API ne joint pas Fabric (docker: vérifier FABRIC_* / FABRIC_PROXY_URL dans .env du conteneur api)."
+  echo "  • Erreur chaincode (voir message \"error\" ci-dessus ou logs: docker compose logs api)."
+  echo "  • date_recolte future ou champs obligatoires manquants."
   exit 1
 fi
 
