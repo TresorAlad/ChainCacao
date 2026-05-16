@@ -336,6 +336,13 @@ func (h *Handler) CreateBatch(c *gin.Context) {
 
 	txHash, created, err := h.batch.Create(c.Request.Context(), req, actorID, orgID)
 	if err != nil {
+		if batch.IsLedgerTransportError(err) {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"error": "Blockchain momentanément indisponible (réseau ou peer Fabric). Réessayez plus tard ; l’administrateur doit vérifier FABRIC_PEER_ENDPOINT et la résolution DNS vers le peer.",
+				"detail": err.Error(),
+			})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

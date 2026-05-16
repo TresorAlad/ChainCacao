@@ -96,6 +96,8 @@ Si `FABRIC_PEER_ENDPOINT` est défini et `USE_INMEMORY_FABRIC` ≠ `true` :
 | `FABRIC_CHANNEL` | `mychannel` |
 | `FABRIC_CHAINCODE` | `chaincacao` |
 
+**Résolution DNS du peer (`dns:///peer0…:7051`) :** ce nom n’existe pas sur Internet. Avec le `docker-compose.yml` du dépôt, le service `api` ajoute `peer0.org1.example.com` → `host-gateway` (IP de l’hôte Docker), ce qui convient quand la test-network publie le peer sur le port **7051** de la machine hôte. Sur une VM seule, ajoute la même ligne dans `/etc/hosts`, ou mets l’API derrière **`FABRIC_PROXY_URL`** (voir `cmd/fabric-proxy`).
+
 **Chaincode attendu :** `CreateBatch`, `TransferBatch`, `UpdateBatchWeight`, `MarkBatchExported`, `GetBatch`, `GetHistory`, `GetStats`, etc.
 
 L’API signe les transactions avec **une identité Gateway** ; l’`actor_id` JWT est une donnée métier côté chaincode.

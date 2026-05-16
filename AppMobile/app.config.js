@@ -81,7 +81,6 @@ module.exports = {
     plugins: [
       withCleartextPlugin,
       'expo-secure-store',
-      'expo-sqlite',
       'expo-router',
       [
         'expo-notifications',
@@ -113,7 +112,6 @@ module.exports = {
       ],
       '@react-native-community/datetimepicker',
       'expo-font',
-      'expo-image',
       'expo-web-browser',
     ],
     extra: {

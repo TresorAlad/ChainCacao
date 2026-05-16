@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -304,6 +305,10 @@ func (s *Service) MarkExported(ctx context.Context, batchID, actorID string) (st
 func (s *Service) GetMyLots(ctx context.Context, actorID string) ([]models.Batch, error) {
 	batches, err := s.fabricClient.GetBatchesByOwner(ctx, actorID)
 	if err != nil {
+		if IsLedgerTransportError(err) {
+			log.Printf("[batch.GetMyLots] ledger_indisponible actor_id=%s: %v — retour liste vide", actorID, err)
+			return []models.Batch{}, nil
+		}
 		return nil, err
 	}
 	return s.enrichBatchesOrg(ctx, batches), nil

@@ -148,14 +148,6 @@ export default function NouveauLot() {
     void refreshGpsPosition();
   }, [refreshGpsPosition]);
 
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7502/ingest/021a24f4-c602-42f7-9527-28f6d89d0b6f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e5623e'},body:JSON.stringify({sessionId:'e5623e',location:'nouveaulot.tsx:mount',message:'screen_mounted',data:{hasUser:Boolean(user?.id)},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.log('[ChainCacao][nouveaulot] écran monté');
-    }
-  }, [user?.id]);
 
   const openCameraModal = async () => {
     const cam = await requestCameraPermission();

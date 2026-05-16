@@ -26,6 +26,12 @@ services:
       # Cache Go entre redémarrages (évite de retélécharger tous les modules à chaque `up`)
       - go_mod_cache:/gomodcache
       - go_build_cache:/gocache
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "peer0.org1.example.com:host-gateway"
+    dns:
+      - 127.0.0.11
+      - 8.8.8.8
     command:
       # -p 2 limite la parallèle de compilation (moins de pic RAM sur petite EC2)
       - sh

@@ -40,8 +40,12 @@ services:
     volumes:
       - ../fabric-samples/test-network/organizations:/fabric-crypto:ro
       - ./secrets:/secrets:ro
+    # Résolution gRPC : peer0.org1.example.com n’existe pas dans le DNS public.
+    # host-gateway = IP de l’hôte Docker → utiliser si le peer expose 7051 sur l’hôte (fabric-samples / test-network).
+    # Sinon : remplacer par une IP fixe (ex. conteneur peer sur un réseau partagé) ou utiliser FABRIC_PROXY_URL.
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "peer0.org1.example.com:host-gateway"
     dns:
       - 127.0.0.11
       - 192.168.1.254
