@@ -105,13 +105,15 @@ if [ -f "$PEER_TLS" ] && [ -n "$KEY_FILE" ]; then
   cat >> /tmp/env_clean <<EOF
 
 # Hyperledger Fabric Gateway (réseau test-network)
+# Chemins pour docker-compose (volume organizations -> /fabric-crypto dans le conteneur api).
+# Pour lancer l'API sans Docker sur cette machine, remplace par les chemins absolus hôte ci-dessous.
 USE_INMEMORY_FABRIC=false
 FABRIC_MSP_ID=Org1MSP
-FABRIC_PEER_ENDPOINT=dns:///localhost:7051
-FABRIC_GATEWAY_PEER=localhost
-FABRIC_TLS_CERT_PATH=$PEER_TLS
-FABRIC_SIGNCERT_PATH=$USER_MSP/signcerts/cert.pem
-FABRIC_KEY_PATH=$USER_MSP/keystore/$KEY_FILE
+FABRIC_PEER_ENDPOINT=dns:///peer0.org1.example.com:7051
+FABRIC_GATEWAY_PEER=peer0.org1.example.com
+FABRIC_TLS_CERT_PATH=/fabric-crypto/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
+FABRIC_SIGNCERT_PATH=/fabric-crypto/peerOrganizations/org1.example.com/users/User1@org1.example.com/msp/signcerts/cert.pem
+FABRIC_KEY_PATH=/fabric-crypto/peerOrganizations/org1.example.com/users/User1@org1.example.com/msp/keystore/$KEY_FILE
 FABRIC_CHANNEL=$CHANNEL
 FABRIC_CHAINCODE=$CC_NAME
 EOF

@@ -3,42 +3,62 @@
 # Usage :
 #   BASE_URL=http://127.0.0.1:8080 bash scripts/smoke_transfer_payment.sh
 #
+# Acteurs démo (internal/db/migrations/002_seed_demo_actors.sql) :
+#   actor-agri-001 PIN 1111 | actor-coop-001 PIN 4444 | actor-exp-001 PIN 3333
+#   (ancien id export : actor-export-001 — secours automatique si BUYER_ACTOR non défini)
+#
 # Variables optionnelles :
-#   AGRI_JWT, COOP_JWT, BUYER_JWT — sinon login PIN par acteurs démo (adapter IDs/PIN en base).
+#   AGRI_JWT, COOP_JWT, BUYER_JWT — sinon login avec les IDs/PIN ci-dessus.
+#   AGRI_ACTOR, COOP_ACTOR, BUYER_ACTOR, AGRI_PIN, COOP_PIN, BUYER_PIN
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:8080}"
 BASE="${BASE_URL%/}"
 
 echo "== Smoke transfert / paiement (HTTP uniquement — erreurs Fabric attendues si peer coupé) =="
+echo "IDs login (défauts) : agri=${AGRI_ACTOR:-actor-agri-001} coop=${COOP_ACTOR:-actor-coop-001} buyer=${BUYER_ACTOR:-actor-exp-001} (+ secours actor-export-001 si buyer vide)"
 
 login_pin() {
   local actor_id="$1"
   local pin="${2:-1111}"
-  local code
-  code="$(curl -sS -o /tmp/smoke_login.json -w "%{http_code}" -X POST "$BASE/api/v1/auth/login" \
+  local code tmp
+  tmp="$(mktemp)"
+  # Pas de -S : évite « Recv failure » sur stderr quand l’API coupe la connexion (HTTP 000).
+  code="$(curl -s --connect-timeout 5 --max-time 20 --retry 2 --retry-delay 1 \
+    -o "$tmp" -w "%{http_code}" -X POST "$BASE/api/v1/auth/login" \
     -H "Content-Type: application/json" \
-    -d "{\"actor_id\":\"$actor_id\",\"pin\":\"$pin\"}")"
+    -d "{\"actor_id\":\"$actor_id\",\"pin\":\"$pin\"}" 2>/dev/null)" || code="000"
   if [[ "$code" != "200" ]]; then
-    echo "Login $actor_id HTTP $code:" >&2
-    cat /tmp/smoke_login.json >&2
+    echo "Login $actor_id HTTP ${code:-000}:" >&2
+    cat "$tmp" >&2 2>/dev/null || true
     echo "" >&2
+    rm -f "$tmp"
+    echo ""
+    return 0
   fi
-  python3 -c 'import json; d=json.load(open("/tmp/smoke_login.json")); print(d.get("token",""))' 2>/dev/null || echo ""
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("token",""))' "$tmp" 2>/dev/null || echo ""
+  rm -f "$tmp"
 }
 
 if [[ -z "${AGRI_JWT:-}" ]]; then
-  AGRI_JWT="$(login_pin "${AGRI_ACTOR:-actor-agri-001}")"
+  AGRI_JWT="$(login_pin "${AGRI_ACTOR:-actor-agri-001}" "${AGRI_PIN:-1111}")"
 fi
 if [[ -z "${COOP_JWT:-}" ]]; then
-  COOP_JWT="$(login_pin "${COOP_ACTOR:-actor-coop-001}")"
+  COOP_JWT="$(login_pin "${COOP_ACTOR:-actor-coop-001}" "${COOP_PIN:-4444}")"
 fi
 if [[ -z "${BUYER_JWT:-}" ]]; then
-  BUYER_JWT="$(login_pin "${BUYER_ACTOR:-actor-export-001}")"
+  BUYER_JWT="$(login_pin "${BUYER_ACTOR:-actor-exp-001}" "${BUYER_PIN:-3333}")"
+  if [[ -z "${BUYER_ACTOR:-}" && (-z "$BUYER_JWT" || "$BUYER_JWT" == "None") ]]; then
+    BUYER_JWT="$(login_pin "actor-export-001" "${BUYER_PIN:-3333}")"
+  fi
 fi
 
 if [[ -z "$AGRI_JWT" || "$AGRI_JWT" == "None" ]]; then
-  echo "Échec login agriculteur — définissez AGRI_JWT ou AGRI_ACTOR + PIN valides."
+  echo "Échec login agriculteur — définissez AGRI_JWT ou vérifiez AGRI_ACTOR + AGRI_PIN (démo: actor-agri-001 / 1111)."
+  echo "« acteur introuvable » : la table actors est vide ou mauvaise base — vérifier DATABASE_URL du conteneur api et les migrations (002_seed_demo_actors.sql)."
+  echo "Ex. : docker compose exec postgres psql -U \"\${POSTGRES_USER}\" -d \"\${POSTGRES_DB}\" -c 'SELECT id FROM actors ORDER BY 1;'"
+  echo "Si les lignes de login montrent encore « actor-export-001 » comme seul buyer : mettre à jour ce script (git pull) ; la démo seed utilise actor-exp-001."
+  echo "HTTP 000 / API instable : docker compose logs --tail=100 api"
   exit 1
 fi
 
