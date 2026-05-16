@@ -1,8 +1,0 @@
-{
-    "cleanOutputDir": true,
-    "entryPoints": [
-        "src/index.ts"
-    ],
-    "out": "apidocs",
-    "treatWarningsAsErrors": true
-}

@@ -1,4 +1,0 @@
-# Exclude everything except specific inclusions below
-**/*
-
-!dist/**/*

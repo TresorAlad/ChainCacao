@@ -35,6 +35,7 @@ tmp/
 
 # --- Caches de build ---
 .gocache/
+.gomodcache/
 .cache/
 
 # --- Certificats / clés ---
