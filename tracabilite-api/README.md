@@ -23,8 +23,24 @@ Backend **Gin** pour le web Next.js et l’app mobile Expo : lots, transferts, *
 
 ## Prérequis
 
-- Go **1.23+**
+- Go **1.23+** (obligatoire : `grpc`, `golang.org/x/*` et le stdlib utilisent des paquets absents de Go 1.18, ex. `cmp`, `slices`, `log/slog`, `math/rand/v2`).
 - Docker / Docker Compose (stack complète)
+
+### Ubuntu / EC2 : `apt` installe souvent Go 1.18
+
+Si `go version` affiche **1.18** ou moins, `go build ./...` échouera. Installez une version récente (ex. **1.23.4**) depuis [go.dev/dl](https://go.dev/dl/) :
+
+```bash
+go version   # doit être go1.23.x ou plus récent
+# Exemple amd64 (adapter l’archive si arm64 : …linux-arm64.tar.gz)
+VER=1.23.4
+curl -sLO "https://go.dev/dl/go${VER}.linux-amd64.tar.gz"
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf "go${VER}.linux-amd64.tar.gz"
+echo 'export PATH=/usr/local/go/bin:$PATH' >> ~/.profile && source ~/.profile
+go version
+```
+
+Évitez d’utiliser en parallèle le `go` du paquet `golang-go` dans le `PATH` avant `/usr/local/go/bin` (sinon le mauvais binaire est pris en premier).
 
 ## Démarrage rapide
 
