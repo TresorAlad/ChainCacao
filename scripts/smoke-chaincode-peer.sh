@@ -8,8 +8,10 @@
 #   ./scripts/smoke-chaincode-peer.sh
 #
 # Variables optionnelles :
-#   TN              — chemin test-network (défaut : $ROOT/fabric-samples/test-network)
-#   CC_CHANNEL      — défaut : chaincacao-channel
+#   TN                   — chemin test-network (défaut : $ROOT/fabric-samples/test-network)
+#   FABRIC_CFG_PATH      — répertoire avec core.yaml (défaut : $ROOT/fabric-samples/config)
+#   FABRIC_SAMPLES_CONFIG — alias du même répertoire si besoin
+#   CC_CHANNEL           — défaut : chaincacao-channel
 #   CC_NAME         — défaut : chaincacao
 #   SMOKE_ACTOR_ID  — défaut : actor-smoke-001
 # ============================================================
@@ -27,7 +29,14 @@ if [[ ! -d "$TN" ]]; then
   exit 1
 fi
 
-export FABRIC_CFG_PATH="${FABRIC_CFG_PATH:-$TN/configtx}"
+# peer CLI charge core.yaml depuis ce répertoire (pas test-network/configtx).
+FABRIC_SAMPLES_CONFIG="${FABRIC_SAMPLES_CONFIG:-$ROOT/fabric-samples/config}"
+if [[ ! -f "$FABRIC_SAMPLES_CONFIG/core.yaml" ]]; then
+  echo "Fichier core.yaml introuvable: $FABRIC_SAMPLES_CONFIG/core.yaml"
+  echo "Vérifiez que fabric-samples est complet (install-fabric.sh binary)."
+  exit 1
+fi
+export FABRIC_CFG_PATH="${FABRIC_CFG_PATH:-$FABRIC_SAMPLES_CONFIG}"
 export PATH="${PATH:-}:$ROOT/fabric-samples/bin"
 command -v peer >/dev/null 2>&1 || { echo "peer CLI introuvable (PATH + fabric-samples/bin)"; exit 1; }
 command -v jq >/dev/null 2>&1 || { echo "jq requis (sudo apt install -y jq)"; exit 1; }

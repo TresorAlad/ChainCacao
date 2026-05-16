@@ -10,7 +10,7 @@
 #   export CC_CHANNEL=chaincacao-channel
 #   export CC_SEQUENCE=2
 #   export CC_LABEL=chaincacao_v2
-#   export FABRIC_CFG_PATH=$HOME/chaincacao/fabric-samples/config
+#   export FABRIC_CFG_PATH=$HOME/ChainCacao/fabric-samples/config
 #   export PATH=$PATH:$HOME/chaincacao/fabric-samples/bin
 #   export CORE_PEER_TLS_ENABLED=true
 #   export CORE_PEER_LOCALMSPID=Org1MSP
@@ -33,7 +33,7 @@ CC_LABEL="${CC_LABEL:-chaincacao_v2}"
 CHAINCODE_DIR="${CHAINCODE_DIR:-$ROOT/chaincode}"
 PKG_OUT="${PKG_OUT:-$ROOT/chaincacao_cc_${CC_LABEL}.tar.gz}"
 
-: "${FABRIC_CFG_PATH:?Définir FABRIC_CFG_PATH (configtx ou fabric config)}"
+: "${FABRIC_CFG_PATH:?Définir FABRIC_CFG_PATH (répertoire contenant core.yaml, ex. fabric-samples/config)}"
 command -v peer >/dev/null 2>&1 || { echo "peer CLI introuvable (ajouter fabric-samples/bin au PATH)"; exit 1; }
 
 echo "=== Package chaincode ==="
