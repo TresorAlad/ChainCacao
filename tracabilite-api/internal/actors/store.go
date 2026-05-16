@@ -63,7 +63,7 @@ func newMemoryStore() *memoryStore {
 		{"actor-agri-001", "Coop Agri Nord", "agri@chaincacao.tg", "AgriculteurMSP", models.RoleAgriculteur, "1111"},
 		{"actor-coop-001", "Cooperative Plateaux", "coop@chaincacao.tg", "CooperativeMSP", models.RoleCooperative, "4444"},
 		{"actor-trans-001", "Usine Cacao Plus", "transfo@chaincacao.tg", "TransformateurMSP", models.RoleTransformateur, "2222"},
-		{"actor-exp-001", "Exportateur SA", "export@chaincacao.tg", "ExportateurMSP", models.RoleExportateur, "3333"},
+		{"actor-exp-001", "Exportateur SA", "export-demo@chaincacao.tg", "ExportateurMSP", models.RoleExportateur, "3333"},
 		{"actor-min-001", "Ministère Agriculture", "ministere@chaincacao.tg", "MinistereMSP", models.RoleMinistere, "8888"},
 		{"actor-admin-001", "Admin Platform", "admin@chaincacao.tg", "PlatformMSP", models.RoleAdmin, "9999"},
 	}

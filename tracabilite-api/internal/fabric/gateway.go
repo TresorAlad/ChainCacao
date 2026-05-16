@@ -413,6 +413,8 @@ func (g *GatewayClient) GetBatchPrice(ctx context.Context, batchID string) (floa
 	return 0, nil
 }
 
+// ConfirmPhysicalReceipt appelle le chaincode SmartContract.ConfirmPhysicalReceipt
+// (réception physique : en_transit → recu ; il n’existe pas de fonction ReceiveBatch côté chaincode).
 func (g *GatewayClient) ConfirmPhysicalReceipt(ctx context.Context, batchID, actorID string) (string, models.Batch, error) {
 	txID, _, err := g.submit(ctx, "ConfirmPhysicalReceipt", batchID, actorID)
 	if err != nil {

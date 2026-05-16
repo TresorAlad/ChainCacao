@@ -1,13 +1,21 @@
 /* eslint-env node */
 /**
  * URL de l'API : EXPO_PUBLIC_API_URL (.env) ou valeur par défaut ci-dessous.
+ * Doit être la racine http(s)://hôte:port sans suffixe /api/v1 (normalisé automatiquement).
  * Cleartext Android forcé via withAndroidManifest pour les URL http://.
  */
 const { withAndroidManifest } = require('@expo/config-plugins');
 
+/** Racine API uniquement (sans /api/v1) : les chemins dans services/api.ts ajoutent déjà /api/v1/... */
+function normalizeApiBaseUrl(url) {
+  let u = String(url || '').trim().replace(/\/+$/, '');
+  u = u.replace(/\/api\/v1\/?$/i, '');
+  return u || 'http://127.0.0.1:8080';
+}
+
 // Production par défaut (téléphone réel). En dev local : .env avec EXPO_PUBLIC_API_URL=http://10.0.2.2:8080
 const PRODUCTION_API_URL = 'http://13.60.214.56:8080';
-const apiUrl = process.env.EXPO_PUBLIC_API_URL || PRODUCTION_API_URL;
+const apiUrl = normalizeApiBaseUrl(process.env.EXPO_PUBLIC_API_URL || PRODUCTION_API_URL);
 const usesCleartextTraffic = apiUrl.startsWith('http://');
 
 /**

@@ -67,6 +67,16 @@ Chaque `up --build` **recompile l’image** (`Dockerfile`) → lent. Pour le quo
 
 Pour une **release** ou la prod : reconstruire l’image comme d’habitude (`docker compose up -d --build api`).
 
+## Acteurs démo (PostgreSQL)
+
+La migration [`internal/db/migrations/002_seed_demo_actors.sql`](internal/db/migrations/002_seed_demo_actors.sql) insère notamment **`actor-exp-001`** (PIN **3333**) avec l’email **`export-demo@chaincacao.tg`** pour éviter une collision `UNIQUE(email)` avec un compte créé via signup sur `export@chaincacao.tg`.
+
+Réparation idempotente sur une base existante (depuis ce dossier, avec le service Compose `postgres`) :
+
+```bash
+docker compose exec -T postgres psql -U chaincacao -d chaincacao < ../scripts/fix-seed-demo.sql
+```
+
 ## Variables d’environnement
 
 | Variable | Description |
@@ -74,7 +84,7 @@ Pour une **release** ou la prod : reconstruire l’image comme d’habitude (`do
 | `PORT` | Port HTTP (défaut `8080`) |
 | `JWT_SECRET` | Secret HMAC JWT |
 | `APP_ENV` | `production` → `JWT_SECRET` obligatoire |
-| `DATABASE_URL` | PostgreSQL (`?sslmode=require` sur Neon) |
+| `DATABASE_URL` | PostgreSQL (`?sslmode=require` sur Neon). **Docker** : hôte `postgres` (nom du service), ex. `postgres://chaincacao:chaincacao@postgres:5432/chaincacao` — pas `127.0.0.1` depuis le conteneur `api`. |
 | `REDIS_URL` | Rate limit `GET /verify/:id` |
 | `ALLOWED_ORIGINS` | CORS (virgules) |
 | `USE_INMEMORY_FABRIC` | `true` → mock ledger |

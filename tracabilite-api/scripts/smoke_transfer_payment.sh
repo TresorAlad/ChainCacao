@@ -4,7 +4,7 @@
 #   BASE_URL=http://127.0.0.1:8080 bash scripts/smoke_transfer_payment.sh
 #
 # Acteurs démo (internal/db/migrations/002_seed_demo_actors.sql) :
-#   actor-agri-001 PIN 1111 | actor-coop-001 PIN 4444 | actor-exp-001 PIN 3333
+#   actor-agri-001 PIN 1111 | actor-coop-001 PIN 4444 | actor-exp-001 PIN 3333 (email export-demo@chaincacao.tg)
 #   (ancien id export : actor-export-001 — secours automatique si BUYER_ACTOR non défini)
 #
 # Variables optionnelles :

@@ -375,6 +375,7 @@ var (
 	batchSeq    uint32
 )
 
+// buildBatchID génère un ID ledger avec préfixe TC- (aligné sur GetBatchesByOwner du chaincode : range TC-…TC~).
 func buildBatchID() string {
 	datePart := time.Now().UTC().Format("20060102")
 	batchIDMu.Lock()

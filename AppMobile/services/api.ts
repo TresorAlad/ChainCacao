@@ -8,11 +8,18 @@ export const HAS_PIN_KEY = 'chaincacao_has_pin';
 
 type ExpoExtra = { apiUrl?: string };
 
+/** Racine serveur uniquement (sans /api/v1) — les requêtes ajoutent /api/v1/... */
+function normalizeApiRoot(url: string): string {
+  let u = url.trim().replace(/\/+$/, '');
+  u = u.replace(/\/api\/v1\/?$/i, '');
+  return u;
+}
+
 /** URL de base : `extra.apiUrl` dans app.config.js (EXPO_PUBLIC_API_URL en build). */
 export function getApiBaseUrl(): string {
   const fromExtra = (Constants.expoConfig?.extra as ExpoExtra | undefined)?.apiUrl;
   if (typeof fromExtra === 'string' && fromExtra.trim()) {
-    const url = fromExtra.trim();
+    const url = normalizeApiRoot(fromExtra);
     if (url.includes('127.0.0.1') || url.includes('localhost')) {
       console.warn(
         '[ChainCacao] ⚠️  URL API localhost détectée (' + url + ').\n' +
@@ -23,7 +30,9 @@ export function getApiBaseUrl(): string {
     }
     return url;
   }
-  throw new Error('API URL non configurée : définissez EXPO_PUBLIC_API_URL ou extra.apiUrl dans app.config.js');
+  throw new Error(
+    'API URL non configurée : définissez EXPO_PUBLIC_API_URL ou extra.apiUrl dans app.config.js (racine http(s)://hôte:port, sans /api/v1).'
+  );
 }
 
 export const API_BASE = getApiBaseUrl();
