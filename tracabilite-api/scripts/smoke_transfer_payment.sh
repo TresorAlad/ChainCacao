@@ -56,7 +56,7 @@ fi
 if [[ -z "$AGRI_JWT" || "$AGRI_JWT" == "None" ]]; then
   echo "Échec login agriculteur — définissez AGRI_JWT ou vérifiez AGRI_ACTOR + AGRI_PIN (démo: actor-agri-001 / 1111)."
   echo "« acteur introuvable » : la table actors est vide ou mauvaise base — vérifier DATABASE_URL du conteneur api et les migrations (002_seed_demo_actors.sql)."
-  echo "Ex. : docker compose exec postgres psql -U \"\${POSTGRES_USER}\" -d \"\${POSTGRES_DB}\" -c 'SELECT id FROM actors ORDER BY 1;'"
+  echo "Ex. (valeurs par défaut compose) : docker compose exec postgres psql -U chaincacao -d chaincacao -c 'SELECT id FROM actors ORDER BY 1;'"
   echo "Si les lignes de login montrent encore « actor-export-001 » comme seul buyer : mettre à jour ce script (git pull) ; la démo seed utilise actor-exp-001."
   echo "HTTP 000 / API instable : docker compose logs --tail=100 api"
   exit 1
