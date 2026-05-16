@@ -78,22 +78,27 @@ export interface Batch {
   notes?: string
 }
 
+function asBatch(raw: unknown): Batch | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const id = r.id ?? r.batch_id
+  if (typeof id !== 'string' || !id.trim()) return null
+  return { ...(raw as unknown as Batch), id: id.trim() }
+}
+
 /** GET /lot/:id renvoie `{ success, lot }` côté API Go — utiliser pour axios.data. */
 export function unwrapLotFromResponse(data: unknown): Batch | null {
   if (!data || typeof data !== 'object') return null
   const o = data as Record<string, unknown>
-  const lot = o.lot
-  const batch = o.batch
-  if (lot && typeof lot === 'object') {
-    const b = lot as Record<string, unknown>
-    const id = (b.id ?? b.batch_id) as string | undefined
-    if (typeof id === 'string' && id) return { ...(lot as Batch), id }
-  }
-  if (batch && typeof batch === 'object' && typeof (batch as Batch).id === 'string') return batch as Batch
-  if (typeof (o as Batch).id === 'string') return o as Batch
+  const fromLot = asBatch(o.lot)
+  if (fromLot) return fromLot
+  const fromBatch = asBatch(o.batch)
+  if (fromBatch) return fromBatch
+  const direct = asBatch(o)
+  if (direct) return direct
   const batchId = o.batch_id
-  if (typeof batchId === 'string' && batchId) {
-    return { ...(o as Batch), id: batchId }
+  if (typeof batchId === 'string' && batchId.trim()) {
+    return { ...(o as unknown as Batch), id: batchId.trim() }
   }
   return null
 }
