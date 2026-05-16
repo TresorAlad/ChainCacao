@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import UpdateModal from '@/components/UpdateModal';
 import { SessionInvalidateBridge } from '@/components/session-invalidate-bridge';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -60,17 +61,19 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
-    <AuthProvider>
-      <PushAndUpdatesBootstrap />
-      <SafeAreaProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <SessionInvalidateBridge />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-          </Stack>
-          <StatusBar style="auto" />
-        </ThemeProvider>
-      </SafeAreaProvider>
-    </AuthProvider>
+    <AppErrorBoundary>
+      <AuthProvider>
+        <PushAndUpdatesBootstrap />
+        <SafeAreaProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <SessionInvalidateBridge />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+            </Stack>
+            <StatusBar style="auto" />
+          </ThemeProvider>
+        </SafeAreaProvider>
+      </AuthProvider>
+    </AppErrorBoundary>
   );
 }

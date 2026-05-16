@@ -410,7 +410,7 @@ export const batchApi = {
     api.get<GetBatchApiResponse>(`/api/v1/batch/${encodeURIComponent(id)}`),
 
   history: (id: string) =>
-    api.get<BatchHistoryApiResponse>(`/api/v1/batch/${encodeURIComponent(id)}/history`),
+    api.get<BatchHistoryApiResponse>(`/api/v1/lot/${encodeURIComponent(id)}/history`),
 
   verify: (id: string) =>
     api.get<VerifyBatchResponse>(`/api/v1/verify/${encodeURIComponent(id)}`),
@@ -447,7 +447,11 @@ export const actorsApi = {
 };
 
 export const myLotsApi = {
-  list: () => api.get<MyLotsResponse>('/api/v1/actors/me/lots'),
+  /** Inclut lots en possession + lots transférés (traçabilité). */
+  list: (params?: { limit?: number; page?: number }) =>
+    api.get<MyLotsResponse>('/api/v1/actors/me/lots', {
+      params: { limit: params?.limit ?? 200, page: params?.page ?? 1 },
+    }),
 };
 
 // ─── WALLET ─────────────────────────────────────────────────────────────────

@@ -55,6 +55,7 @@ type Service struct {
 	fabricClient fabric.Client
 	actors       ActorLookup
 	wallets      *wallet.Store // optionnel : soldes persistants PostgreSQL
+	traceIndex   TraceabilityIndex
 }
 
 func NewService(fabricClient fabric.Client, actors ActorLookup) *Service {
@@ -67,6 +68,12 @@ func NewService(fabricClient fabric.Client, actors ActorLookup) *Service {
 // WithWalletStore active les opérations portefeuille sur PostgreSQL (demo persistante).
 func (s *Service) WithWalletStore(store *wallet.Store) *Service {
 	s.wallets = store
+	return s
+}
+
+// WithTraceabilityIndex enregistre les liens acteur ↔ lot (lots transférés visibles après envoi).
+func (s *Service) WithTraceabilityIndex(idx TraceabilityIndex) *Service {
+	s.traceIndex = idx
 	return s
 }
 
@@ -102,6 +109,7 @@ func (s *Service) Create(ctx context.Context, input CreateBatchInput, actorID, o
 		Parcelle:      strings.TrimSpace(input.Parcelle),
 		DateRecolte:   strings.TrimSpace(input.DateRecolte),
 		Proprietaire:  actorID,
+		CreateurID:    actorID,
 		OrgID:         orgID, // proprietaire courant (org) cote API
 		PhotoURL:      strings.TrimSpace(input.PhotoURL),
 		Notes:         strings.TrimSpace(input.Notes),
@@ -111,6 +119,9 @@ func (s *Service) Create(ctx context.Context, input CreateBatchInput, actorID, o
 		return "", models.Batch{}, err
 	}
 	created = s.enrichOwnerOrg(ctx, created)
+	if s.traceIndex != nil {
+		_ = s.traceIndex.Link(ctx, actorID, created.ID)
+	}
 	return txHash, created, nil
 }
 
@@ -144,6 +155,11 @@ func (s *Service) Transfer(ctx context.Context, input TransferBatchInput, fromAc
 	}
 	// Harmonisation API: org proprietaire derive de l'acteur proprietaire (destinataire).
 	updated.OrgID = toActor.OrgID
+	if s.traceIndex != nil {
+		bid := strings.TrimSpace(input.BatchID)
+		_ = s.traceIndex.Link(ctx, fromActorID, bid)
+		_ = s.traceIndex.Link(ctx, input.ToActorID, bid)
+	}
 	return txHash, updated, nil
 }
 
@@ -156,7 +172,12 @@ func (s *Service) GetBatch(ctx context.Context, id string) (models.Batch, error)
 }
 
 func (s *Service) GetHistory(ctx context.Context, id string) ([]models.BatchHistoryEvent, error) {
-	return s.fabricClient.GetHistory(ctx, id)
+	events, err := s.fabricClient.GetHistory(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	linkActorsFromEvents(s.traceIndex, strings.TrimSpace(id), events)
+	return events, nil
 }
 
 func (s *Service) UpdateBatch(ctx context.Context, input map[string]any, batchID, actorID string) (string, models.Batch, error) {
@@ -209,6 +230,9 @@ func (s *Service) ConfirmPhysicalReceipt(ctx context.Context, batchID, actorID s
 		}
 	}
 	updated = s.enrichOwnerOrg(ctx, updated)
+	if s.traceIndex != nil {
+		_ = s.traceIndex.Link(ctx, actorID, batchID)
+	}
 	return txHash, updated, nil
 }
 
@@ -319,7 +343,49 @@ func (s *Service) GetMyLots(ctx context.Context, actorID string) ([]models.Batch
 		}
 		return nil, err
 	}
-	return s.enrichBatchesOrg(ctx, batches), nil
+	merged, err := s.mergeTraceabilityLots(ctx, actorID, batches)
+	if err != nil {
+		return nil, err
+	}
+	return s.enrichBatchesOrg(ctx, merged), nil
+}
+
+func (s *Service) mergeTraceabilityLots(ctx context.Context, actorID string, fromFabric []models.Batch) ([]models.Batch, error) {
+	seen := make(map[string]struct{}, len(fromFabric)+8)
+	out := make([]models.Batch, 0, len(fromFabric)+8)
+	add := func(b models.Batch) {
+		id := strings.TrimSpace(b.ID)
+		if id == "" {
+			return
+		}
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		out = append(out, b)
+	}
+	for _, b := range fromFabric {
+		add(b)
+	}
+	if s.traceIndex == nil {
+		return out, nil
+	}
+	ids, err := s.traceIndex.ListBatchIDs(ctx, actorID)
+	if err != nil {
+		log.Printf("[batch.GetMyLots] trace_index list actor_id=%s: %v", actorID, err)
+		return out, nil
+	}
+	for _, id := range ids {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		b, err := s.fabricClient.GetBatch(ctx, id)
+		if err != nil {
+			continue
+		}
+		add(b)
+	}
+	return out, nil
 }
 
 

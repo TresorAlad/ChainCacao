@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
+import { useRouter, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useAuth } from '@/hooks/use-auth';
 import { useLots } from '@/hooks/use-storage';
-import { batchApi, isNetworkError } from '@/services/api';
+import { batchApi, isNetworkError, myLotsApi, type BatchResponse } from '@/services/api';
+import { mapStatut } from '@/utils/lot-status';
 import {
   eventsFromVerifyResponse,
   parseTimelineEvents,
@@ -27,14 +29,28 @@ function firstParam(v: string | string[] | undefined): string {
   return Array.isArray(v) ? String(v[0] ?? '').trim() : String(v).trim();
 }
 
+type LotFilter = 'all' | 'owned' | 'transferred';
+
+type ServerLotPick = {
+  id: string;
+  title: string;
+  subtitle: string;
+  statutLabel: string;
+  isTransferredAway: boolean;
+};
+
 export default function HistoriqueScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { lots } = useLots();
+  const { isAuthenticated, user } = useAuth();
 
   const lotIdFromRoute = firstParam(params.lotId as string | string[] | undefined);
 
   const [searchId, setSearchId] = useState(lotIdFromRoute);
+  const [serverLots, setServerLots] = useState<ServerLotPick[]>([]);
+  const [serverLotsLoading, setServerLotsLoading] = useState(false);
+  const [lotFilter, setLotFilter] = useState<LotFilter>('all');
   const [events, setEvents] = useState<TimelineDisplayEvent[]>([]);
   const [lotTitle, setLotTitle] = useState('');
   const [loading, setLoading] = useState(false);
@@ -83,7 +99,7 @@ export default function HistoriqueScreen() {
 
     // 2. Historique authentifié (lot connu côté serveur)
     try {
-      const histRes = await batchApi.history(rawQuery);
+      const histRes = await batchApi.history(blockchainId);
       const rawEvents = histRes.data.events ?? [];
       if (rawEvents.length > 0) {
         setLotTitle(rawQuery);
@@ -113,6 +129,47 @@ export default function HistoriqueScreen() {
     if (next) setSearchId(next);
   }, [lotIdFromRoute]);
 
+  const loadServerLots = useCallback(async () => {
+    if (!isAuthenticated) {
+      setServerLots([]);
+      return;
+    }
+    const actorId = (user?.id ?? '').trim();
+    setServerLotsLoading(true);
+    try {
+      const { data } = await myLotsApi.list({ limit: 200 });
+      const picks = (data.lots ?? []).map((b: BatchResponse) => {
+        const st = mapStatut(b.statut);
+        const ownerId = (b.proprietaire_id ?? '').trim();
+        const isTransferredAway = Boolean(actorId && ownerId && ownerId !== actorId);
+        return {
+          id: b.id ?? '',
+          title: b.id ?? '—',
+          subtitle: `${b.culture ?? '—'} · ${b.quantite ?? '—'} kg · ${b.lieu ?? '—'}`,
+          statutLabel: isTransferredAway ? `${st.label} · Transféré` : st.label,
+          isTransferredAway,
+        };
+      });
+      setServerLots(picks.filter((p) => p.id));
+    } catch {
+      setServerLots([]);
+    } finally {
+      setServerLotsLoading(false);
+    }
+  }, [isAuthenticated, user?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadServerLots();
+    }, [loadServerLots])
+  );
+
+  const filteredServerLots = useMemo(() => {
+    if (lotFilter === 'owned') return serverLots.filter((l) => !l.isTransferredAway);
+    if (lotFilter === 'transferred') return serverLots.filter((l) => l.isTransferredAway);
+    return serverLots;
+  }, [serverLots, lotFilter]);
+
   useEffect(() => {
     if (!lotIdFromRoute) return;
     void handleSearch(lotIdFromRoute);
@@ -121,12 +178,19 @@ export default function HistoriqueScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lotIdFromRoute, lots]);
 
-  const openLotHistory = useCallback(
-    (lot: Lot) => {
-      setSearchId(lot.id);
-      void handleSearch(lot.id);
+  const openLotHistoryById = useCallback(
+    (id: string) => {
+      setSearchId(id);
+      void handleSearch(id);
     },
     [handleSearch]
+  );
+
+  const openLotHistory = useCallback(
+    (lot: Lot) => {
+      openLotHistoryById(lot.id);
+    },
+    [openLotHistoryById]
   );
 
   const eventConfig: Record<
@@ -152,7 +216,7 @@ export default function HistoriqueScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <MaterialCommunityIcons name="arrow-left" size={28} color="white" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Historique du lot</Text>
+        <Text style={styles.headerTitle}>Historique des lots</Text>
         <View style={{ width: 38 }} />
       </LinearGradient>
 
@@ -184,11 +248,79 @@ export default function HistoriqueScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          {isAuthenticated && (serverLotsLoading || serverLots.length > 0) ? (
+            <View style={styles.myLotsSection}>
+              <Text style={styles.myLotsTitle}>
+                Mes lots {user?.role ? `(${user.role})` : ''}
+              </Text>
+              <Text style={styles.myLotsSubtitle}>
+                Les lots transférés restent visibles pour la traçabilité (création, envoi, réception).
+              </Text>
+              <View style={styles.filterRow}>
+                {(
+                  [
+                    { key: 'all' as const, label: 'Tous' },
+                    { key: 'owned' as const, label: 'En ma possession' },
+                    { key: 'transferred' as const, label: 'Transférés' },
+                  ] as const
+                ).map((f) => (
+                  <TouchableOpacity
+                    key={f.key}
+                    style={[styles.filterChip, lotFilter === f.key && styles.filterChipActive]}
+                    onPress={() => setLotFilter(f.key)}
+                  >
+                    <Text
+                      style={[
+                        styles.filterChipText,
+                        lotFilter === f.key && styles.filterChipTextActive,
+                      ]}
+                    >
+                      {f.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {serverLotsLoading ? (
+                <ActivityIndicator color="#2E7D32" style={{ marginVertical: 12 }} />
+              ) : null}
+              {!serverLotsLoading && filteredServerLots.length === 0 ? (
+                <Text style={styles.emptyFilterText}>
+                  {lotFilter === 'transferred'
+                    ? 'Aucun lot transféré listé. Après un nouveau transfert (API à jour), ils apparaîtront ici.'
+                    : 'Aucun lot pour ce filtre.'}
+                </Text>
+              ) : null}
+              {filteredServerLots.map((lot) => (
+                <TouchableOpacity
+                  key={lot.id}
+                  style={[
+                    styles.lotPickRow,
+                    lot.isTransferredAway && styles.lotPickRowTransferred,
+                  ]}
+                  onPress={() => openLotHistoryById(lot.id)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons
+                    name={lot.isTransferredAway ? 'truck-check' : 'timeline-text-outline'}
+                    size={22}
+                    color={lot.isTransferredAway ? '#1565C0' : '#2E7D32'}
+                  />
+                  <View style={styles.lotPickTexts}>
+                    <Text style={styles.lotPickTitle}>{lot.title}</Text>
+                    <Text style={styles.lotPickSub}>{lot.subtitle}</Text>
+                    <Text style={styles.lotPickStatut}>{lot.statutLabel}</Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color="#CCC" />
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+
           {lots.length > 0 && (
             <View style={styles.myLotsSection}>
-              <Text style={styles.myLotsTitle}>Mes lots</Text>
+              <Text style={styles.myLotsTitle}>Lots sur l&apos;appareil</Text>
               <Text style={styles.myLotsSubtitle}>
-                Touchez un lot pour afficher son historique (chaîne).
+                Lots locaux (hors ligne ou en attente de synchro).
               </Text>
               {lots.map((lot) => (
                 <TouchableOpacity
@@ -295,7 +427,7 @@ export default function HistoriqueScreen() {
                       </View>
                       <Text style={styles.timelineDetail}>{event.detail}</Text>
                       <Text style={styles.timelineDate}>
-                        {event.date} · {event.acteur}
+                        {event.date} · Acteur : {event.acteur}
                       </Text>
                       {event.txHash ? (
                         <View style={styles.hashRow}>
@@ -374,6 +506,19 @@ const styles = StyleSheet.create({
   lotPickTexts: { flex: 1 },
   lotPickTitle: { fontSize: 16, fontWeight: '600', color: '#333' },
   lotPickSub: { fontSize: 13, color: '#888', marginTop: 2 },
+  lotPickStatut: { fontSize: 11, color: '#2E7D32', fontWeight: '700', marginTop: 4 },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#EEE',
+  },
+  filterChipActive: { backgroundColor: '#2E7D32' },
+  filterChipText: { fontSize: 11, fontWeight: '600', color: '#666' },
+  filterChipTextActive: { color: '#FFF' },
+  lotPickRowTransferred: { borderLeftWidth: 3, borderLeftColor: '#1565C0' },
+  emptyFilterText: { fontSize: 12, color: '#888', marginVertical: 8, lineHeight: 18 },
   emptyHint: {
     alignItems: 'center',
     paddingVertical: 28,

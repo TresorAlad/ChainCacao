@@ -126,7 +126,17 @@ export default function HistoriqueCooperativeScreen() {
                   if (activeFilter === 'Paiements' && !lot.statut?.includes('pay')) return null;
 
                   return (
-                    <View key={lot.id + index} style={styles.timelineItem}>
+                    <TouchableOpacity
+                      key={lot.id + index}
+                      style={styles.timelineItem}
+                      activeOpacity={0.85}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/historique',
+                          params: { lotId: lot.id ?? '' },
+                        } as any)
+                      }
+                    >
                       <View style={styles.timelineLeft}>
                         <View style={[styles.iconCircle, { backgroundColor: iconColor + '20' }]}>
                           <MaterialCommunityIcons name={iconName as any} size={20} color={iconColor} />
@@ -158,8 +168,9 @@ export default function HistoriqueCooperativeScreen() {
                             </Text>
                           </View>
                         </View>
+                        <Text style={styles.viewHistoryHint}>Voir l&apos;historique blockchain →</Text>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   );
                 })
               )}
@@ -272,6 +283,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     elevation: 2,
+  },
+  viewHistoryHint: {
+    marginTop: 8,
+    fontSize: 11,
+    fontFamily: 'Montserrat-Bold',
+    color: '#2E7D32',
   },
   detailRow: {
     flexDirection: 'row',

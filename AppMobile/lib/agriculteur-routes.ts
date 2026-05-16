@@ -12,6 +12,7 @@ export const AG = {
   lotDetail: (lotId: string) => `/(agriculteur)/lot-detail?lotId=${encodeURIComponent(lotId)}`,
   qrLot: (lotId: string) => `/(agriculteur)/qr-lot?lotId=${encodeURIComponent(lotId)}`,
   paiementLot: (lotId: string) => `/(agriculteur)/paiement-lot?lotId=${encodeURIComponent(lotId)}`,
+  historique: '/historique',
   historiqueLot: (lotId: string) => `/historique?lotId=${encodeURIComponent(lotId)}`,
   transfertLot: (lotId: string) => `/transfert?lotId=${encodeURIComponent(lotId)}`,
 } as const;

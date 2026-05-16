@@ -20,6 +20,25 @@ export interface TimelineDisplayEvent {
   source: 'blockchain' | 'local';
 }
 
+export function historyEventLabel(type?: string): string {
+  const t = String(type ?? '').toLowerCase();
+  if (t === 'creation') return 'Création du lot';
+  if (t === 'transfert') return 'Transfert';
+  if (t === 'reception') return 'Réception confirmée';
+  if (t === 'paiement' || t === 'paiement_liste') return 'Paiement';
+  if (t === 'export') return 'Export';
+  if (t === 'maj_poids') return 'Mise à jour du poids';
+  return type || 'Événement';
+}
+
+export function historyActorLine(event: BatchTimelineEvent): string {
+  const t = String(event.type ?? '').toLowerCase();
+  if (t === 'transfert' && (event.from_actor_id || event.to_actor_id)) {
+    return `${event.from_actor_id || '?'} → ${event.to_actor_id || '?'}`;
+  }
+  return event.actor_id || event.to_actor_id || event.from_actor_id || '—';
+}
+
 export function parseTimelineEvents(events: BatchTimelineEvent[]): TimelineDisplayEvent[] {
   return events.map((e) => {
     const p = e.payload || {};
@@ -50,13 +69,7 @@ export function parseTimelineEvents(events: BatchTimelineEvent[]): TimelineDispl
       if (!Number.isNaN(d.getTime())) date = d.toLocaleDateString('fr-FR');
     }
 
-    const acteur =
-      e.to_actor_id ||
-      e.actor_id ||
-      e.from_actor_id ||
-      p.proprietaire_id ||
-      p.org_id ||
-      '—';
+    const acteur = historyActorLine(e);
 
     let detail = `${p.culture ?? '—'} · ${p.quantite ?? '—'} kg · ${p.lieu ?? '—'}`;
     if (type === 'transfert' && (e.from_actor_id || e.to_actor_id)) {

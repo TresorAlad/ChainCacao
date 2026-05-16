@@ -118,6 +118,21 @@ export default function AccueilAgriculteur() {
                </View>
             </View>
 
+            <TouchableOpacity
+              style={styles.historiqueCard}
+              onPress={() => handleNavigation(AG.historique)}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons name="timeline-text-outline" size={28} color="#1B5E20" />
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text style={styles.historiqueTitle}>Historique des lots</Text>
+                <Text style={styles.historiqueSub}>
+                  Transferts, réceptions et traçabilité sur la blockchain
+                </Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color="#CCC" />
+            </TouchableOpacity>
+
             {/* OBJECTIF DE SAISON */}
             <View style={styles.rectGoalCard}>
               <View style={{ flex: 1 }}>
@@ -214,6 +229,17 @@ const styles = StyleSheet.create({
   body: { flex: 1, backgroundColor: '#F5F5F5', borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   content: { padding: 15 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
+  historiqueCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 15,
+    elevation: 2,
+  },
+  historiqueTitle: { fontSize: 15, fontFamily: 'Montserrat-Bold', color: '#1B5E20' },
+  historiqueSub: { fontSize: 12, fontFamily: 'Montserrat-Regular', color: '#666', marginTop: 4 },
   rectCard: { width: '48%', backgroundColor: 'white', borderRadius: 12, padding: 15, minHeight: 120, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   trendTextUp: { color: '#2E7D32', fontSize: 12, fontWeight: 'bold' },

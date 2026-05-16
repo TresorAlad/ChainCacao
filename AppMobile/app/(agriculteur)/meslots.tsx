@@ -130,6 +130,13 @@ export default function MesLots() {
           <View style={{ flex: 1 }}>
             <Text style={styles.lotNom}>{item.nom}</Text>
             <Text style={styles.lotDate}>Récolté le {item.date}</Text>
+            <TouchableOpacity
+              style={styles.historyLink}
+              onPress={() => router.push(AG.historiqueLot(item.id) as any)}
+            >
+              <MaterialCommunityIcons name="timeline-text-outline" size={14} color="#1B5E20" />
+              <Text style={styles.historyLinkText}>Historique blockchain</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.rightInfo}>
@@ -165,7 +172,16 @@ export default function MesLots() {
           <View style={styles.overlay}>
             <View style={styles.heroTopRow}>
               <Text style={styles.heroTitle}>Mes Lots</Text>
-              <Text style={styles.heroCount}>{lots.length} lots</Text>
+              <View style={styles.heroTopRight}>
+                <Text style={styles.heroCount}>{lots.length} lots</Text>
+                <TouchableOpacity
+                  style={styles.historyBtn}
+                  onPress={() => router.push(AG.historique as any)}
+                  accessibilityLabel="Historique des lots"
+                >
+                  <MaterialCommunityIcons name="history" size={22} color="white" />
+                </TouchableOpacity>
+              </View>
             </View>
             <View style={styles.statusRow}>
               <View style={[styles.dot, { backgroundColor: listError ? '#FFA726' : '#4CAF50' }]} />
@@ -232,8 +248,25 @@ const styles = StyleSheet.create({
   heroImage: { height: 160, width: '100%' },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', paddingHorizontal: 20 },
   heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  heroTopRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   heroTitle: { color: 'white', fontSize: 26, fontFamily: 'Montserrat-Bold' },
   heroCount: { color: 'white', fontSize: 18, fontFamily: 'Montserrat-Bold' },
+  historyBtn: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    padding: 8,
+    borderRadius: 10,
+  },
+  historyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 4,
+  },
+  historyLinkText: {
+    fontSize: 11,
+    color: '#1B5E20',
+    fontFamily: 'Montserrat-Bold',
+  },
   statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
   heroSubtitle: { color: 'rgba(255,255,255,0.9)', fontSize: 12, fontFamily: 'Montserrat-Regular', flex: 1 },

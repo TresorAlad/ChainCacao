@@ -76,7 +76,7 @@ export default function LotsRecusScreen() {
               <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
                 <Text style={styles.intro}>
                   Après un transfert vers votre compte, le lot est en <Text style={{ fontWeight: '700' }}>transit</Text>{' '}
-                  jusqu’à ce que vous confirmiez la réception physique (PIN).
+                  jusqu’à ce que vous confirmiez la réception physique (PIN). Appui long sur un lot pour voir son historique.
                 </Text>
                 {autres.length > 0 ? (
                   <Text style={styles.subIntro}>
@@ -104,6 +104,12 @@ export default function LotsRecusScreen() {
                   onPress={() =>
                     router.push({
                       pathname: '/confirmer-reception-lot',
+                      params: { lotId: id },
+                    } as any)
+                  }
+                  onLongPress={() =>
+                    router.push({
+                      pathname: '/historique',
                       params: { lotId: id },
                     } as any)
                   }

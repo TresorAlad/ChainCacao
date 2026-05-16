@@ -93,6 +93,9 @@ func main() {
 	batchService := batch.NewService(fc, actorService)
 	if pgPool != nil {
 		batchService = batchService.WithWalletStore(wallet.NewPGStore(pgPool))
+		batchService = batchService.WithTraceabilityIndex(batch.NewPGTraceIndex(pgPool))
+	} else {
+		batchService = batchService.WithTraceabilityIndex(batch.NewMemoryTraceIndex())
 	}
 
 	// DEMO: crédit initial 2M FCFA pour transformateur / exportateur existants.
