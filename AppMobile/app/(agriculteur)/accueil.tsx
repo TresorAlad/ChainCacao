@@ -70,6 +70,9 @@ export default function AccueilAgriculteur() {
   }, []);
 
   const handleNavigation = (path: string) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7502/ingest/021a24f4-c602-42f7-9527-28f6d89d0b6f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e5623e'},body:JSON.stringify({sessionId:'e5623e',location:'accueil.tsx:handleNavigation',message:'push',data:{path},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
     logNavigation('accueil', path);
     router.push(path as any);
   };

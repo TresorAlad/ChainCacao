@@ -45,6 +45,35 @@ function frDateToIso(fr: string): string {
   return new Date().toISOString().split('T')[0];
 }
 
+type NouveauLotErrorBoundaryState = { err: Error | null };
+
+class NouveauLotErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  NouveauLotErrorBoundaryState
+> {
+  state: NouveauLotErrorBoundaryState = { err: null };
+
+  static getDerivedStateFromError(err: Error): NouveauLotErrorBoundaryState {
+    return { err };
+  }
+
+  render() {
+    if (this.state.err) {
+      return (
+        <View style={{ flex: 1, padding: 24, justifyContent: 'center', backgroundColor: '#F5F5F5' }}>
+          <Text style={{ fontFamily: 'Montserrat-Bold', fontSize: 16, color: '#B71C1C', marginBottom: 8 }}>
+            Erreur à l’affichage
+          </Text>
+          <Text style={{ fontFamily: 'Montserrat-Regular', fontSize: 14, color: '#333' }}>
+            {this.state.err.message}
+          </Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 
 export default function NouveauLot() {
   const insets = useSafeAreaInsets();
@@ -120,10 +149,13 @@ export default function NouveauLot() {
   }, [refreshGpsPosition]);
 
   useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7502/ingest/021a24f4-c602-42f7-9527-28f6d89d0b6f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e5623e'},body:JSON.stringify({sessionId:'e5623e',location:'nouveaulot.tsx:mount',message:'screen_mounted',data:{hasUser:Boolean(user?.id)},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       console.log('[ChainCacao][nouveaulot] écran monté');
     }
-  }, []);
+  }, [user?.id]);
 
   const openCameraModal = async () => {
     const cam = await requestCameraPermission();
@@ -284,6 +316,7 @@ export default function NouveauLot() {
   }
 
   return (
+    <NouveauLotErrorBoundary>
     <SafeAreaProvider>
       <SafeAreaView style={styles.container} edges={['top']}>
         <Stack.Screen options={{ headerShown: false }} />
@@ -485,6 +518,7 @@ export default function NouveauLot() {
         </View>
       </SafeAreaView>
     </SafeAreaProvider>
+    </NouveauLotErrorBoundary>
   );
 }
 
@@ -504,7 +538,12 @@ const TabItem = ({ icon, label, active = false, isMain = false, onPress }: any) 
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1B5E20' },
-  loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1B5E20',
+  },
   header: { height: 60, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20 },
   headerTitle: { color: 'white', fontSize: 20, fontFamily: 'Montserrat-Bold', marginLeft: 15 },
   body: { flex: 1, backgroundColor: '#F5F5F5', borderTopLeftRadius: 20, borderTopRightRadius: 20 },

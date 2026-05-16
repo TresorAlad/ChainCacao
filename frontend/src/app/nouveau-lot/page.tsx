@@ -107,6 +107,9 @@ export default function NouveauLotPage() {
     }
 
     setIsSubmitting(true)
+    // #region agent log
+    fetch('http://127.0.0.1:7502/ingest/021a24f4-c602-42f7-9527-28f6d89d0b6f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e5623e'},body:JSON.stringify({sessionId:'e5623e',location:'nouveau-lot/page.tsx:submit',message:'post_lot_start',data:{culture,qty,hasLieu:Boolean(lieu.trim())},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{})
+    // #endregion
     if (process.env.NODE_ENV === 'development') {
       console.log('[nouveau-lot] POST /lot', { ...payload, notes: payload.notes ? '(présent)' : '' })
     }
@@ -116,6 +119,9 @@ export default function NouveauLotPage() {
         console.log('[nouveau-lot] réponse OK', res.status, res.data)
       }
       const newId = res.data.batch?.id
+      // #region agent log
+      fetch('http://127.0.0.1:7502/ingest/021a24f4-c602-42f7-9527-28f6d89d0b6f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e5623e'},body:JSON.stringify({sessionId:'e5623e',location:'nouveau-lot/page.tsx:submit',message:'post_lot_ok',data:{status:res.status,hasBatchId:Boolean(newId)},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{})
+      // #endregion
       if (newId && typeof window !== 'undefined') {
         try {
           const stored = JSON.parse(localStorage.getItem('chaincacao_my_lots') || '[]') as string[]
@@ -131,7 +137,11 @@ export default function NouveauLotPage() {
       toast.success(`Lot créé avec succès${newId ? ` (ID: ${newId})` : ''}`)
       router.push('/dashboard-agriculteur')
     } catch (err: unknown) {
-      console.error('[nouveau-lot] échec création lot', getAxiosErrorDetail(err))
+      const det = getAxiosErrorDetail(err)
+      // #region agent log
+      fetch('http://127.0.0.1:7502/ingest/021a24f4-c602-42f7-9527-28f6d89d0b6f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e5623e'},body:JSON.stringify({sessionId:'e5623e',location:'nouveau-lot/page.tsx:submit',message:'post_lot_err',data:{...det},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{})
+      // #endregion
+      console.error('[nouveau-lot] échec création lot', det)
       toast.error(getErrorMessage(err, 'Erreur lors de la création du lot'))
     } finally {
       setIsSubmitting(false)
