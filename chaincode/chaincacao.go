@@ -1052,11 +1052,63 @@ func (s *SmartContract) WithdrawWallet(ctx contractapi.TransactionContextInterfa
 	return s.walletPut(ctx, actorID, bal-amt)
 }
 
-// GetStats retourne des statistiques globales.
+// GetStats retourne des statistiques globales (scan des lots TC-* sur le ledger).
 func (s *SmartContract) GetStats(ctx contractapi.TransactionContextInterface) (map[string]interface{}, error) {
+	iter, err := ctx.GetStub().GetStateByRange("TC-", "TC~")
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	byStatus := make(map[string]int)
+	var totalWeight float64
+	enTransit := 0
+	exportes := 0
+	eudrConformes := 0
+	total := 0
+
+	for iter.HasNext() {
+		res, err := iter.Next()
+		if err != nil {
+			return nil, err
+		}
+		var b Batch
+		if err := json.Unmarshal(res.Value, &b); err != nil {
+			continue
+		}
+		if strings.TrimSpace(b.ID) == "" {
+			continue
+		}
+		total++
+		totalWeight += b.Quantite
+		st := strings.ToLower(strings.TrimSpace(b.Statut))
+		byStatus[st]++
+		switch st {
+		case "en_transit":
+			enTransit++
+		case "exporte", "exporté":
+			exportes++
+		}
+		if b.EUDRConforme {
+			eudrConformes++
+		}
+	}
+
+	activeLots := total - exportes
+	if activeLots < 0 {
+		activeLots = 0
+	}
+
 	return map[string]interface{}{
-		"status": "ok",
-		"note":   "GetStats non implemente sur le ledger; utilisez le dashboard API",
+		"total_lots":       total,
+		"total_batches":    total,
+		"total_weight":     totalWeight,
+		"active_lots":      activeLots,
+		"en_transit":       enTransit,
+		"exportes":         exportes,
+		"eudr_conformes":   eudrConformes,
+		"lots_by_statut":   byStatus,
+		"generated_at_utc": time.Now().UTC().Format(time.RFC3339),
 	}, nil
 }
 

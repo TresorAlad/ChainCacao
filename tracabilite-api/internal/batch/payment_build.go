@@ -9,8 +9,23 @@ import (
 )
 
 func (s *Service) sellerIDForBatch(ctx context.Context, lot models.Batch) string {
-	// Le vendeur au paiement est le propriétaire courant (agriculteur) sauf si fabric track sellers.
-	return strings.TrimSpace(lot.Proprietaire)
+	owner := strings.TrimSpace(lot.Proprietaire)
+	creator := strings.TrimSpace(lot.CreateurID)
+	// Après transfert, le propriétaire est l’acheteur (coop / exportateur) : créditer l’agriculteur.
+	if creator != "" && creator != owner {
+		return creator
+	}
+	if events, err := s.fabricClient.GetHistory(ctx, lot.ID); err == nil {
+		for i := len(events) - 1; i >= 0; i-- {
+			ev := events[i]
+			if strings.EqualFold(strings.TrimSpace(ev.Type), "transfert") {
+				if from := strings.TrimSpace(ev.FromActorID); from != "" && from != owner {
+					return from
+				}
+			}
+		}
+	}
+	return owner
 }
 
 func (s *Service) BuildPaymentLines(ctx context.Context, batchIDs []string, prixParKg, margePct float64) ([]PaymentLine, error) {

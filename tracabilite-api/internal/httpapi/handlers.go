@@ -610,16 +610,20 @@ func (h *Handler) DashboardStats(c *gin.Context) {
 	if list, err := h.actors.List(ctx); err == nil {
 		stats["total_actors"] = len(list)
 	}
+	var syncLots int64
 	if h.dedup != nil {
-		if n, err := h.dedup.CountDistinctLotIDs(ctx); err == nil && n > 0 {
-			stats["lots_synchronises"] = n
-			if batch.IntFromAny(stats["total_lots"]) == 0 {
-				stats["total_lots"] = n
-				stats["total_batches"] = n
+		if n, err := h.dedup.CountDistinctLotIDs(ctx); err == nil {
+			syncLots = n
+			if n > 0 {
+				stats["lots_synchronises"] = n
 			}
 		}
 	}
-	stats = batch.NormalizeDashboardStats(stats)
+	var traceLots int64
+	if h.pgPool != nil {
+		_ = h.pgPool.QueryRow(ctx, `SELECT COUNT(DISTINCT batch_id) FROM actor_lot_traceability`).Scan(&traceLots)
+	}
+	stats = batch.MergeDashboardFallback(stats, syncLots, traceLots)
 	c.JSON(http.StatusOK, gin.H{"success": true, "stats": stats})
 }
 
@@ -650,11 +654,32 @@ func (h *Handler) ActivityChart(c *gin.Context) {
 }
 
 func (h *Handler) AlertsCount(c *gin.Context) {
-	alerts, err := h.batch.GetAlertsCount(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+	ctx := c.Request.Context()
+	alerts, err := h.batch.GetAlertsCount(ctx)
+	if err != nil || alerts == nil {
+		alerts = map[string]any{}
 	}
+	total := batch.IntFromAny(alerts["total"])
+	if total == 0 {
+		total = batch.IntFromAny(alerts["count"])
+	}
+	if total == 0 {
+		stats := h.batch.GetStats(ctx)
+		total = batch.IntFromAny(stats["en_transit"])
+		if total == 0 {
+			total = batch.IntFromAny(stats["fraud_alerts"])
+		}
+	}
+	if h.inc != nil {
+		if open, err := h.inc.ListOpen(ctx); err == nil {
+			total += len(open)
+		}
+	}
+	if total < 0 {
+		total = 0
+	}
+	alerts["total"] = total
+	alerts["count"] = total
 	c.JSON(http.StatusOK, gin.H{"success": true, "alerts": alerts})
 }
 

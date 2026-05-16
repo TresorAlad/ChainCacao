@@ -20,6 +20,7 @@ import {
 import Link from 'next/link'
 import api, { Batch, BatchHistoryEvent, mergeLotDetail, unwrapLotFromResponse } from '@/lib/api'
 import {
+  canPayLot,
   canTransferLot,
   historyActorSummary,
   historyEventLabel,
@@ -120,6 +121,13 @@ function LotDetailContent() {
     receptionRoles.includes(user.role) &&
     lot.proprietaire_id === user.actor_id
 
+  const paymentRoles = ['cooperative', 'transformateur', 'exportateur', 'admin']
+  const canPay =
+    canPayLot(lot.statut) &&
+    user?.role &&
+    paymentRoles.includes(user.role) &&
+    lot.proprietaire_id === user.actor_id
+
   return (
     <div className="page-container py-6 sm:py-8">
       {/* En-tête du lot */}
@@ -169,6 +177,15 @@ function LotDetailContent() {
                 >
                   <CheckCircleIcon className="w-4 h-4" />
                   Confirmer réception
+                </Link>
+              ) : null}
+              {canPay ? (
+                <Link
+                  href={`/paiement-lot?lot=${encodeURIComponent(lot.id)}`}
+                  className="btn btn-primary btn-sm flex items-center gap-2"
+                >
+                  <FileCheckIcon className="w-4 h-4" />
+                  Payer le producteur
                 </Link>
               ) : null}
               {showTransfer ? (

@@ -122,7 +122,7 @@ export const NAV_ITEMS: NavItemDef[] = [
     icon: BanknotesIcon,
     label: 'Paiement lot',
     href: '/paiement-lot',
-    roles: ['transformateur', 'exportateur', 'admin'],
+    roles: ['cooperative', 'transformateur', 'exportateur', 'admin'],
     section: 'ops',
   },
   {
@@ -196,7 +196,7 @@ const ROUTE_ACCESS: Record<string, UserRole[]> = {
   '/transactions': ['admin'],
   '/export': ['exportateur', 'admin'],
   '/reception-lot': ['cooperative', 'transformateur', 'exportateur', 'admin'],
-  '/paiement-lot': ['transformateur', 'exportateur', 'admin'],
+  '/paiement-lot': ['cooperative', 'transformateur', 'exportateur', 'admin'],
   '/eudr-report': ['exportateur', 'admin'],
   '/paiement-liste': ['cooperative', 'transformateur', 'exportateur', 'admin'],
   '/transfer': ['agriculteur', 'cooperative', 'transformateur', 'exportateur', 'admin'],
@@ -218,10 +218,9 @@ function normalizeRole(role: string | undefined): UserRole | undefined {
   return normalizeUserRole(role)
 }
 
-/** Libellé sidebar (ex. « Supervision » pour le ministère à la place de « Accueil »). */
+/** Libellé sidebar (accueil ≠ supervision pour le ministère). */
 export function getNavLabel(item: NavItemDef, role: UserRole | string | undefined): string {
   const r = normalizeRole(role)
-  if (item.id === 'home' && r === 'ministere') return 'Supervision'
   if (item.id === 'home' && r === 'admin') return 'Tableau de bord'
   return item.label
 }

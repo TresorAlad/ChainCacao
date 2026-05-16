@@ -13,10 +13,11 @@ type Props = {
   visible: boolean;
   downloading: boolean;
   onUpdate: () => void;
+  onLater?: () => void;
 };
 
 /** Popup bloquant de mise à jour OTA (style application de paris). */
-export default function UpdateModal({ visible, downloading, onUpdate }: Props) {
+export default function UpdateModal({ visible, downloading, onUpdate, onLater }: Props) {
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View style={styles.overlay}>
@@ -43,8 +44,13 @@ export default function UpdateModal({ visible, downloading, onUpdate }: Props) {
               <Text style={styles.buttonText}>Mettre à jour maintenant</Text>
             )}
           </TouchableOpacity>
+          {onLater && !downloading ? (
+            <TouchableOpacity style={styles.laterBtn} onPress={onLater} activeOpacity={0.85}>
+              <Text style={styles.laterText}>Plus tard</Text>
+            </TouchableOpacity>
+          ) : null}
           {downloading ? (
-            <Text style={styles.hint}>Téléchargement en cours…</Text>
+            <Text style={styles.hint}>Téléchargement en cours… Ne fermez pas l’application.</Text>
           ) : null}
         </View>
       </View>
@@ -110,4 +116,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#757575',
   },
+  laterBtn: { marginTop: 14, paddingVertical: 10 },
+  laterText: { fontSize: 15, color: '#757575', fontWeight: '600' },
 });

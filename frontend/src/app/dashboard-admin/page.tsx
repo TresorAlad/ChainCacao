@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -9,6 +9,7 @@ import { KPICard, Badge, Button } from '@/components/ui'
 import { getRoleTheme } from '@/lib/role-themes'
 import api, { type ActorDTO } from '@/lib/api'
 import type { DashboardStats } from '@/lib/dashboard-stats'
+import { displayKpiNumber } from '@/lib/dashboard-kpi'
 import type { ActivityChartRow, RecentTransferRow } from '@/lib/dashboard-types'
 import { LocationMap } from '@/components/maps/LocationMapDynamic'
 import { markersFromActors, SUPERVISION_ACTOR_MAP_PIN, type MapMarker } from '@/lib/geo-utils'
@@ -45,53 +46,43 @@ export default function AdminDashboardPage() {
     }
   }, [isAuthenticated, loading, router])
 
+  const loadDashboard = useCallback(() => {
+    if (!isAuthenticated || user?.role !== 'admin') return
+    setStatsLoading(true)
+    setStatsNote(null)
+    Promise.all([
+      api.get<{ success: boolean; stats: DashboardStats }>('/dashboard/stats'),
+      api.get<{ success: boolean; transfers: RecentTransferRow[] }>('/dashboard/recent-transfers'),
+      api.get<{ success: boolean; activity: ActivityChartRow[] }>('/dashboard/activity-chart'),
+      api.get<{ success: boolean; alerts: Record<string, number> }>('/dashboard/alerts-count'),
+    ])
+      .then(([statsRes, transfersRes, chartRes, alertsRes]) => {
+        setStats(statsRes.data.stats || {})
+        setRecentTransfers(transfersRes.data.transfers || [])
+        setChartData(chartRes.data.activity || [])
+        const a = alertsRes.data.alerts
+        setAlertsCount(a?.total ?? a?.count ?? null)
+      })
+      .catch((err: Error & { status?: number }) => {
+        setStats({})
+        const msg = err.message || ''
+        const forbidden =
+          err.status === 403 ||
+          msg.includes('403') ||
+          msg.toLowerCase().includes('interdit') ||
+          msg.toLowerCase().includes('forbidden')
+        setStatsNote(
+          forbidden
+            ? 'Les statistiques agrégées sont réservées aux administrateurs.'
+            : msg || 'Impossible de charger les statistiques.'
+        )
+      })
+      .finally(() => setStatsLoading(false))
+  }, [isAuthenticated, user?.role])
+
   useEffect(() => {
-    if (isAuthenticated && user?.role === 'admin') {
-      // Fetch general stats
-      api
-        .get<{ success: boolean; stats: DashboardStats }>('/dashboard/stats')
-        .then((res) => {
-          setStats(res.data.stats || {})
-        })
-        .catch((err: Error & { status?: number }) => {
-          setStats({})
-          const msg = err.message || ''
-          const forbidden =
-            err.status === 403 ||
-            msg.includes('403') ||
-            msg.toLowerCase().includes('interdit') ||
-            msg.toLowerCase().includes('forbidden')
-          if (forbidden) {
-            setStatsNote(
-              'Les statistiques agrégées sont réservées aux administrateurs. Les autres fonctionnalités (lots, transferts, etc.) restent disponibles selon votre rôle.'
-            )
-          } else {
-            setStatsNote(msg || 'Impossible de charger les statistiques.')
-          }
-        })
-        .finally(() => setStatsLoading(false))
-
-      // Fetch recent transfers
-      api
-        .get<{ success: boolean; transfers: RecentTransferRow[] }>('/dashboard/recent-transfers')
-        .then((res) => setRecentTransfers(res.data.transfers || []))
-        .catch(() => setRecentTransfers([]))
-
-      // Fetch activity chart data
-      api
-        .get<{ success: boolean; activity: ActivityChartRow[] }>('/dashboard/activity-chart')
-        .then((res) => setChartData(res.data.activity || []))
-        .catch(() => setChartData([]))
-
-      api
-        .get<{ success: boolean; alerts: Record<string, number> }>('/dashboard/alerts-count')
-        .then((res) => {
-          const a = res.data.alerts
-          setAlertsCount(a?.total ?? a?.count ?? null)
-        })
-        .catch(() => setAlertsCount(null))
-    }
-  }, [isAuthenticated, user])
+    loadDashboard()
+  }, [loadDashboard])
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') return
@@ -144,7 +135,15 @@ export default function AdminDashboardPage() {
               Gestion globale de la plateforme ChainCacao et supervision des flux.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              type="button"
+              onClick={() => void loadDashboard()}
+              disabled={statsLoading}
+              className="px-5 py-2.5 bg-white border border-[var(--color-border)] rounded-xl text-sm font-bold text-[var(--color-muted)] hover:bg-gray-50 disabled:opacity-50"
+            >
+              {statsLoading ? 'Actualisation…' : 'Actualiser'}
+            </button>
             <Link href="/admin" className="px-6 py-2.5 bg-white border border-[var(--color-border)] rounded-xl text-sm font-bold text-[var(--color-muted)] hover:bg-gray-50 transition-colors">
               Administration
             </Link>
@@ -162,7 +161,9 @@ export default function AdminDashboardPage() {
               <CubeIcon className="w-6 h-6 text-[#2E7D32]" />
             </div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Lots Enregistrés</p>
-            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">{statsLoading ? '—' : (stats?.total_batches ?? '—')}</p>
+            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">
+              {displayKpiNumber(stats?.total_batches ?? stats?.total_lots, statsLoading)}
+            </p>
           </div>
 
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
@@ -170,7 +171,9 @@ export default function AdminDashboardPage() {
               <UsersIcon className="w-6 h-6 text-[#1565C0]" />
             </div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Acteurs Actifs</p>
-            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">{statsLoading ? '—' : (stats?.total_actors ?? '—')}</p>
+            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">
+              {displayKpiNumber(stats?.total_actors, statsLoading)}
+            </p>
           </div>
 
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
@@ -178,7 +181,9 @@ export default function AdminDashboardPage() {
               <TruckIcon className="w-6 h-6 text-[#E65100]" />
             </div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Lots en transit</p>
-            <p className="text-3xl font-black text-[#E65100] mt-1">{statsLoading ? '—' : (stats?.en_transit ?? '—')}</p>
+            <p className="text-3xl font-black text-[#E65100] mt-1">
+              {displayKpiNumber(stats?.en_transit, statsLoading)}
+            </p>
           </div>
 
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
@@ -186,9 +191,17 @@ export default function AdminDashboardPage() {
               <ExclamationTriangleIcon className="w-6 h-6 text-[#B71C1C]" />
             </div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Alertes Système</p>
-            <p className="text-3xl font-black text-[#B71C1C] mt-1">{statsLoading ? '—' : alertsCount ?? '—'}</p>
+            <p className="text-3xl font-black text-[#B71C1C] mt-1">
+              {displayKpiNumber(alertsCount, statsLoading)}
+            </p>
           </div>
         </div>
+
+        {statsNote ? (
+          <p className="mb-6 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            {statsNote}
+          </p>
+        ) : null}
 
         {/* Acteurs géolocalisés (pastilles rouges) */}
         <div className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-[var(--color-border)] mb-10">

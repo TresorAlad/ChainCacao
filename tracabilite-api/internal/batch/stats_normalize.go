@@ -32,7 +32,59 @@ func NormalizeDashboardStats(raw map[string]any) map[string]any {
 	if _, ok := out["exportes"]; !ok {
 		out["exportes"] = countStatus(by, "exporte") + countStatus(by, "exporté")
 	}
+	if _, ok := out["active_lots"]; !ok {
+		total := intFromAny(out["total_lots"])
+		if total == 0 {
+			total = intFromAny(out["total_batches"])
+		}
+		exp := intFromAny(out["exportes"])
+		active := total - exp
+		if active < 0 {
+			active = 0
+		}
+		out["active_lots"] = active
+	}
 	return out
+}
+
+// FabricStatsEmpty indique si le ledger n’a pas renvoyé de volumes exploitables.
+func FabricStatsEmpty(stats map[string]any) bool {
+	if stats == nil {
+		return true
+	}
+	if intFromAny(stats["total_lots"]) > 0 || intFromAny(stats["total_batches"]) > 0 {
+		return false
+	}
+	if intFromAny(stats["total_weight"]) > 0 {
+		return false
+	}
+	if note, ok := stats["note"].(string); ok && strings.Contains(strings.ToLower(note), "non implement") {
+		return true
+	}
+	if _, ok := stats["fabric_stats_error"]; ok {
+		return true
+	}
+	return intFromAny(stats["total_lots"]) == 0 && intFromAny(stats["total_batches"]) == 0
+}
+
+// MergeDashboardFallback complète les stats depuis PostgreSQL (sync_dedup, traçabilité).
+func MergeDashboardFallback(stats map[string]any, syncLots int64, traceLots int64) map[string]any {
+	stats = NormalizeDashboardStats(stats)
+	if !FabricStatsEmpty(stats) {
+		return stats
+	}
+	n := int(syncLots)
+	if int(traceLots) > n {
+		n = int(traceLots)
+	}
+	if n > 0 {
+		stats["total_lots"] = n
+		stats["total_batches"] = n
+		if _, ok := stats["active_lots"]; !ok || intFromAny(stats["active_lots"]) == 0 {
+			stats["active_lots"] = n
+		}
+	}
+	return stats
 }
 
 func parseLotsByStatut(v any) map[string]int {

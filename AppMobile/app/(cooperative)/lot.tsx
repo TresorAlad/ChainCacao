@@ -1,82 +1,91 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  TextInput, 
+import React, { useCallback, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
   FlatList,
-  Dimensions,
-  Platform
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-import { Stack, useRouter, useLocalSearchParams } from 'expo-router'; 
+import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-const { width } = Dimensions.get('window');
+import { CoopBottomNav } from '@/components/CoopBottomNav';
+import { myLotsApi, getApiError, type BatchResponse } from '@/services/api';
+import { canIncludeInGroupedList, canPayLot, isEnTransit, mapStatut } from '@/utils/lot-status';
 
-interface Production {
-  id: string;
-  title: string;
-  status: 'Terminé' | 'En cours' | 'Problème';
-  date: string;
-  poids?: string;
-  acheteur?: string;
-  destination?: string;
-}
+const brandGreen = '#2E7D32';
 
-export default function ProductionScreen() {
-  const insets = useSafeAreaInsets();
+export default function CooperativeLotsScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams(); 
-  const brandGreen = '#2E7D32';
-
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('Tous');
-  const [productions, setProductions] = useState<Production[]>([]);
+  const [filter, setFilter] = useState<'Tous' | 'Transit' | 'Reçus'>('Tous');
+  const [lots, setLots] = useState<BatchResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (params.newLotTitle) {
-      const nouveauLot: Production = {
-        id: Math.random().toString(),
-        title: params.newLotTitle as string,
-        status: (params.newLotStatus as any) || 'En cours',
-        date: params.newLotDate as string,
-        poids: (params.newLotQty as string) || '0',
-        destination: (params.newLotZone as string) || 'Non spécifiée',
-      };
-
-      setProductions(prev => {
-          const exists = prev.find(p => p.title === nouveauLot.title && p.date === nouveauLot.date);
-          if (exists) return prev;
-          return [nouveauLot, ...prev]; 
-      });
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const { data } = await myLotsApi.list({ limit: 200 });
+      setLots(data.lots ?? []);
+    } catch (e) {
+      setError(getApiError(e));
+      setLots([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-  }, [params.newLotTitle, params.newLotDate]);
+  }, []);
 
-  const filteredData = productions.filter(item => {
-    const matchesSearch = item.title.toLowerCase().includes(search.toLowerCase());
-    // On garde la logique de filtrage mais on a retiré l'option "Problème" de l'interface
-    const matchesFilter = filter === 'Tous' || item.status === filter;
-    return matchesSearch && matchesFilter;
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      void load();
+    }, [load])
+  );
+
+  const filtered = lots.filter((item) => {
+    const id = item.id ?? '';
+    const q = search.toLowerCase();
+    const matchesSearch =
+      id.toLowerCase().includes(q) ||
+      String(item.culture ?? '').toLowerCase().includes(q) ||
+      String(item.lieu ?? '').toLowerCase().includes(q);
+    if (!matchesSearch) return false;
+    if (filter === 'Transit') return isEnTransit(item.statut);
+    if (filter === 'Reçus') return canIncludeInGroupedList(item.statut);
+    return true;
   });
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* HEADER */}
       <LinearGradient colors={['#1B5E20', '#2E7D32', '#43A047']} style={styles.header}>
-        <Text style={styles.headerTitle}>Lots</Text>
+        <Text style={styles.headerTitle}>Mes lots</Text>
+        <TouchableOpacity
+          style={styles.listGroupBtn}
+          onPress={() => router.push('/(cooperative)/generation_liste' as any)}
+        >
+          <MaterialCommunityIcons name="format-list-bulleted-type" size={20} color="#1B5E20" />
+          <Text style={styles.listGroupText}>Liste groupée</Text>
+        </TouchableOpacity>
       </LinearGradient>
 
       <View style={styles.body}>
+        {error ? <Text style={styles.err}>{error}</Text> : null}
+
         <View style={styles.searchContainer}>
           <MaterialCommunityIcons name="magnify" size={20} color="#999" />
-          <TextInput 
+          <TextInput
             style={styles.searchInput}
-            placeholder="Rechercher un lot..."
+            placeholder="Rechercher un lot…"
             placeholderTextColor="#999"
             value={search}
             onChangeText={setSearch}
@@ -84,10 +93,9 @@ export default function ProductionScreen() {
         </View>
 
         <View style={styles.filterBar}>
-          {/* Option "Problème" supprimée ici */}
-          {['Tous', 'Terminé', 'En cours'].map((f) => (
-            <TouchableOpacity 
-              key={f} 
+          {(['Tous', 'Transit', 'Reçus'] as const).map((f) => (
+            <TouchableOpacity
+              key={f}
               style={[styles.filterBtn, filter === f && { backgroundColor: brandGreen }]}
               onPress={() => setFilter(f)}
             >
@@ -96,214 +104,138 @@ export default function ProductionScreen() {
           ))}
         </View>
 
-        <FlatList
-          data={filteredData}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <MaterialCommunityIcons name="clipboard-text-outline" size={80} color="#CCC" />
-              <Text style={styles.emptyText}>Aucun lot reçu.</Text>
-            </View>
-          }
-          renderItem={({ item }) => (
-            <TouchableOpacity 
-              style={styles.card}
-              onPress={() => router.push({
-                pathname: "/caracteristiqueslot",
-                params: { ...item }
-              })}
-            >
-              <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>{item.title}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <StatusBadge status={item.status} />
-                  <MaterialCommunityIcons name="chevron-right" size={20} color="#CCC" />
-                </View>
+        {loading ? (
+          <ActivityIndicator size="large" color={brandGreen} style={{ marginTop: 40 }} />
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => item.id ?? String(Math.random())}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => {
+                  setRefreshing(true);
+                  void load();
+                }}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <MaterialCommunityIcons name="package-variant" size={64} color="#CCC" />
+                <Text style={styles.emptyText}>Aucun lot pour ce filtre.</Text>
+                <Text style={styles.emptyHint}>
+                  Les lots transférés apparaissent en « Transit » jusqu’à confirmation de réception.
+                </Text>
               </View>
-              <Text style={styles.cardDate}>{item.date} • {item.poids} kg</Text>
-            </TouchableOpacity>
-          )}
-        />
+            }
+            renderItem={({ item }) => {
+              const id = item.id ?? '';
+              const st = mapStatut(item.statut);
+              const inTransit = isEnTransit(item.statut);
+              const payable = canPayLot(item.statut);
+              return (
+                <TouchableOpacity
+                  style={styles.card}
+                  onPress={() => {
+                    if (inTransit) {
+                      router.push({ pathname: '/confirmer-reception-lot', params: { lotId: id } } as any);
+                    } else if (payable) {
+                      router.push({ pathname: '/(cooperative)/paiement', params: { lotId: id } } as any);
+                    } else {
+                      router.push({ pathname: '/historique', params: { lotId: id } } as any);
+                    }
+                  }}
+                  onLongPress={() =>
+                    router.push({ pathname: '/historique', params: { lotId: id } } as any)
+                  }
+                >
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>
+                      {id}
+                    </Text>
+                    <View style={[styles.badge, { backgroundColor: st.color }]}>
+                      <Text style={[styles.badgeText, { color: st.textColor }]}>{st.label}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.cardSub}>
+                    {item.culture ?? 'Cacao'} · {item.quantite ?? 0} kg · {item.lieu ?? '—'}
+                  </Text>
+                  {inTransit ? (
+                    <Text style={styles.actionHint}>Appuyer pour confirmer la réception →</Text>
+                  ) : payable ? (
+                    <Text style={[styles.actionHint, { color: '#2E7D32' }]}>Appuyer pour payer l’agriculteur →</Text>
+                  ) : null}
+                </TouchableOpacity>
+              );
+            }}
+          />
+        )}
       </View>
 
-      {/* NAVIGATION BASSE */}
-      <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
-        <TabItem 
-          icon="home-variant" 
-          label="Dashboard" 
-          onPress={() => router.push('/(cooperative)/accueil' as any)} 
-        />
-        <TabItem 
-          icon="camera" 
-          label="Scanner" 
-          onPress={() => router.push('/(cooperative)/scanner' as any)} 
-        />
-        <TabItem 
-          icon="package-variant-closed" 
-          label="Lots" 
-          active 
-          color="#2E7D32" 
-        />
-        <TabItem 
-          icon="chart-timeline-variant" 
-          label="Historique" 
-          onPress={() => router.push('/historique' as any)}
-        />
-        <TabItem 
-          icon="account" 
-          label="Profil" 
-          onPress={() => router.push('/(cooperative)/profil' as any)}
-        />
-      </View>
+      <CoopBottomNav activeTab="lots" />
     </SafeAreaView>
   );
 }
 
-// Sous-composants
-const StatusBadge = ({ status }: { status: string }) => {
-  let color = '#666';
-  if (status === 'Terminé') color = '#2E7D32';
-  if (status === 'En cours') color = '#F9A825';
-  if (status === 'Problème') color = '#C62828';
-  return (
-    <View style={[styles.badge, { backgroundColor: color + '20', borderColor: color }]}>
-      <Text style={[styles.badgeText, { color }]}>{status}</Text>
-    </View>
-  );
-};
-
-const TabItem = ({ icon, label, active = false, color = "#666", onPress }: any) => (
-  <TouchableOpacity style={styles.tabItem} onPress={onPress} activeOpacity={0.6}>
-    <MaterialCommunityIcons name={icon} size={26} color={active ? color : "#666"} />
-    <Text style={[styles.tabLabel, { color: active ? color : "#666", fontFamily: active ? 'Montserrat-Bold' : 'Montserrat-Regular' }]}>
-        {label}
-    </Text>
-  </TouchableOpacity>
-);
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1B5E20' },
-  header: { 
-    height: 70, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: 25 
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  header: {
+    paddingTop: 12,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  headerTitle: { 
-    color: 'white', 
-    fontSize: 24, 
-    fontFamily: 'Montserrat-Bold' 
+  headerTitle: { color: 'white', fontSize: 22, fontWeight: 'bold' },
+  listGroupBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
   },
-  body: { 
-    flex: 1, 
-    backgroundColor: '#F8F9FA', 
-    borderTopLeftRadius: 30, 
-    borderTopRightRadius: 30, 
-    paddingTop: 20 
+  listGroupText: { color: '#1B5E20', fontWeight: '700', fontSize: 12 },
+  body: { flex: 1 },
+  err: { color: '#C62828', padding: 16, fontSize: 13 },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    height: 46,
+    elevation: 2,
   },
-  searchContainer: { 
-    flexDirection: 'row', 
-    backgroundColor: 'white', 
-    marginHorizontal: 20, 
-    paddingHorizontal: 15, 
-    borderRadius: 15, 
-    height: 50, 
-    alignItems: 'center', 
-    elevation: 2 
-  },
-  searchInput: { 
-    flex: 1, 
-    marginLeft: 10, 
-    fontSize: 16, 
-    fontFamily: 'Montserrat-Regular',
-    color: '#333'
-  },
-  filterBar: { 
-    flexDirection: 'row', 
-    justifyContent: 'flex-start', // Alignement au début pour 3 boutons
-    paddingHorizontal: 20, 
-    marginVertical: 15 
-  },
-  filterBtn: { 
-    paddingHorizontal: 15, 
-    paddingVertical: 8, 
-    borderRadius: 20, 
+  searchInput: { flex: 1, marginLeft: 8, fontSize: 15, color: '#333' },
+  filterBar: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginVertical: 12 },
+  filterBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
     backgroundColor: '#EEE',
-    marginRight: 10
   },
-  filterText: { 
-    fontSize: 12, 
-    fontFamily: 'Montserrat-Bold', 
-    color: '#666' 
+  filterText: { fontSize: 13, color: '#666', fontWeight: '600' },
+  listContent: { paddingHorizontal: 16, paddingBottom: 16 },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    elevation: 2,
   },
-  listContent: { 
-    paddingHorizontal: 20, 
-    paddingBottom: 40, // Moins d'espace nécessaire sans le FAB
-    flexGrow: 1 
-  },
-  card: { 
-    backgroundColor: 'white', 
-    borderRadius: 15, 
-    padding: 15, 
-    marginBottom: 12, 
-    elevation: 2 
-  },
-  cardHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center' 
-  },
-  cardTitle: { 
-    fontSize: 16, 
-    fontFamily: 'Montserrat-Bold', 
-    color: '#333' 
-  },
-  cardDate: { 
-    fontSize: 13, 
-    color: '#999', 
-    marginTop: 5, 
-    fontFamily: 'Montserrat-Regular' 
-  },
-  badge: { 
-    paddingHorizontal: 8, 
-    paddingVertical: 4, 
-    borderRadius: 8, 
-    borderWidth: 1, 
-    marginRight: 5 
-  },
-  badgeText: { 
-    fontSize: 10, 
-    fontFamily: 'Montserrat-Bold' 
-  },
-  emptyContainer: { 
-    flex: 1, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    marginTop: 100 
-  },
-  emptyText: { 
-    fontSize: 18, 
-    color: '#666', 
-    fontFamily: 'Montserrat-Bold', 
-    marginTop: 10 
-  },
-  bottomTab: { 
-    height: 75, 
-    backgroundColor: 'white', 
-    flexDirection: 'row', 
-    borderTopWidth: 1, 
-    borderTopColor: '#EEE', 
-    paddingBottom: Platform.OS === 'ios' ? 15 : 0 
-  },
-  tabItem: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
-  },
-  tabLabel: { 
-    fontSize: 10, 
-    marginTop: 4 
-  },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  cardTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: '#333' },
+  cardSub: { fontSize: 12, color: '#777', marginTop: 6 },
+  actionHint: { fontSize: 11, color: '#E65100', marginTop: 8, fontWeight: '600' },
+  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  badgeText: { fontSize: 10, fontWeight: '800' },
+  emptyContainer: { alignItems: 'center', marginTop: 48, paddingHorizontal: 24 },
+  emptyText: { fontSize: 16, color: '#999', marginTop: 12 },
+  emptyHint: { fontSize: 13, color: '#AAA', textAlign: 'center', marginTop: 8, lineHeight: 20 },
 });

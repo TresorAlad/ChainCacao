@@ -8,6 +8,7 @@ import { RoleLayout } from '@/components/RoleLayout'
 import { getRoleBasedRedirect, isMinistereRole, isAdminRole } from '@/lib/role-utils'
 import api from '@/lib/api'
 import type { DashboardStats } from '@/lib/dashboard-stats'
+import { displayKpiNumber, displayTracedVolume, pickTotalLots } from '@/lib/dashboard-kpi'
 import {
   BuildingLibraryIcon,
   UsersIcon,
@@ -59,9 +60,6 @@ export default function AccueilMinisterePage() {
     )
   }
 
-  const totalLots = stats?.total_batches ?? stats?.total_lots
-  const totalWeight = stats?.total_weight
-
   const quickLinks = [
     {
       href: '/dashboard-ministere',
@@ -92,7 +90,8 @@ export default function AccueilMinisterePage() {
         <header className="page-header mb-8">
           <h1 className="page-heading">Accueil — Ministère</h1>
           <p className="page-subtitle">
-            Vue d&apos;ensemble de la filière cacao et accès rapide aux outils de supervision.
+            Synthèse nationale et raccourcis. Pour l&apos;audit des lots, la carte et les alertes détaillées, ouvrez{' '}
+            <strong>Supervision</strong> (menu latéral).
           </p>
         </header>
 
@@ -101,23 +100,29 @@ export default function AccueilMinisterePage() {
             <ScaleIcon className="w-8 h-8 text-[#2E7D32] mb-3" />
             <p className="text-xs font-bold text-gray-400 uppercase">Volume tracé</p>
             <p className="text-2xl font-black text-[var(--color-primary)] mt-1">
-              {statsLoading ? '—' : totalWeight != null ? `${totalWeight.toLocaleString('fr-FR')} kg` : totalLots ?? '—'}
+              {displayTracedVolume(stats, statsLoading)}
             </p>
           </div>
           <div className="card p-5">
             <GlobeAmericasIcon className="w-8 h-8 text-[#1565C0] mb-3" />
             <p className="text-xs font-bold text-gray-400 uppercase">Lots actifs</p>
-            <p className="text-2xl font-black text-[var(--color-primary)] mt-1">{statsLoading ? '—' : totalLots ?? '—'}</p>
+            <p className="text-2xl font-black text-[var(--color-primary)] mt-1">
+              {displayKpiNumber(pickTotalLots(stats), statsLoading)}
+            </p>
           </div>
           <div className="card p-5">
             <ExclamationTriangleIcon className="w-8 h-8 text-[#E65100] mb-3" />
             <p className="text-xs font-bold text-gray-400 uppercase">En transit</p>
-            <p className="text-2xl font-black text-[#E65100] mt-1">{statsLoading ? '—' : stats?.en_transit ?? '—'}</p>
+            <p className="text-2xl font-black text-[#E65100] mt-1">
+              {displayKpiNumber(stats?.en_transit, statsLoading)}
+            </p>
           </div>
           <div className="card p-5">
             <ExclamationTriangleIcon className="w-8 h-8 text-[#B71C1C] mb-3" />
             <p className="text-xs font-bold text-gray-400 uppercase">Alertes</p>
-            <p className="text-2xl font-black text-[#B71C1C] mt-1">{statsLoading ? '—' : alertsCount ?? '—'}</p>
+            <p className="text-2xl font-black text-[#B71C1C] mt-1">
+              {displayKpiNumber(alertsCount, statsLoading)}
+            </p>
           </div>
         </div>
 

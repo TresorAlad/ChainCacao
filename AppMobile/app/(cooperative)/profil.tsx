@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Font from 'expo-font';
+import { CoopBottomNav } from '@/components/CoopBottomNav';
 import { useAuth } from '@/hooks/use-auth';
 
 const { width } = Dimensions.get('window');
@@ -47,7 +48,7 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: 88 }} showsVerticalScrollIndicator={false}>
         
         {/* --- FRAME SOLDE DESIGN --- */}
         <View style={styles.walletWrapper}>
@@ -122,6 +123,7 @@ export default function ProfileScreen() {
 
         <Text style={styles.versionText}>Chaincacao v1.0.4</Text>
       </ScrollView>
+      <CoopBottomNav activeTab="profil" />
     </SafeAreaView>
   );
 }

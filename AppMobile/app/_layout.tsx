@@ -18,7 +18,7 @@ import {
 } from '@/services/push-notifications';
 
 function PushAndUpdatesBootstrap() {
-  const { user, isAuthenticated, initialized } = useAuth();
+  const { user, isAuthenticated, initialized, canAccessApp } = useAuth();
   const [updateVisible, setUpdateVisible] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
@@ -31,18 +31,21 @@ function PushAndUpdatesBootstrap() {
   }, [initialized, isAuthenticated, user?.id]);
 
   useEffect(() => {
-    if (__DEV__) return;
-    void (async () => {
-      try {
-        const result = await Updates.checkForUpdateAsync();
-        if (result.isAvailable) {
-          setUpdateVisible(true);
+    if (__DEV__ || !initialized || !canAccessApp) return;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const result = await Updates.checkForUpdateAsync();
+          if (result.isAvailable) {
+            setUpdateVisible(true);
+          }
+        } catch {
+          /* expo-updates indisponible */
         }
-      } catch {
-        /* expo-updates indisponible en dev local */
-      }
-    })();
-  }, []);
+      })();
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [initialized, canAccessApp]);
 
   const onApplyUpdate = useCallback(async () => {
     setDownloading(true);
@@ -54,7 +57,14 @@ function PushAndUpdatesBootstrap() {
     }
   }, []);
 
-  return <UpdateModal visible={updateVisible} downloading={downloading} onUpdate={onApplyUpdate} />;
+  return (
+    <UpdateModal
+      visible={updateVisible}
+      downloading={downloading}
+      onUpdate={onApplyUpdate}
+      onLater={() => setUpdateVisible(false)}
+    />
+  );
 }
 
 export default function RootLayout() {

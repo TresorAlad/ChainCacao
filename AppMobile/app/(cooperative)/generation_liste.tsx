@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -11,9 +11,10 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { CoopBottomNav } from '@/components/CoopBottomNav';
 import {
   myLotsApi,
   groupedListApi,
@@ -22,6 +23,7 @@ import {
   getApiBaseUrl,
   type BatchResponse,
 } from '@/services/api';
+import { canIncludeInGroupedList } from '@/utils/lot-status';
 
 function generateListId() {
   const d = new Date();
@@ -57,7 +59,6 @@ function toRow(b: BatchResponse): LotRow {
 }
 
 export default function GenerationListeScreen() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const brandGreen = '#2E7D32';
 
@@ -69,20 +70,27 @@ export default function GenerationListeScreen() {
   const [lastListId, setLastListId] = useState<string | null>(null);
   const [qrBase64, setQrBase64] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const { data } = await myLotsApi.list();
-        const rows = (data.lots ?? []).map(toRow).filter((r) => r.id);
-        setLots(rows);
-      } catch (e) {
-        Alert.alert('Erreur', getApiError(e));
-      } finally {
-        setLoading(false);
-      }
-    })();
+  const loadLots = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await myLotsApi.list({ limit: 200 });
+      const rows = (data.lots ?? [])
+        .filter((b) => canIncludeInGroupedList(b.statut))
+        .map(toRow)
+        .filter((r) => r.id);
+      setLots(rows);
+    } catch (e) {
+      Alert.alert('Erreur', getApiError(e));
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadLots();
+    }, [loadLots])
+  );
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) =>
@@ -169,7 +177,11 @@ export default function GenerationListeScreen() {
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>Aucun lot reçu.</Text>
+                <Text style={styles.emptyText}>Aucun lot éligible.</Text>
+                <Text style={styles.emptyHint}>
+                  Confirmez d’abord la réception des lots en transit (Scanner ou onglet Lots → Transit), puis
+                  revenez ici pour créer une liste groupée (minimum 2 lots).
+                </Text>
               </View>
             }
             renderItem={({ item }) => {
@@ -219,25 +231,10 @@ export default function GenerationListeScreen() {
         </View>
       )}
 
-      <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
-        <TabItem icon="home-variant" label="Dashboard" onPress={() => router.push('/(cooperative)/accueil' as any)} />
-        <TabItem icon="camera" label="Scanner" onPress={() => router.push('/(cooperative)/scanner' as any)} />
-        <TabItem icon="package-variant-closed" label="Lots" active color={brandGreen} />
-        <TabItem icon="chart-timeline-variant" label="Historique" onPress={() => router.push('/historique' as any)} />
-        <TabItem icon="account" label="Profil" onPress={() => router.push('/(cooperative)/profil' as any)} />
-      </View>
+      <CoopBottomNav activeTab="lots" />
     </SafeAreaView>
   );
 }
-
-const TabItem = ({ icon, label, active = false, color = '#666', onPress }: any) => (
-  <TouchableOpacity style={styles.tabItem} onPress={onPress}>
-    <MaterialCommunityIcons name={icon} size={26} color={active ? color : '#666'} />
-    <Text style={[styles.tabLabel, { color: active ? color : '#666', fontWeight: active ? 'bold' : 'normal' }]}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#2E7D32' },
@@ -324,14 +321,5 @@ const styles = StyleSheet.create({
   generateBtnText: { color: 'white', marginLeft: 8, fontSize: 14, fontWeight: 'bold' },
   emptyContainer: { alignItems: 'center', marginTop: 80 },
   emptyText: { fontSize: 16, color: '#999', marginTop: 10 },
-  bottomTab: {
-    height: 75,
-    backgroundColor: 'white',
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: '#EEE',
-    paddingBottom: Platform.OS === 'ios' ? 15 : 0,
-  },
-  tabItem: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  tabLabel: { fontSize: 10, marginTop: 4 },
+  emptyHint: { fontSize: 13, color: '#AAA', textAlign: 'center', marginTop: 10, lineHeight: 20, paddingHorizontal: 12 },
 });

@@ -9,7 +9,7 @@ import api, { type Batch, unwrapLotFromResponse } from '@/lib/api'
 import { BanknotesIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
-const PAYMENT_ROLES = ['transformateur', 'exportateur', 'admin']
+const PAYMENT_ROLES = ['cooperative', 'transformateur', 'exportateur', 'admin']
 
 type LotPreview = {
   marge_pct: number
@@ -149,7 +149,12 @@ function PaiementLotContent() {
 
   if (!isAuthenticated || !user?.role || !PAYMENT_ROLES.includes(user.role)) return null
 
-  const roleKey = user.role === 'exportateur' ? 'exportateur' : 'transformateur'
+  const roleKey =
+    user.role === 'exportateur'
+      ? 'exportateur'
+      : user.role === 'cooperative'
+        ? 'cooperative'
+        : 'transformateur'
 
   return (
     <RoleLayout role={roleKey}>
@@ -160,7 +165,8 @@ function PaiementLotContent() {
             Paiement par identifiant
           </h1>
           <p className="page-subtitle">
-            Prix brut, marge coopérative et montant net affichés avant confirmation (CDC).
+            Paiement direct du producteur après réception du lot : prix brut, marge coopérative et montant net
+            crédité à l&apos;agriculteur.
           </p>
         </header>
 

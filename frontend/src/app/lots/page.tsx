@@ -10,6 +10,7 @@ import toast from 'react-hot-toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { canCreateLot } from '@/lib/role-nav'
 import {
+  canPayLot,
   historyActorSummary,
   historyEventLabel,
   isEnTransit,
@@ -362,6 +363,18 @@ export default function LotsPage() {
                     className="w-full py-3 bg-amber-500 text-white rounded-[1.5rem] text-sm font-bold text-center hover:brightness-110"
                   >
                     Confirmer réception
+                  </Link>
+                ) : null}
+                {user?.role &&
+                ['cooperative', 'transformateur', 'exportateur', 'admin'].includes(user.role) &&
+                selectedLot.proprietaire_id === user.actor_id &&
+                canPayLot(selectedLot.statut) &&
+                !isEnTransit(selectedLot.statut) ? (
+                  <Link
+                    href={`/paiement-lot?lot=${encodeURIComponent(selectedLot.id)}`}
+                    className="w-full py-3 bg-emerald-700 text-white rounded-[1.5rem] text-sm font-bold text-center hover:brightness-110"
+                  >
+                    Payer le producteur
                   </Link>
                 ) : null}
                 <Link

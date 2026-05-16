@@ -92,8 +92,8 @@ module.exports = {
     },
     updates: {
       url: 'https://u.expo.dev/f6a18683-7b87-4986-8742-0bf31e0078a3',
-      checkAutomatically: 'ON_LOAD',
-      fallbackToCacheTimeout: 0,
+      checkAutomatically: 'ON_ERROR_RECOVERY',
+      fallbackToCacheTimeout: 5000,
     },
     splash: {
       image: './assets/images/accueil.jpg',

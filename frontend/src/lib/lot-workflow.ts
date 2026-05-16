@@ -12,6 +12,14 @@ export function canTransferLot(statut?: string | null): boolean {
   return s === 'cree' || s === 'recu' || s === 'transfere' || !s
 }
 
+/** Acheteur (coop, transformateur, exportateur) peut payer un lot reçu, pas déjà payé. */
+export function canPayLot(statut?: string | null): boolean {
+  if (isEnTransit(statut)) return false
+  const s = String(statut ?? '').toLowerCase().trim()
+  if (s === 'paye' || s === 'exporte') return false
+  return s === 'recu' || s === 'cree' || s === 'transfere' || !s
+}
+
 /** Agriculteur : transfert uniquement tant que le lot n'a pas quitté la parcelle. */
 export function canAgriculteurTransfer(statut?: string | null): boolean {
   const s = String(statut ?? '').toLowerCase().trim()

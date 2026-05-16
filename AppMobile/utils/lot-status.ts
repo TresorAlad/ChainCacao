@@ -40,6 +40,21 @@ export function isEnTransit(statut?: string | null): boolean {
   return String(statut ?? '').toLowerCase() === 'en_transit';
 }
 
+/** Lot éligible à une liste groupée (réception confirmée, pas en transit ni déjà payé). */
+export function canIncludeInGroupedList(statut?: string | null): boolean {
+  const s = String(statut ?? '').toLowerCase().trim();
+  if (!s || s === 'en_transit' || s === 'paye' || s === 'exporte') return false;
+  return s === 'recu' || s === 'cree' || s === 'transfere';
+}
+
+/** Acheteur peut payer le producteur (lot reçu, pas en transit ni déjà payé). */
+export function canPayLot(statut?: string | null): boolean {
+  if (isEnTransit(statut)) return false;
+  const s = String(statut ?? '').toLowerCase().trim();
+  if (s === 'paye' || s === 'exporte') return false;
+  return s === 'recu' || s === 'cree' || s === 'transfere' || !s;
+}
+
 /** Le propriétaire peut transférer (réception confirmée ou lot créé). */
 export function canTransferLot(statut?: string | null): boolean {
   if (isEnTransit(statut)) return false;

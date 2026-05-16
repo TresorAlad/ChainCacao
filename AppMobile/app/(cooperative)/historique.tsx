@@ -14,6 +14,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
 
+import { CoopBottomNav } from '@/components/CoopBottomNav';
 import { myLotsApi, getApiError, type BatchResponse } from '@/services/api';
 import { mapStatut } from '@/utils/lot-status';
 
@@ -37,7 +38,7 @@ export default function HistoriqueCooperativeScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const { data } = await myLotsApi.list();
+      const { data } = await myLotsApi.list({ limit: 200 });
       const list = data.lots ?? [];
       list.sort((a, b) => new Date(b.timestamp ?? 0).getTime() - new Date(a.timestamp ?? 0).getTime());
       setLots(list);
@@ -178,23 +179,11 @@ export default function HistoriqueCooperativeScreen() {
           )}
         </View>
 
-        <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
-          <TabItem icon="home-variant" label="Accueil" onPress={() => router.replace('/(cooperative)/accueil')} />
-          <TabItem icon="package-variant-closed" label="Lots" onPress={() => router.push('/(cooperative)/lot')} />
-          <TabItem icon="truck-fast" label="Expédition" onPress={() => router.push('/(cooperative)/generation_liste')} />
-          <TabItem icon="history" label="Historique" active />
-        </View>
+        <CoopBottomNav activeTab="historique" />
       </SafeAreaView>
     </SafeAreaProvider>
   );
 }
-
-const TabItem = ({ icon, label, active = false, onPress }: { icon: string; label: string; active?: boolean; onPress?: () => void }) => (
-  <TouchableOpacity style={styles.tabItem} onPress={onPress}>
-    <MaterialCommunityIcons name={icon as any} size={24} color={active ? '#1B5E20' : '#888'} />
-    <Text style={[styles.tabLabel, { color: active ? '#1B5E20' : '#888', fontWeight: active ? 'bold' : 'normal' }]}>{label}</Text>
-  </TouchableOpacity>
-);
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1B5E20' },
@@ -306,17 +295,4 @@ const styles = StyleSheet.create({
     maxWidth: '70%',
   },
 
-  bottomTab: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'white',
-    flexDirection: 'row',
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    elevation: 20,
-  },
-  tabItem: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 10 },
-  tabLabel: { fontSize: 10, marginTop: 4, fontFamily: 'Montserrat-Regular' },
 });

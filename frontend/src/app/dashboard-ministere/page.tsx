@@ -11,6 +11,7 @@ import api, { type ActorDTO, type Batch, type BatchHistoryEvent, unwrapLotFromRe
 import { LocationMap } from '@/components/maps/LocationMapDynamic'
 import { coordsFromLot, markersFromActors, SUPERVISION_ACTOR_MAP_PIN, SUPERVISION_AUDIT_LOT_MAP_PIN, type MapMarker } from '@/lib/geo-utils'
 import type { DashboardStats } from '@/lib/dashboard-stats'
+import { displayKpiNumber, displayTracedVolume, pickTotalLots } from '@/lib/dashboard-kpi'
 import {
   GlobeAmericasIcon,
   ScaleIcon,
@@ -145,9 +146,6 @@ function MinistereDashboardContent() {
     )
   }
 
-  const totalLots = stats?.total_batches ?? stats?.total_lots
-  const totalWeight = stats?.total_weight
-
   return (
     <RoleLayout role="ministere">
       <div className="w-full py-6 sm:py-8">
@@ -175,7 +173,7 @@ function MinistereDashboardContent() {
             </div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Volume tracé</p>
             <p className="text-3xl font-black text-[var(--color-primary)] mt-1">
-              {statsLoading ? '—' : totalWeight != null ? `${totalWeight.toLocaleString('fr-FR')} kg` : totalLots ?? '—'}
+              {displayTracedVolume(stats, statsLoading)}
             </p>
           </div>
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
@@ -183,7 +181,9 @@ function MinistereDashboardContent() {
               <GlobeAmericasIcon className="w-6 h-6 text-[#1565C0]" />
             </div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Lots actifs</p>
-            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">{statsLoading ? '—' : totalLots ?? '—'}</p>
+            <p className="text-3xl font-black text-[var(--color-primary)] mt-1">
+              {displayKpiNumber(pickTotalLots(stats), statsLoading)}
+            </p>
           </div>
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
             <div className="w-10 h-10 bg-[#F3E5F5] rounded-xl flex items-center justify-center mb-4">
@@ -191,7 +191,7 @@ function MinistereDashboardContent() {
             </div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Lots en transit</p>
             <p className="text-3xl font-black text-[#E65100] mt-1">
-              {statsLoading ? '—' : stats?.en_transit ?? '—'}
+              {displayKpiNumber(stats?.en_transit, statsLoading)}
             </p>
           </div>
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
@@ -199,7 +199,9 @@ function MinistereDashboardContent() {
               <ExclamationTriangleIcon className="w-6 h-6 text-[#B71C1C]" />
             </div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Alertes fraude</p>
-            <p className="text-3xl font-black text-[#B71C1C] mt-1">{statsLoading ? '—' : alertsCount ?? '—'}</p>
+            <p className="text-3xl font-black text-[#B71C1C] mt-1">
+              {displayKpiNumber(alertsCount, statsLoading)}
+            </p>
           </div>
         </div>
 
@@ -212,7 +214,7 @@ function MinistereDashboardContent() {
             <ul className="space-y-3 text-sm text-[var(--color-muted)]">
               <li className="flex items-start gap-2 p-3 rounded-xl bg-red-50">
                 <span className="font-bold text-red-700">Lots bloqués &gt; 30 jours</span>
-                <span className="ml-auto font-black text-red-600">{alertsCount ?? '—'}</span>
+                <span className="ml-auto font-black text-red-600">{displayKpiNumber(alertsCount, statsLoading)}</span>
               </li>
               <li className="p-3 rounded-xl bg-amber-50 text-amber-800">
                 Variations de poids anormales — surveillance active via blockchain

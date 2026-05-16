@@ -12,8 +12,10 @@ import {
   CurrencyDollarIcon,
   CheckCircleIcon,
   PlusIcon,
+  InboxArrowDownIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import { canPayLot, isEnTransit, lotStatutDisplay } from '@/lib/lot-workflow'
 
 export default function ExportateurDashboardPage() {
   const { isAuthenticated, loading, user } = useAuth()
@@ -117,6 +119,72 @@ export default function ExportateurDashboardPage() {
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Chiffre d&apos;affaires</p>
             <p className="text-3xl font-black text-[var(--color-primary)] mt-1">—</p>
           </div>
+        </div>
+
+        {/* Lots en possession */}
+        <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[var(--color-border)] mb-10">
+          <div className="flex items-center gap-3 mb-6">
+            <InboxArrowDownIcon className="w-6 h-6 text-[#1B3A0F]" />
+            <h3 className="text-2xl font-black text-[var(--color-primary)]">
+              Mes lots
+              {myLots.length > 0 ? (
+                <span className="ml-2 text-sm font-bold text-[#2E7D32]">({myLots.length})</span>
+              ) : null}
+            </h3>
+          </div>
+          {myLots.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">
+              Aucun lot en stock. Les lots transférés vers vous apparaîtront ici.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {myLots.map((lot) => {
+                const { label, cls } = lotStatutDisplay(lot.statut)
+                const enTransit = isEnTransit(lot.statut)
+                const payable = canPayLot(lot.statut) && !enTransit
+                return (
+                  <div
+                    key={lot.id}
+                    className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-[#F9FBF7] border border-gray-100"
+                  >
+                    <div>
+                      <p className="text-sm font-black text-[#1B3A0F] font-mono">{lot.id}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {lot.culture} — {lot.quantite} kg{lot.lieu ? ` · ${lot.lieu}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${cls}`}>
+                        {label}
+                      </span>
+                      {enTransit ? (
+                        <Link
+                          href={`/reception-lot?lot=${encodeURIComponent(lot.id)}`}
+                          className="px-3 py-1.5 text-xs font-black bg-amber-500 text-white rounded-xl hover:brightness-110"
+                        >
+                          Réception
+                        </Link>
+                      ) : null}
+                      {payable ? (
+                        <Link
+                          href={`/paiement-lot?lot=${encodeURIComponent(lot.id)}`}
+                          className="px-3 py-1.5 text-xs font-black bg-emerald-700 text-white rounded-xl hover:brightness-110"
+                        >
+                          Payer
+                        </Link>
+                      ) : null}
+                      <Link
+                        href={`/lot-detail?id=${encodeURIComponent(lot.id)}`}
+                        className="px-3 py-1.5 text-xs font-black bg-white border border-gray-200 text-[#1B3A0F] rounded-xl hover:bg-gray-50"
+                      >
+                        Détail
+                      </Link>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Flux logistiques visuels (GPS) */}

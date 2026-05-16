@@ -112,7 +112,12 @@ export function getApiError(e: unknown, kind: GetApiErrorKind = 'default'): stri
       return `Configuration incorrecte : l'URL de l'API pointe vers localhost (${API_BASE}), ce qui ne fonctionne pas sur un téléphone réel. Vérifiez EXPO_PUBLIC_API_URL.`;
     }
     if (kind === 'auth') {
-      return unreachableServerMessage();
+      return (
+        `Le serveur ChainCacao (${API_BASE}) ne répond pas.\n\n` +
+        `Ce n’est pas le « mode hors-ligne » de l’application (il est désactivé). ` +
+        `Votre connexion Internet peut fonctionner (notifications, navigateur) alors que l’API est injoignable.\n\n` +
+        `Test : ouvrez ${API_BASE}/health dans le navigateur du téléphone.`
+      );
     }
     return unreachableServerMessage();
   }

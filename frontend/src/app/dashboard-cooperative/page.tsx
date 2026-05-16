@@ -20,7 +20,7 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { LocationMap } from '@/components/maps/LocationMapDynamic'
 import { markersFromActors, markersFromLots, type MapMarker } from '@/lib/geo-utils'
-import { canTransferLot, historyEventLabel, isEnTransit } from '@/lib/lot-workflow'
+import { canPayLot, canTransferLot, historyEventLabel, isEnTransit } from '@/lib/lot-workflow'
 
 interface LotWithHistory { lot: Batch; history: BatchHistoryEvent[] }
 
@@ -202,6 +202,12 @@ export default function CooperativeDashboardPage() {
             >
               Liste groupée
             </Link>
+            <Link
+              href="/paiement-lot"
+              className="px-6 py-2.5 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all text-center"
+            >
+              Payer un lot
+            </Link>
             <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-[#33691E] text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all">
               <CalendarIcon className="w-5 h-5" />
               Derniers 30 jours
@@ -343,6 +349,8 @@ export default function CooperativeDashboardPage() {
                     )
                     const enTransit = isEnTransit(lot.statut)
                     const canTransfer = !isTransferredAway && canTransferLot(lot.statut)
+                    const canPay =
+                      !isTransferredAway && canPayLot(lot.statut) && !enTransit
                     return (
                     <tr key={lot.id} className="hover:bg-gray-50 transition-all">
                       <td className="py-4 text-sm font-mono font-bold text-[#1B5E20]">
@@ -366,6 +374,10 @@ export default function CooperativeDashboardPage() {
                           {enTransit ? (
                             <Link href={`/reception-lot?lot=${encodeURIComponent(lot.id)}`} className="flex items-center gap-1 px-3 py-1.5 text-xs font-black bg-amber-500 text-white rounded-xl hover:brightness-110">
                               <InboxArrowDownIcon className="w-3 h-3" /> Réception
+                            </Link>
+                          ) : canPay ? (
+                            <Link href={`/paiement-lot?lot=${encodeURIComponent(lot.id)}`} className="px-3 py-1.5 text-xs font-black bg-emerald-700 text-white rounded-xl hover:brightness-110">
+                              Payer
                             </Link>
                           ) : canTransfer ? (
                             <Link href={`/transfer?lot=${lot.id}`} className="flex items-center gap-1 px-3 py-1.5 text-xs font-black bg-[#33691E] text-white rounded-xl hover:brightness-110">

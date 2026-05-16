@@ -7,16 +7,16 @@ import {
   ScrollView, 
   StatusBar,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as Font from 'expo-font';
+import { CoopBottomNav } from '@/components/CoopBottomNav';
 import { myLotsApi, marginApi, getApiError } from '@/services/api';
+import { isEnTransit } from '@/utils/lot-status';
 
 export default function MainDashboard() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [lotsRecus, setLotsRecus] = useState(0);
@@ -45,10 +45,10 @@ export default function MainDashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await myLotsApi.list();
+        const { data } = await myLotsApi.list({ limit: 200 });
         const lots = data.lots ?? [];
         setLotsRecus(lots.length);
-        const transit = lots.filter((b) => String(b.statut ?? '').toLowerCase() === 'en_transit').length;
+        const transit = lots.filter((b) => isEnTransit(b.statut)).length;
         setLotsEnTransit(transit);
         const kg = lots.reduce((s, b) => s + (b.quantite ?? 0), 0);
         setPoidsTotal(Math.round(kg));
@@ -155,52 +155,11 @@ export default function MainDashboard() {
           </ScrollView>
         </View>
 
-        {/* BARRE DE NAVIGATION BASSE (CORRIGÉE) */}
-        <View style={[styles.bottomTab, { paddingBottom: insets.bottom || 5, height: 70 + (insets.bottom || 0) }]}>
-          <TabItem 
-            icon="home-variant" 
-            label="Dashboard" 
-            active 
-            color="#2E7D32" 
-          />
-          <TabItem 
-            icon="camera" 
-            label="Scanner" 
-            onPress={() => router.push('/(cooperative)/scanner' as any)} 
-          />
-          <TabItem 
-            icon="package-variant-closed" 
-            label="Lots" 
-            onPress={() => router.push('/(cooperative)/lot' as any)} 
-          />
-          <TabItem 
-            icon="chart-timeline-variant" 
-            label="Historique" 
-            onPress={() => router.push('/(cooperative)/historique' as any)} 
-          />
-          <TabItem 
-            icon="account" 
-            label="Profil" 
-            onPress={() => router.push('/(cooperative)/profil' as any)} 
-          />
-        </View>
+        <CoopBottomNav activeTab="accueil" />
       </SafeAreaView>
     </SafeAreaProvider>
   );
 }
-
-// Composant interne pour les onglets
-const TabItem = ({ icon, label, active = false, color = "#666", onPress }: any) => (
-  <TouchableOpacity style={styles.tabItem} onPress={onPress} activeOpacity={0.6}>
-    <MaterialCommunityIcons name={icon} size={26} color={active ? color : "#666"} />
-    <Text style={[styles.tabLabel, { 
-        color: active ? color : "#666", 
-        fontFamily: active ? 'Montserrat-Bold' : 'Montserrat-Regular' 
-      }]}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1B5E20' },
@@ -272,14 +231,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   listText: { color: 'white', fontFamily: 'Montserrat-Bold', fontSize: 15, marginLeft: 10 },
-  bottomTab: { 
-    height: 75, 
-    backgroundColor: 'white', 
-    flexDirection: 'row', 
-    borderTopWidth: 1, 
-    borderTopColor: '#EEE',
-    paddingBottom: Platform.OS === 'ios' ? 20 : 10 
-  },
-  tabItem: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  tabLabel: { fontSize: 10, marginTop: 4 },
 });

@@ -19,6 +19,7 @@ import {
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import { canPayLot, isEnTransit } from '@/lib/lot-workflow'
 
 export default function TransformateurDashboardPage() {
   const { isAuthenticated, loading, user } = useAuth()
@@ -108,9 +109,9 @@ export default function TransformateurDashboardPage() {
           <div className="flex items-center gap-3">
             <Link
               href="/paiement-lot"
-              className="px-6 py-2.5 bg-white border border-[var(--color-border)] rounded-xl text-sm font-bold text-[var(--color-muted)] hover:bg-gray-50 transition-colors"
+              className="px-6 py-2.5 bg-emerald-800 text-white rounded-xl text-sm font-bold shadow-md hover:brightness-110 transition-all"
             >
-              Paiement par ID lot
+              Payer un lot
             </Link>
             <Link
               href="/transfer"
@@ -177,12 +178,24 @@ export default function TransformateurDashboardPage() {
                     <p className="text-sm font-black text-[#1B5E20] font-mono">{lot.id}</p>
                     <p className="text-xs text-gray-500 mt-0.5">{lot.culture} — {lot.quantite} kg{lot.lieu ? ` · ${lot.lieu}` : ''}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${statusColor(lot.statut)}`}>{statusLabel(lot.statut)}</span>
+                    {isEnTransit(lot.statut) ? (
+                      <Link href={`/reception-lot?lot=${encodeURIComponent(lot.id)}`} className="px-3 py-1.5 text-xs font-black bg-amber-500 text-white rounded-xl hover:brightness-110">
+                        Réception
+                      </Link>
+                    ) : null}
+                    {canPayLot(lot.statut) && !isEnTransit(lot.statut) ? (
+                      <Link href={`/paiement-lot?lot=${encodeURIComponent(lot.id)}`} className="px-3 py-1.5 text-xs font-black bg-emerald-700 text-white rounded-xl hover:brightness-110">
+                        Payer
+                      </Link>
+                    ) : null}
                     <Link href={`/update-weight?lot=${lot.id}`} className="px-3 py-1.5 text-xs font-black bg-[#33691E] text-white rounded-xl hover:brightness-110">Màj poids</Link>
-                    <Link href={`/transfer?lot=${lot.id}`} className="flex items-center gap-1 px-3 py-1.5 text-xs font-black bg-white border border-gray-200 text-[#33691E] rounded-xl hover:bg-[#F1F8E9]">
-                      <ArrowRightIcon className="w-3 h-3" /> Transférer
-                    </Link>
+                    {!isEnTransit(lot.statut) ? (
+                      <Link href={`/transfer?lot=${lot.id}`} className="flex items-center gap-1 px-3 py-1.5 text-xs font-black bg-white border border-gray-200 text-[#33691E] rounded-xl hover:bg-[#F1F8E9]">
+                        <ArrowRightIcon className="w-3 h-3" /> Transférer
+                      </Link>
+                    ) : null}
                   </div>
                 </div>
               ))}
