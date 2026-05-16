@@ -130,6 +130,9 @@ func (s *Service) Transfer(ctx context.Context, input TransferBatchInput, fromAc
 	if current.Proprietaire != fromActorID {
 		return "", models.Batch{}, errors.New("seul le proprietaire courant peut transferer")
 	}
+	if strings.EqualFold(strings.TrimSpace(current.Statut), "en_transit") {
+		return "", models.Batch{}, errors.New("le destinataire doit d'abord confirmer la reception physique du lot avant de le transferer")
+	}
 
 	toActor, err := s.actors.FindByID(ctx, input.ToActorID)
 	if err != nil {
@@ -215,6 +218,10 @@ func (s *Service) ConfirmBatchReceipt(ctx context.Context, batchID, actorID stri
 
 func (s *Service) GetPaymentStatus(ctx context.Context, batchID string) (map[string]any, error) {
 	return s.fabricClient.GetPaymentStatus(ctx, batchID)
+}
+
+func (s *Service) GetGroupedListBatchIDs(ctx context.Context, listID string) ([]string, error) {
+	return s.fabricClient.GetGroupedList(ctx, strings.TrimSpace(listID))
 }
 
 func (s *Service) CreateGroupedList(ctx context.Context, listID string, batchIDs []string, actorID string) (string, error) {

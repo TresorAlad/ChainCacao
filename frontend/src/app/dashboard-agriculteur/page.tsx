@@ -357,14 +357,8 @@ export default function AgriculteurDashboardPage() {
             </p>
             <div className="space-y-3">
               <Link
-                href="/sync"
-                className="block w-full py-3 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold text-center hover:brightness-110 transition-all"
-              >
-                Synchroniser mes lots
-              </Link>
-              <Link
                 href="/lots"
-                className="block w-full py-3 bg-white border border-[var(--color-border)] text-[var(--color-primary)] rounded-xl text-sm font-bold text-center hover:bg-gray-50 transition-all"
+                className="block w-full py-3 bg-[#1B3A0F] text-white rounded-xl text-sm font-bold text-center hover:brightness-110 transition-all"
               >
                 Gérer mes lots
               </Link>

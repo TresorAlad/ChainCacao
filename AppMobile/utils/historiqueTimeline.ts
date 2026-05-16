@@ -59,7 +59,15 @@ export function parseTimelineEvents(events: BatchTimelineEvent[]): TimelineDispl
       '—';
 
     let detail = `${p.culture ?? '—'} · ${p.quantite ?? '—'} kg · ${p.lieu ?? '—'}`;
-    if (p.statut) detail += ` · statut: ${p.statut}`;
+    if (type === 'transfert' && (e.from_actor_id || e.to_actor_id)) {
+      detail = `Transfert : ${e.from_actor_id || '?'} → ${e.to_actor_id || '?'}`;
+      if (p.statut) detail += ` · statut: ${p.statut}`;
+    } else if (type === 'reception') {
+      detail = 'Réception physique confirmée';
+      if (e.actor_id) detail += ` · ${e.actor_id}`;
+    } else if (p.statut) {
+      detail += ` · statut: ${p.statut}`;
+    }
     if (type === 'paiement' && e.commentaire) {
       try {
         const pay = JSON.parse(e.commentaire) as {

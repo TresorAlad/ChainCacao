@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -42,6 +43,7 @@ func (m *MemoryRepo) Save(_ context.Context, listID, createdBy string, batchIDs 
 }
 
 func (m *MemoryRepo) Get(_ context.Context, listID string) (List, error) {
+	listID = strings.TrimSpace(listID)
 	l, ok := m.m[listID]
 	if !ok {
 		return List{}, errors.New("liste introuvable")
@@ -68,6 +70,7 @@ func (p *PGRepo) Save(ctx context.Context, listID, createdBy string, batchIDs []
 }
 
 func (p *PGRepo) Get(ctx context.Context, listID string) (List, error) {
+	listID = strings.TrimSpace(listID)
 	var (
 		l        List
 		rawIDs   []byte

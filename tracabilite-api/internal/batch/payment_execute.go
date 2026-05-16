@@ -119,7 +119,7 @@ func (s *Service) PayGroupedListAtomic(ctx context.Context, list groupedlist.Lis
 	if prixParKg <= 0 {
 		return "", PaymentSummary{}, errors.New("prix_par_kg invalide")
 	}
-	coop, err := s.ResolveCooperativeForList(ctx, list)
+	coop, err := s.ResolveCooperativeForList(ctx, list, actorID)
 	if err != nil {
 		return "", PaymentSummary{}, err
 	}

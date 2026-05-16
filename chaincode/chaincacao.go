@@ -429,6 +429,9 @@ func (s *SmartContract) TransferBatch(ctx contractapi.TransactionContextInterfac
 	if batch.Proprietaire != fromActorID {
 		return fmt.Errorf("seul le proprietaire courant peut transferer")
 	}
+	if strings.EqualFold(strings.TrimSpace(batch.Statut), "en_transit") {
+		return fmt.Errorf("reception physique requise avant tout nouveau transfert (lot en transit)")
+	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	prev := batch.Proprietaire
 	batch.Proprietaire = toActorID
@@ -864,6 +867,29 @@ func (s *SmartContract) GetPaymentStatus(ctx contractapi.TransactionContextInter
 		return map[string]interface{}{"batch_id": batchID, "status": "paye"}, nil
 	}
 	return map[string]interface{}{"batch_id": batchID, "status": "en_attente"}, nil
+}
+
+// GetGroupedList retourne les identifiants de lots d'une liste groupée.
+func (s *SmartContract) GetGroupedList(ctx contractapi.TransactionContextInterface, listID string) ([]string, error) {
+	listID = strings.TrimSpace(listID)
+	if listID == "" {
+		return nil, fmt.Errorf("list_id requis")
+	}
+	raw, err := ctx.GetStub().GetState(groupedListKey(listID))
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return nil, fmt.Errorf("liste introuvable")
+	}
+	var ids []string
+	if err := json.Unmarshal(raw, &ids); err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("liste vide")
+	}
+	return ids, nil
 }
 
 // CreateGroupedList enregistre une liste de lots.

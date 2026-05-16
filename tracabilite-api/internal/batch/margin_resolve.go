@@ -31,8 +31,14 @@ func (s *Service) resolveCooperativeFromActorID(ctx context.Context, actorID str
 	return CooperativeContext{OrgID: org, CoopActorID: a.ID}, nil
 }
 
-func (s *Service) ResolveCooperativeForList(ctx context.Context, list groupedlist.List) (CooperativeContext, error) {
-	return s.resolveCooperativeFromActorID(ctx, list.CreatedBy)
+func (s *Service) ResolveCooperativeForList(ctx context.Context, list groupedlist.List, payerActorID string) (CooperativeContext, error) {
+	if list.CreatedBy != "" {
+		return s.resolveCooperativeFromActorID(ctx, list.CreatedBy)
+	}
+	if payerActorID != "" {
+		return s.resolveCooperativeFromActorID(ctx, payerActorID)
+	}
+	return CooperativeContext{OrgID: defaultCooperativeOrgID}, nil
 }
 
 func (s *Service) ResolveCooperativeForBatch(ctx context.Context, _ models.Batch) (CooperativeContext, error) {

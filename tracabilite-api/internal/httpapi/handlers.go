@@ -1062,13 +1062,36 @@ func (h *Handler) CreerListeGroupee(c *gin.Context) {
 		return
 	}
 	if h.lists != nil {
-		_ = h.lists.Save(c.Request.Context(), req.ListID, actorID, req.BatchIDs)
+		if err := h.lists.Save(c.Request.Context(), strings.TrimSpace(req.ListID), actorID, req.BatchIDs); err != nil {
+			log.Printf("[CreerListeGroupee] save_postgres list_id=%s err=%v", req.ListID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "liste créée sur la blockchain mais enregistrement local échoué — réessayez ou contactez l'admin"})
+			return
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": txHash, "list_id": req.ListID})
 }
 
+func (h *Handler) resolveGroupedList(ctx context.Context, listID, payerActorID string) (groupedlist.List, error) {
+	listID = strings.TrimSpace(listID)
+	if listID == "" {
+		return groupedlist.List{}, fmt.Errorf("identifiant liste requis")
+	}
+	if h.lists != nil {
+		if l, err := h.lists.Get(ctx, listID); err == nil {
+			return l, nil
+		}
+	}
+	ids, err := h.batch.GetGroupedListBatchIDs(ctx, listID)
+	if err != nil || len(ids) == 0 {
+		return groupedlist.List{}, fmt.Errorf("liste introuvable")
+	}
+	createdBy := strings.TrimSpace(payerActorID)
+	return groupedlist.List{ID: listID, CreatedBy: createdBy, BatchIDs: ids}, nil
+}
+
 func (h *Handler) PreviewListeGroupee(c *gin.Context) {
-	listID := c.Param("id")
+	listID := strings.TrimSpace(c.Param("id"))
+	actorID := c.GetString(auth.ContextActorID)
 	var req struct {
 		PrixParKg float64 `json:"prix_par_kg" binding:"required"`
 	}
@@ -1076,16 +1099,12 @@ func (h *Handler) PreviewListeGroupee(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload invalide"})
 		return
 	}
-	if h.lists == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "liste store absent"})
-		return
-	}
-	l, err := h.lists.Get(c.Request.Context(), listID)
+	l, err := h.resolveGroupedList(c.Request.Context(), listID, actorID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
-	coop, err := h.batch.ResolveCooperativeForList(c.Request.Context(), l)
+	coop, err := h.batch.ResolveCooperativeForList(c.Request.Context(), l, actorID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -1120,7 +1139,7 @@ func (h *Handler) PayerListeGroupee(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload invalide"})
 		return
 	}
-	listID := c.Param("id")
+	listID := strings.TrimSpace(c.Param("id"))
 	actorID := c.GetString(auth.ContextActorID)
 	_, err := h.actors.Authenticate(c.Request.Context(), actorID, req.PIN)
 	if err != nil {
@@ -1128,12 +1147,7 @@ func (h *Handler) PayerListeGroupee(c *gin.Context) {
 		return
 	}
 
-	// Calculer le total a payer + verifier solde puis debiter le payeur.
-	if h.lists == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "liste store absent"})
-		return
-	}
-	l, err := h.lists.Get(c.Request.Context(), listID)
+	l, err := h.resolveGroupedList(c.Request.Context(), listID, actorID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return

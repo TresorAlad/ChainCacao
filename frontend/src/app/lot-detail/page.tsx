@@ -19,6 +19,12 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import api, { Batch, BatchHistoryEvent, mergeLotDetail, unwrapLotFromResponse } from '@/lib/api'
+import {
+  canTransferLot,
+  historyActorSummary,
+  historyEventLabel,
+  isEnTransit,
+} from '@/lib/lot-workflow'
 import toast from 'react-hot-toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { LocationMap } from '@/components/maps/LocationMapDynamic'
@@ -27,7 +33,7 @@ import { coordsFromLot } from '@/lib/geo-utils'
 function LotDetailContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { isAuthenticated, loading } = useAuth()
+  const { isAuthenticated, loading, user } = useAuth()
   const [lot, setLot] = useState<Batch | null>(null)
   const [history, setHistory] = useState<BatchHistoryEvent[]>([])
   const [dataLoading, setDataLoading] = useState(true)
@@ -105,6 +111,15 @@ function LotDetailContent() {
     )
   }
 
+  const enTransit = isEnTransit(lot.statut)
+  const showTransfer = canTransferLot(lot.statut)
+  const receptionRoles = ['cooperative', 'transformateur', 'exportateur', 'admin']
+  const canConfirmReception =
+    enTransit &&
+    user?.role &&
+    receptionRoles.includes(user.role) &&
+    lot.proprietaire_id === user.actor_id
+
   return (
     <div className="page-container py-6 sm:py-8">
       {/* En-tête du lot */}
@@ -137,16 +152,35 @@ function LotDetailContent() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4 flex-wrap">
               {lot.statut && (
-                <span className="inline-flex px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  {lot.statut}
+                <span
+                  className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
+                    enTransit ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                  }`}
+                >
+                  {enTransit ? 'En transit — réception requise' : lot.statut}
                 </span>
               )}
             </div>
-            <div className="flex gap-2">
-              <Link href={`/transfer?lot=${lot.id}`} className="btn btn-secondary btn-sm flex items-center gap-2">
-                <TruckIcon className="w-4 h-4" />
-                Transférer
-              </Link>
+            <div className="flex gap-2 flex-wrap">
+              {canConfirmReception ? (
+                <Link
+                  href={`/reception-lot?lot=${encodeURIComponent(lot.id)}`}
+                  className="btn btn-primary btn-sm flex items-center gap-2"
+                >
+                  <CheckCircleIcon className="w-4 h-4" />
+                  Confirmer réception
+                </Link>
+              ) : null}
+              {showTransfer ? (
+                <Link href={`/transfer?lot=${lot.id}`} className="btn btn-secondary btn-sm flex items-center gap-2">
+                  <TruckIcon className="w-4 h-4" />
+                  Transférer
+                </Link>
+              ) : enTransit ? (
+                <span className="text-xs text-amber-800 font-medium px-2 py-1 self-center">
+                  Transfert bloqué tant que la réception n&apos;est pas confirmée
+                </span>
+              ) : null}
               <Link href={`/update-weight?lot=${lot.id}`} className="btn btn-primary btn-sm flex items-center gap-2">
                 <WeightIcon className="w-4 h-4" />
                 Mettre à jour poids
@@ -263,8 +297,10 @@ function LotDetailContent() {
                               ? new Date(event.created_at).toLocaleString('fr-FR')
                               : '—'}
                           </td>
-                          <td className="px-6 py-4 font-medium text-[var(--color-primary)]">{event.type}</td>
-                          <td className="px-6 py-4 text-[var(--color-earth)]">{event.actor_id || '—'}</td>
+                          <td className="px-6 py-4 font-medium text-[var(--color-primary)]">
+                            {historyEventLabel(event.type)}
+                          </td>
+                          <td className="px-6 py-4 text-[var(--color-earth)]">{historyActorSummary(event)}</td>
                           <td className="px-6 py-4 text-[var(--color-muted)]">{event.commentaire || '—'}</td>
                           <td className="px-6 py-4 text-[var(--color-muted)] font-mono text-xs">
                             {event.tx_hash ? `${event.tx_hash.slice(0, 10)}...` : '—'}

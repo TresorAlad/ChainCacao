@@ -5,21 +5,14 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { CubeIcon, PlusIcon, QrCodeIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
-import api, { type Batch, unwrapLotFromResponse } from '@/lib/api'
+import api, { type Batch, type BatchHistoryEvent, unwrapLotFromResponse } from '@/lib/api'
 import { canCreateLot } from '@/lib/role-nav'
-
-function statusLabel(statut?: string): { label: string; cls: string } {
-  switch ((statut || '').toUpperCase()) {
-    case 'VERIFIED':
-    case 'VÉRIFIÉ':
-      return { label: 'VÉRIFIÉ', cls: 'bg-[#E8F5E9] text-[#2E7D32]' }
-    case 'REJECTED':
-    case 'REJETÉ':
-      return { label: 'REJETÉ', cls: 'bg-[#FFEBEE] text-[#B71C1C]' }
-    default:
-      return { label: 'EN COURS', cls: 'bg-[#FFF3E0] text-[#E65100]' }
-  }
-}
+import {
+  historyActorSummary,
+  historyEventLabel,
+  isEnTransit,
+  lotStatutDisplay,
+} from '@/lib/lot-workflow'
 
 function formatDate(d?: string) {
   if (!d) return '—'
@@ -37,15 +30,32 @@ export default function LotsPage() {
   const [searchResult, setSearchResult] = useState<Batch | null | 'not-found'>(null)
   const [searching, setSearching] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [panelHistory, setPanelHistory] = useState<BatchHistoryEvent[]>([])
+  const [panelHistoryLoading, setPanelHistoryLoading] = useState(false)
 
   const filteredLots =
     statusFilter === 'all'
       ? lots
       : lots.filter((l) => {
           const st = (l.statut || '').toLowerCase().trim()
-          if (statusFilter === 'transfere') return st === 'transfere' || st === 'en_transit'
+          if (statusFilter === 'transfere') return st === 'transfere'
           return st === statusFilter
         })
+
+  useEffect(() => {
+    if (!selectedLot?.id) {
+      setPanelHistory([])
+      return
+    }
+    setPanelHistoryLoading(true)
+    api
+      .get<{ success: boolean; events: BatchHistoryEvent[] }>(
+        `/lot/${encodeURIComponent(selectedLot.id)}/history`
+      )
+      .then((res) => setPanelHistory(res.data.events || []))
+      .catch(() => setPanelHistory([]))
+      .finally(() => setPanelHistoryLoading(false))
+  }, [selectedLot?.id])
 
   const fetchLot = useCallback(async (id: string) => {
     if (!id.trim()) return
@@ -157,16 +167,23 @@ export default function LotsPage() {
             </span>
           </div>
           <div className="flex flex-wrap gap-2 mb-6">
-            {['all', 'cree', 'transfere', 'exporte'].map((s) => (
+            {[
+              { key: 'all', label: 'Tous' },
+              { key: 'cree', label: 'Créés' },
+              { key: 'en_transit', label: 'En transit' },
+              { key: 'recu', label: 'Reçus' },
+              { key: 'transfere', label: 'Transférés' },
+              { key: 'exporte', label: 'Exportés' },
+            ].map(({ key, label }) => (
               <button
-                key={s}
+                key={key}
                 type="button"
-                onClick={() => setStatusFilter(s)}
+                onClick={() => setStatusFilter(key)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase ${
-                  statusFilter === s ? 'bg-[#1B3A0F] text-white' : 'bg-gray-100 text-gray-500'
+                  statusFilter === key ? 'bg-[#1B3A0F] text-white' : 'bg-gray-100 text-gray-500'
                 }`}
               >
-                {s === 'all' ? 'Tous' : s}
+                {label}
               </button>
             ))}
           </div>
@@ -194,7 +211,12 @@ export default function LotsPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {filteredLots.map((lot) => {
-                    const st = statusLabel(lot.statut)
+                    const st = lotStatutDisplay(lot.statut)
+                    const isTransferredAway = Boolean(
+                      user?.actor_id &&
+                        lot.proprietaire_id &&
+                        lot.proprietaire_id !== user.actor_id
+                    )
                     return (
                       <tr
                         key={lot.id}
@@ -214,6 +236,11 @@ export default function LotsPage() {
                           <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${st.cls}`}>
                             {st.label}
                           </span>
+                          {isTransferredAway ? (
+                            <span className="ml-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase bg-blue-50 text-blue-700">
+                              Traçabilité
+                            </span>
+                          ) : null}
                         </td>
                         <td className="py-5 text-right">
                           <Link href={`/lot-detail?id=${lot.id}`} className="p-2 hover:bg-white rounded-lg border border-transparent hover:border-gray-200 transition-all inline-block">
@@ -245,6 +272,19 @@ export default function LotsPage() {
                 </div>
               </div>
 
+              <div className="mb-4">
+                <span
+                  className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase ${lotStatutDisplay(selectedLot.statut).cls}`}
+                >
+                  {lotStatutDisplay(selectedLot.statut).label}
+                </span>
+                {isEnTransit(selectedLot.statut) ? (
+                  <p className="text-xs text-amber-800 mt-2 font-medium">
+                    Réception physique requise avant un nouveau transfert.
+                  </p>
+                ) : null}
+              </div>
+
               <div className="space-y-4 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Culture</span>
@@ -264,13 +304,55 @@ export default function LotsPage() {
                 </div>
               </div>
 
-              <Link
-                href={`/lot-detail?id=${selectedLot.id}`}
-                className="w-full mt-8 py-4 bg-[#1B3A0F] text-white rounded-[1.5rem] text-sm font-bold shadow-lg hover:brightness-110 transition-all flex items-center justify-center gap-2"
-              >
-                <CubeIcon className="w-5 h-5" />
-                Voir historique complet
-              </Link>
+              <div className="mt-6 border-t border-gray-100 pt-5">
+                <p className="text-xs font-black uppercase text-gray-400 tracking-widest mb-3">
+                  Historique ({panelHistory.length})
+                </p>
+                {panelHistoryLoading ? (
+                  <p className="text-xs text-gray-400">Chargement…</p>
+                ) : panelHistory.length === 0 ? (
+                  <p className="text-xs text-gray-400">Aucun événement enregistré.</p>
+                ) : (
+                  <ul className="space-y-2 max-h-48 overflow-y-auto">
+                    {panelHistory.map((ev, idx) => (
+                      <li key={idx} className="text-xs rounded-xl bg-gray-50 p-3">
+                        <p className="font-bold text-[var(--color-primary)]">{historyEventLabel(ev.type)}</p>
+                        <p className="text-gray-600 mt-0.5">{historyActorSummary(ev)}</p>
+                        <p className="text-gray-400 mt-1">
+                          {ev.created_at ? new Date(ev.created_at).toLocaleString('fr-FR') : '—'}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2 mt-6">
+                {isEnTransit(selectedLot.statut) &&
+                user?.role &&
+                ['cooperative', 'transformateur', 'exportateur', 'admin'].includes(user.role) &&
+                selectedLot.proprietaire_id === user.actor_id ? (
+                  <Link
+                    href={`/reception-lot?lot=${encodeURIComponent(selectedLot.id)}`}
+                    className="w-full py-3 bg-amber-500 text-white rounded-[1.5rem] text-sm font-bold text-center hover:brightness-110"
+                  >
+                    Confirmer réception
+                  </Link>
+                ) : null}
+                <Link
+                  href={`/full-history?lot=${encodeURIComponent(selectedLot.id)}`}
+                  className="w-full py-3 bg-[#1B3A0F] text-white rounded-[1.5rem] text-sm font-bold shadow-lg hover:brightness-110 transition-all flex items-center justify-center gap-2"
+                >
+                  <CubeIcon className="w-5 h-5" />
+                  Historique complet
+                </Link>
+                <Link
+                  href={`/lot-detail?id=${selectedLot.id}`}
+                  className="w-full py-3 border border-[#C8E6C9] text-[#33691E] rounded-[1.5rem] text-sm font-bold text-center hover:bg-[#F1F8E9]"
+                >
+                  Détail du lot
+                </Link>
+              </div>
             </div>
           </div>
         )}

@@ -73,7 +73,12 @@ function ReceptionLotContent() {
         poids_constate: poids && poids > 0 ? poids : undefined,
       })
       toast.success('Réception physique confirmée sur la chaîne')
-      router.push(`/paiement-lot?lot=${encodeURIComponent(lot.id)}`)
+      const role = (user?.role || '').toLowerCase()
+      if (role === 'cooperative') {
+        router.push('/dashboard-cooperative')
+      } else {
+        router.push(`/lots`)
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Échec de la réception'
       toast.error(msg)

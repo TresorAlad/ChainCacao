@@ -9,7 +9,7 @@ import api from '@/lib/api'
 import { BanknotesIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
-const PAYMENT_ROLES = ['transformateur', 'exportateur', 'admin']
+const PAYMENT_ROLES = ['cooperative', 'transformateur', 'exportateur', 'admin']
 
 type PaymentLine = {
   lot_id: string
@@ -122,7 +122,12 @@ function PaiementListeContent() {
 
   if (!isAuthenticated || !user?.role || !PAYMENT_ROLES.includes(user.role)) return null
 
-  const roleKey = user.role === 'exportateur' ? 'exportateur' : 'transformateur'
+  const roleKey =
+    user.role === 'exportateur'
+      ? 'exportateur'
+      : user.role === 'cooperative'
+        ? 'cooperative'
+        : 'transformateur'
 
   return (
     <RoleLayout role={roleKey}>

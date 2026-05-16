@@ -6,7 +6,6 @@ import {
   ChartBarIcon,
   QrCodeIcon,
   UsersIcon,
-  ArrowPathIcon,
   ArrowUpTrayIcon,
   BuildingLibraryIcon,
   RectangleStackIcon,
@@ -131,7 +130,7 @@ export const NAV_ITEMS: NavItemDef[] = [
     icon: RectangleStackIcon,
     label: 'Payer liste groupée',
     href: '/paiement-liste',
-    roles: ['transformateur', 'exportateur', 'admin'],
+    roles: ['cooperative', 'transformateur', 'exportateur', 'admin'],
     section: 'ops',
   },
   {
@@ -183,14 +182,6 @@ export const NAV_ITEMS: NavItemDef[] = [
     section: 'ops',
   },
   {
-    id: 'sync',
-    icon: ArrowPathIcon,
-    label: 'Sync',
-    href: '/sync',
-    roles: ['admin', 'agriculteur'],
-    section: 'ops',
-  },
-  {
     id: 'portefeuille',
     icon: WalletIcon,
     label: 'Portefeuille',
@@ -202,13 +193,12 @@ export const NAV_ITEMS: NavItemDef[] = [
 
 const ROUTE_ACCESS: Record<string, UserRole[]> = {
   '/nouveau-lot': ['agriculteur', 'admin'],
-  '/sync': ['agriculteur', 'admin'],
   '/transactions': ['admin'],
   '/export': ['exportateur', 'admin'],
   '/reception-lot': ['cooperative', 'transformateur', 'exportateur', 'admin'],
   '/paiement-lot': ['transformateur', 'exportateur', 'admin'],
   '/eudr-report': ['exportateur', 'admin'],
-  '/paiement-liste': ['transformateur', 'exportateur', 'admin'],
+  '/paiement-liste': ['cooperative', 'transformateur', 'exportateur', 'admin'],
   '/transfer': ['agriculteur', 'cooperative', 'transformateur', 'exportateur', 'admin'],
   '/liste-groupee': ['cooperative', 'admin'],
   '/lots': ['agriculteur', 'cooperative', 'transformateur', 'exportateur', 'admin'],
@@ -265,11 +255,6 @@ export function getNavSectionsForRole(role: UserRole | string | undefined): {
 }
 
 export function canCreateLot(role: UserRole | string | undefined): boolean {
-  const r = normalizeRole(role)
-  return r === 'agriculteur' || r === 'admin'
-}
-
-export function canUseSync(role: UserRole | string | undefined): boolean {
   const r = normalizeRole(role)
   return r === 'agriculteur' || r === 'admin'
 }

@@ -222,6 +222,14 @@ func (c *ProxyClient) CreateGroupedList(ctx context.Context, listID string, batc
 	return out.TxHash, err
 }
 
+func (c *ProxyClient) GetGroupedList(ctx context.Context, listID string) ([]string, error) {
+	var out struct {
+		BatchIDs []string `json:"batch_ids"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/v1/fabric/groupedlist/"+listID, nil, &out)
+	return out.BatchIDs, err
+}
+
 func (c *ProxyClient) PayGroupedList(ctx context.Context, listID, actorID string) (string, error) {
 	var out proxyTxBatchResponse
 	err := c.doJSON(ctx, http.MethodPost, "/v1/fabric/groupedlist/pay", map[string]any{"list_id": listID, "actor_id": actorID}, &out)

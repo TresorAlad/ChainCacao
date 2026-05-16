@@ -16,7 +16,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, Stack, useLocalSearchParams, Redirect } from 'expo-router';
 import { useLots } from '@/hooks/use-storage';
 import { useAuth } from '@/hooks/use-auth';
-import { actorsApi, batchApi, ActorInfo, getApiError, isNetworkError } from '@/services/api';
+import {
+  actorsApi,
+  batchApi,
+  myLotsApi,
+  ActorInfo,
+  getApiError,
+  isNetworkError,
+  type BatchResponse,
+} from '@/services/api';
+import { canAgriculteurTransfer, canTransferLot, isEnTransit } from '@/utils/lot-status';
 import { LOTS_UPDATED_EVENT } from '@/lib/storage-keys';
 
 export default function TransfertScreen() {
@@ -33,6 +42,8 @@ export default function TransfertScreen() {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'lot' | 'acteur' | 'confirm'>('lot');
   const [lotSearch, setLotSearch] = useState('');
+  const [chainLots, setChainLots] = useState<BatchResponse[]>([]);
+  const [loadingLots, setLoadingLots] = useState(false);
 
   const roleLower = (user?.role || '').toLowerCase();
 
@@ -69,7 +80,6 @@ export default function TransfertScreen() {
     return filteredActors.filter(a => a.id !== myCoopActor.id);
   }, [filteredActors, myCoopActor, roleLower]);
 
-  const foundLot = lots.find(l => l.id === selectedLotId || l.title === selectedLotId);
   const selectedActor = filteredActors.find(a => a.id === selectedActorId);
 
   // Charger la liste des acteurs depuis l'API
@@ -88,18 +98,63 @@ export default function TransfertScreen() {
     })();
   }, []);
 
-  const filteredLots = lots.filter(l =>
-    lotSearch === '' ||
-    l.title.toLowerCase().includes(lotSearch.toLowerCase()) ||
-    l.id.toLowerCase().includes(lotSearch.toLowerCase())
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    (async () => {
+      setLoadingLots(true);
+      try {
+        const { data } = await myLotsApi.list();
+        setChainLots(data.lots ?? []);
+      } catch {
+        setChainLots([]);
+      } finally {
+        setLoadingLots(false);
+      }
+    })();
+  }, [isAuthenticated]);
+
+  const transferableChainLots = useMemo(() => {
+    return chainLots.filter((b) => {
+      if (roleLower === 'agriculteur') return canAgriculteurTransfer(b.statut);
+      return canTransferLot(b.statut);
+    });
+  }, [chainLots, roleLower]);
+
+  const pendingReception = useMemo(
+    () => chainLots.filter((b) => isEnTransit(b.statut)),
+    [chainLots]
   );
+
+  const filteredLots = transferableChainLots.filter((b) => {
+    const q = lotSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      (b.id || '').toLowerCase().includes(q) ||
+      (b.culture || '').toLowerCase().includes(q)
+    );
+  });
+
+  const foundLot =
+    transferableChainLots.find((b) => b.id === selectedLotId) ??
+    lots.find((l) => l.id === selectedLotId || l.title === selectedLotId);
+
+  const selectedLotIdResolved = foundLot ? (isChainLot(foundLot) ? foundLot.id ?? '' : foundLot.id) : '';
+
+  function isChainLot(b: BatchResponse | (typeof lots)[number]): b is BatchResponse {
+    return 'culture' in b;
+  }
+
+  const lotLabel = (b: BatchResponse | (typeof lots)[number]) => {
+    if (isChainLot(b)) return `${b.id ?? ''} (${b.culture ?? 'lot'})`;
+    return b.title || b.id;
+  };
 
   const handleTransfer = () => {
     if (!foundLot || !selectedActor) return;
 
     Alert.alert(
       'Confirmer le transfert',
-      `Transférer "${foundLot.title}" vers "${selectedActor.nom || selectedActor.name}" ?`,
+      `Transférer "${lotLabel(foundLot)}" vers "${selectedActor.nom || selectedActor.name}" ?`,
       [
         { text: 'Annuler', style: 'cancel' },
         { text: 'Confirmer', onPress: doTransfer },
@@ -109,6 +164,27 @@ export default function TransfertScreen() {
 
   const doTransfer = async () => {
     if (!foundLot || !selectedActor) return;
+    const lotId = selectedLotIdResolved;
+    if (!lotId) return;
+    const chainLot = chainLots.find((b) => b.id === lotId);
+    if (chainLot && isEnTransit(chainLot.statut)) {
+      Alert.alert(
+        'Réception requise',
+        'Ce lot est en transit. Confirmez d’abord la réception physique.',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Réception',
+            onPress: () =>
+              router.push({
+                pathname: '/confirmer-reception-lot',
+                params: { lotId },
+              } as any),
+          },
+        ]
+      );
+      return;
+    }
     setLoading(true);
 
     const actorName = selectedActor.nom || selectedActor.name || selectedActor.id;
@@ -116,7 +192,7 @@ export default function TransfertScreen() {
 
     try {
       const { data } = await batchApi.transfer({
-        batch_id: foundLot.id,
+        batch_id: lotId,
         to_actor_id: toActorId,
         commentaire: commentaire.trim() || undefined,
       });
@@ -125,7 +201,7 @@ export default function TransfertScreen() {
       const tx = data.tx_hash || '';
       Alert.alert(
         'Transfert confirmé ✓',
-        `Lot "${foundLot.title}" transféré vers "${actorName}".\n\nHash blockchain: ${tx || '—'}`,
+        `Lot "${lotLabel(foundLot)}" transféré vers "${actorName}".\n\nHash blockchain: ${tx || '—'}`,
         [{ text: 'OK', onPress: () => router.back() }]
       );
     } catch (e) {
@@ -198,17 +274,46 @@ export default function TransfertScreen() {
               />
             </View>
 
-            {filteredLots.length === 0 ? (
+            {pendingReception.length > 0 ? (
+              <View style={styles.transitBanner}>
+                <Text style={styles.transitBannerTitle}>
+                  {pendingReception.length} lot(s) en transit
+                </Text>
+                <Text style={styles.transitBannerText}>
+                  Confirmez la réception avant un nouveau transfert.
+                </Text>
+                {pendingReception.slice(0, 3).map((b) => (
+                  <TouchableOpacity
+                    key={b.id}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/confirmer-reception-lot',
+                        params: { lotId: b.id },
+                      } as any)
+                    }
+                  >
+                    <Text style={styles.transitLink}>{b.id} — confirmer réception</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+
+            {loadingLots ? (
+              <ActivityIndicator color="#2E7D32" style={{ marginVertical: 24 }} />
+            ) : filteredLots.length === 0 ? (
               <View style={styles.emptyBox}>
                 <MaterialCommunityIcons name="clipboard-text-outline" size={50} color="#CCC" />
-                <Text style={styles.emptyText}>Aucun lot disponible</Text>
+                <Text style={styles.emptyText}>Aucun lot transférable</Text>
+                <Text style={styles.emptySub}>
+                  Les lots en transit doivent être réceptionnés d&apos;abord.
+                </Text>
               </View>
             ) : (
-              filteredLots.map(lot => (
+              filteredLots.map((lot) => (
                 <TouchableOpacity
                   key={lot.id}
                   style={[styles.lotCard, selectedLotId === lot.id && styles.lotCardSelected]}
-                  onPress={() => setSelectedLotId(lot.id)}
+                  onPress={() => setSelectedLotId(lot.id ?? '')}
                 >
                   <View style={styles.lotCardLeft}>
                     <MaterialCommunityIcons
@@ -217,11 +322,13 @@ export default function TransfertScreen() {
                       color={selectedLotId === lot.id ? '#2E7D32' : '#CCC'}
                     />
                     <View style={{ marginLeft: 12 }}>
-                      <Text style={styles.lotCardTitle}>{lot.title}</Text>
-                      <Text style={styles.lotCardSub}>{lot.date} · {lot.poids} kg</Text>
+                      <Text style={styles.lotCardTitle}>{lot.id}</Text>
+                      <Text style={styles.lotCardSub}>
+                        {lot.culture ?? '—'} · {lot.quantite ?? '—'} kg
+                      </Text>
                     </View>
                   </View>
-                  <StatusBadge status={lot.status} />
+                  <StatusBadge status={lot.statut ?? 'cree'} />
                 </TouchableOpacity>
               ))
             )}
@@ -245,7 +352,11 @@ export default function TransfertScreen() {
             {foundLot && (
               <View style={styles.selectedLotBadge}>
                 <MaterialCommunityIcons name="package-variant" size={16} color="#2E7D32" />
-                <Text style={styles.selectedLotBadgeText}>{foundLot.title} · {foundLot.poids} kg</Text>
+                <Text style={styles.selectedLotBadgeText}>
+                  {isChainLot(foundLot)
+                    ? `${foundLot.id} · ${foundLot.quantite ?? '—'} kg`
+                    : `${foundLot.title} · ${foundLot.poids} kg`}
+                </Text>
               </View>
             )}
 
@@ -331,8 +442,16 @@ export default function TransfertScreen() {
             <Text style={styles.stepTitle}>Vérifiez et confirmez</Text>
 
             <View style={styles.confirmCard}>
-              <ConfirmRow icon="package-variant" label="Lot" value={foundLot.title} />
-              <ConfirmRow icon="weight-kilogram" label="Quantité" value={`${foundLot.poids} kg`} />
+              <ConfirmRow
+                icon="package-variant"
+                label="Lot"
+                value={isChainLot(foundLot) ? String(foundLot.id) : String(foundLot.title)}
+              />
+              <ConfirmRow
+                icon="weight-kilogram"
+                label="Quantité"
+                value={`${isChainLot(foundLot) ? foundLot.quantite : foundLot.poids} kg`}
+              />
               <ConfirmRow icon="account-arrow-right" label="Destinataire" value={selectedActor.nom || selectedActor.name || selectedActor.id} />
               <ConfirmRow icon="office-building" label="Organisation" value={selectedActor.orgID || selectedActor.org_id || '—'} />
               {commentaire ? (
@@ -465,4 +584,16 @@ const styles = StyleSheet.create({
   signatureText: { flex: 1, fontSize: 12, color: '#1565C0', lineHeight: 18 },
   emptyBox: { alignItems: 'center', padding: 30 },
   emptyText: { color: '#999', marginTop: 10 },
+  emptySub: { color: '#BBB', marginTop: 6, fontSize: 12, textAlign: 'center', paddingHorizontal: 16 },
+  transitBanner: {
+    backgroundColor: '#FFF8E1',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#FFE082',
+  },
+  transitBannerTitle: { fontWeight: '700', color: '#E65100', marginBottom: 4 },
+  transitBannerText: { fontSize: 12, color: '#795548', marginBottom: 8 },
+  transitLink: { fontSize: 12, fontWeight: '600', color: '#1565C0', marginTop: 4 },
 });

@@ -12,6 +12,7 @@ import {
 import api, { ActorDTO, Batch } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { getErrorMessage } from '@/lib/error-utils'
+import { canAgriculteurTransfer, canTransferLot, isEnTransit } from '@/lib/lot-workflow'
 
 const TRANSFER_ALLOWED_ROLES = ['agriculteur', 'cooperative', 'transformateur', 'exportateur', 'admin']
 
@@ -97,20 +98,41 @@ function TransferContent() {
     [recipients, toActorId]
   )
 
+  const roleLower = (user?.role || '').toLowerCase()
+
+  const transferableLots = useMemo(() => {
+    return myLots.filter((b) => {
+      if (roleLower === 'agriculteur') return canAgriculteurTransfer(b.statut)
+      return canTransferLot(b.statut)
+    })
+  }, [myLots, roleLower])
+
+  const pendingReceptionLots = useMemo(
+    () => myLots.filter((b) => isEnTransit(b.statut)),
+    [myLots]
+  )
+
   const filteredLots = useMemo(() => {
     const q = lotSearch.trim().toLowerCase()
-    if (!q) return myLots
-    return myLots.filter(
+    const base = transferableLots
+    if (!q) return base
+    return base.filter(
       (b) =>
         (b.id || '').toLowerCase().includes(q) ||
         (b.culture || '').toLowerCase().includes(q) ||
         (b.statut || '').toLowerCase().includes(q)
     )
-  }, [myLots, lotSearch])
+  }, [transferableLots, lotSearch])
 
   const handleSubmit = async () => {
     if (!batchId.trim() || !toActorId.trim()) {
       toast.error('Choisissez un lot et un destinataire.')
+      return
+    }
+    const lot = myLots.find((b) => b.id === batchId.trim())
+    if (lot && isEnTransit(lot.statut)) {
+      toast.error('Confirmez d’abord la réception physique du lot (statut en transit).')
+      router.push(`/reception-lot?lot=${encodeURIComponent(lot.id)}`)
       return
     }
     setIsSubmitting(true)
@@ -203,15 +225,46 @@ function TransferContent() {
                 value={lotSearch}
                 onChange={(e) => setLotSearch(e.target.value)}
               />
+              {pendingReceptionLots.length > 0 ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 mb-4 text-sm text-amber-900">
+                  <p className="font-black mb-2">
+                    {pendingReceptionLots.length} lot(s) en transit — réception requise
+                  </p>
+                  <p className="mb-3 text-xs">
+                    Après un transfert vers vous, confirmez la réception avant de renvoyer le lot.
+                  </p>
+                  <ul className="space-y-2">
+                    {pendingReceptionLots.slice(0, 5).map((b) => (
+                      <li key={b.id}>
+                        <button
+                          type="button"
+                          className="w-full text-left font-mono text-xs font-bold underline"
+                          onClick={() => router.push(`/reception-lot?lot=${encodeURIComponent(b.id)}`)}
+                        >
+                          {b.id} — confirmer réception
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               {lotsLoading ? (
                 <p className="text-gray-400 py-8 text-center">Chargement de vos lots…</p>
               ) : filteredLots.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-gray-200 p-8 text-center text-[var(--color-muted)]">
-                  <p className="font-bold mb-2">Aucun lot disponible</p>
-                  <p className="text-sm mb-4">Créez un lot ou vérifiez que vous êtes bien connecté.</p>
-                  <button type="button" className="btn btn-primary text-sm" onClick={() => router.push('/nouveau-lot')}>
-                    Nouveau lot
-                  </button>
+                  <p className="font-bold mb-2">Aucun lot transférable</p>
+                  <p className="text-sm mb-4">
+                    Les lots « en transit » doivent être réceptionnés avant un nouveau transfert.
+                  </p>
+                  {roleLower === 'agriculteur' ? (
+                    <button type="button" className="btn btn-primary text-sm" onClick={() => router.push('/nouveau-lot')}>
+                      Nouveau lot
+                    </button>
+                  ) : (
+                    <button type="button" className="btn btn-primary text-sm" onClick={() => router.push('/reception-lot')}>
+                      Réception lot
+                    </button>
+                  )}
                 </div>
               ) : (
                 <ul className="space-y-2 max-h-[420px] overflow-y-auto">

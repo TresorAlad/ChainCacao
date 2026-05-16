@@ -20,6 +20,7 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { LocationMap } from '@/components/maps/LocationMapDynamic'
 import { markersFromActors, markersFromLots, type MapMarker } from '@/lib/geo-utils'
+import { canTransferLot, historyEventLabel, isEnTransit } from '@/lib/lot-workflow'
 
 interface LotWithHistory { lot: Batch; history: BatchHistoryEvent[] }
 
@@ -73,6 +74,64 @@ export default function CooperativeDashboardPage() {
   }, [myLots, agriculteurs])
 
   const geoLotCount = useMemo(() => markersFromLots(myLots).length, [myLots])
+
+  const [networkProductionKg, setNetworkProductionKg] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!isAuthenticated || agriculteurs.length === 0) {
+      setNetworkProductionKg(null)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const results = await Promise.all(
+          agriculteurs.slice(0, 40).map((a) =>
+            api
+              .get<{ success?: boolean; lots?: Batch[] }>(`/actors/${encodeURIComponent(a.id)}/lots`)
+              .then((r) => r.data.lots ?? [])
+              .catch(() => [] as Batch[])
+          )
+        )
+        if (cancelled) return
+        const seen = new Set<string>()
+        let kg = 0
+        for (const list of results) {
+          for (const lot of list) {
+            if (!lot.id || seen.has(lot.id)) continue
+            seen.add(lot.id)
+            kg += Number(lot.quantite) || 0
+          }
+        }
+        setNetworkProductionKg(kg)
+      } catch {
+        if (!cancelled) setNetworkProductionKg(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isAuthenticated, agriculteurs])
+
+  const totalProductionKg = useMemo(() => {
+    if (networkProductionKg != null && networkProductionKg > 0) return networkProductionKg
+    return myLots.reduce((sum, lot) => sum + (Number(lot.quantite) || 0), 0)
+  }, [networkProductionKg, myLots])
+
+  const collectedThisWeek = useMemo(() => {
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+    return myLots.filter((lot) => {
+      const raw = lot.timestamp || lot.date_recolte
+      if (!raw) return false
+      const t = new Date(raw).getTime()
+      return !Number.isNaN(t) && t >= cutoff
+    })
+  }, [myLots])
+
+  const collectedWeekKg = useMemo(
+    () => collectedThisWeek.reduce((sum, lot) => sum + (Number(lot.quantite) || 0), 0),
+    [collectedThisWeek]
+  )
 
   if (loading || fetching) {
     return (
@@ -159,7 +218,13 @@ export default function CooperativeDashboardPage() {
               </div>
             </div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Production Totale</p>
-            <p className="text-2xl font-black text-[var(--color-primary)] mt-1">— <span className="text-sm font-bold opacity-40 uppercase">kg</span></p>
+            <p className="text-2xl font-black text-[var(--color-primary)] mt-1">
+              {lotsLoading ? '…' : totalProductionKg.toLocaleString('fr-FR', { maximumFractionDigits: 0 })}{' '}
+              <span className="text-sm font-bold opacity-40 uppercase">kg</span>
+            </p>
+            <p className="text-[10px] text-gray-400 mt-1 font-medium">
+              {agriculteurs.length > 0 ? 'Réseau agriculteurs' : 'Lots en possession'}
+            </p>
           </div>
 
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
@@ -180,7 +245,15 @@ export default function CooperativeDashboardPage() {
               </div>
             </div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Lots Collectés</p>
-            <p className="text-2xl font-black text-[var(--color-primary)] mt-1">— <span className="text-sm font-bold opacity-40 uppercase">cette semaine</span></p>
+            <p className="text-2xl font-black text-[var(--color-primary)] mt-1">
+              {lotsLoading ? '…' : collectedThisWeek.length}{' '}
+              <span className="text-sm font-bold opacity-40 uppercase">lots</span>
+            </p>
+            <p className="text-[10px] text-gray-400 mt-1 font-medium">
+              {lotsLoading
+                ? '…'
+                : `${collectedWeekKg.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} kg · 7 derniers jours`}
+            </p>
           </div>
 
           <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[var(--color-border)]">
@@ -262,9 +335,22 @@ export default function CooperativeDashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {myLots.map((lot) => (
+                  {myLots.map((lot) => {
+                    const isTransferredAway = Boolean(
+                      user?.actor_id &&
+                        lot.proprietaire_id &&
+                        lot.proprietaire_id !== user.actor_id
+                    )
+                    const enTransit = isEnTransit(lot.statut)
+                    const canTransfer = !isTransferredAway && canTransferLot(lot.statut)
+                    return (
                     <tr key={lot.id} className="hover:bg-gray-50 transition-all">
-                      <td className="py-4 text-sm font-mono font-bold text-[#1B5E20]">{lot.id}</td>
+                      <td className="py-4 text-sm font-mono font-bold text-[#1B5E20]">
+                        {lot.id}
+                        {isTransferredAway ? (
+                          <span className="ml-2 text-[9px] font-black uppercase text-blue-600">· transféré</span>
+                        ) : null}
+                      </td>
                       <td className="py-4 text-sm text-gray-700">{lot.culture}{lot.variete ? ` · ${lot.variete}` : ''}</td>
                       <td className="py-4 text-sm font-bold text-gray-700">{lot.quantite} kg</td>
                       <td className="py-4">
@@ -277,13 +363,24 @@ export default function CooperativeDashboardPage() {
                           <button onClick={() => { setSearchId(lot.id); fetchLotWithHistory(lot.id) }} className="px-3 py-1.5 text-xs font-black bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors">
                             Historique
                           </button>
-                          <Link href={`/transfer?lot=${lot.id}`} className="flex items-center gap-1 px-3 py-1.5 text-xs font-black bg-[#33691E] text-white rounded-xl hover:brightness-110">
-                            <ArrowRightIcon className="w-3 h-3" /> Transférer
-                          </Link>
+                          {enTransit ? (
+                            <Link href={`/reception-lot?lot=${encodeURIComponent(lot.id)}`} className="flex items-center gap-1 px-3 py-1.5 text-xs font-black bg-amber-500 text-white rounded-xl hover:brightness-110">
+                              <InboxArrowDownIcon className="w-3 h-3" /> Réception
+                            </Link>
+                          ) : canTransfer ? (
+                            <Link href={`/transfer?lot=${lot.id}`} className="flex items-center gap-1 px-3 py-1.5 text-xs font-black bg-[#33691E] text-white rounded-xl hover:brightness-110">
+                              <ArrowRightIcon className="w-3 h-3" /> Transférer
+                            </Link>
+                          ) : isTransferredAway ? (
+                            <Link href={`/lot-detail?id=${lot.id}`} className="px-3 py-1.5 text-xs font-black bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100">
+                              Détail
+                            </Link>
+                          ) : null}
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -319,9 +416,15 @@ export default function CooperativeDashboardPage() {
                 <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${statusColor(detailData.lot.statut)}`}>{statusLabel(detailData.lot.statut)}</span>
                 <div className="flex gap-2">
                   <Link href={`/lot-detail?id=${detailData.lot.id}`} className="px-4 py-2 text-xs font-black bg-white border border-[#C8E6C9] rounded-xl text-[#33691E] hover:bg-[#E8F5E9]">Détail</Link>
-                  <Link href={`/transfer?lot=${detailData.lot.id}`} className="flex items-center gap-1 px-4 py-2 text-xs font-black bg-[#33691E] text-white rounded-xl hover:brightness-110">
-                    <ArrowRightIcon className="w-4 h-4" /> Transférer
-                  </Link>
+                  {isEnTransit(detailData.lot.statut) ? (
+                    <Link href={`/reception-lot?lot=${encodeURIComponent(detailData.lot.id)}`} className="flex items-center gap-1 px-4 py-2 text-xs font-black bg-amber-500 text-white rounded-xl hover:brightness-110">
+                      <InboxArrowDownIcon className="w-4 h-4" /> Confirmer réception
+                    </Link>
+                  ) : canTransferLot(detailData.lot.statut) ? (
+                    <Link href={`/transfer?lot=${detailData.lot.id}`} className="flex items-center gap-1 px-4 py-2 text-xs font-black bg-[#33691E] text-white rounded-xl hover:brightness-110">
+                      <ArrowRightIcon className="w-4 h-4" /> Transférer
+                    </Link>
+                  ) : null}
                 </div>
               </div>
               <div className="space-y-2">
@@ -332,7 +435,7 @@ export default function CooperativeDashboardPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap gap-2 items-center">
-                        <span className="text-xs font-black uppercase">{ev.type}</span>
+                        <span className="text-xs font-black uppercase">{historyEventLabel(ev.type)}</span>
                         {ev.type === 'transfert' && <span className="text-xs text-gray-500">{ev.from_actor_id} → {ev.to_actor_id}</span>}
                         {ev.commentaire && <span className="text-xs text-gray-400 italic">· {ev.commentaire}</span>}
                       </div>

@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -286,6 +287,22 @@ func main() {
 				return
 			}
 			c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": tx})
+		})
+
+		v1.GET("/groupedlist/:id", func(c *gin.Context) {
+			listID := strings.TrimSpace(c.Param("id"))
+			if listID == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "list_id requis"})
+				return
+			}
+			ctx, cancel := context.WithTimeout(c.Request.Context(), 25*time.Second)
+			defer cancel()
+			ids, err := fc.GetGroupedList(ctx, listID)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"success": true, "list_id": listID, "batch_ids": ids})
 		})
 
 		v1.POST("/groupedlist/pay", func(c *gin.Context) {

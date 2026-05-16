@@ -61,8 +61,8 @@ func NewRouter(handler *Handler, jwt *auth.JWTService, rdb *redis.Client) *gin.E
 			protected.GET("/eudr/:id/report/pdf", auth.RequireAnyRole(models.RoleExportateur, models.RoleAdmin), handler.EudrReportPDF)
 			
 			protected.POST("/liste-groupee", auth.RequireAnyRole(models.RoleCooperative, models.RoleAdmin), handler.CreerListeGroupee)
-			protected.POST("/liste-groupee/:id/preview", auth.RequireAnyRole(models.RoleTransformateur, models.RoleExportateur, models.RoleAdmin), handler.PreviewListeGroupee)
-			protected.POST("/liste-groupee/:id/payer", auth.RequireAnyRole(models.RoleTransformateur, models.RoleExportateur, models.RoleAdmin), handler.PayerListeGroupee)
+			protected.POST("/liste-groupee/:id/preview", auth.RequireAnyRole(models.RoleCooperative, models.RoleTransformateur, models.RoleExportateur, models.RoleAdmin), handler.PreviewListeGroupee)
+			protected.POST("/liste-groupee/:id/payer", auth.RequireAnyRole(models.RoleCooperative, models.RoleTransformateur, models.RoleExportateur, models.RoleAdmin), handler.PayerListeGroupee)
 			
 			protected.GET("/portefeuille/solde", handler.GetPortefeuilleSolde)
 			protected.POST("/portefeuille/depot", handler.PortefeuilleDepot)

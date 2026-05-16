@@ -36,6 +36,7 @@ type Client interface {
 	ConfirmBatchReceipt(ctx context.Context, batchID, actorID string) (txHash string, err error)
 	GetPaymentStatus(ctx context.Context, batchID string) (map[string]any, error)
 	CreateGroupedList(ctx context.Context, listID string, batchIDs []string, actorID string) (txHash string, err error)
+	GetGroupedList(ctx context.Context, listID string) ([]string, error)
 	PayGroupedList(ctx context.Context, listID, actorID string) (txHash string, err error)
 	// PayGroupedListWithDebit debite le payeur puis distribue les paiements (operation atomique cote ledger demo).
 	PayGroupedListWithDebit(ctx context.Context, listID, actorID string, totalAmount float64) (txHash string, err error)
@@ -163,6 +164,9 @@ func (c *InMemoryClient) TransferBatch(_ context.Context, batchID, fromActorID, 
 	}
 	if batch.Proprietaire != fromActorID {
 		return "", models.Batch{}, errors.New("seul le proprietaire courant peut transferer")
+	}
+	if strings.EqualFold(strings.TrimSpace(batch.Statut), "en_transit") {
+		return "", models.Batch{}, errors.New("reception physique requise avant tout nouveau transfert (lot en transit)")
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -715,8 +719,20 @@ func (c *InMemoryClient) GetPaymentStatus(_ context.Context, batchID string) (ma
 func (c *InMemoryClient) CreateGroupedList(_ context.Context, listID string, batchIDs []string, actorID string) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.groupedLists[listID] = batchIDs
+	c.groupedLists[listID] = append([]string{}, batchIDs...)
 	return newTxHash(), nil
+}
+
+func (c *InMemoryClient) GetGroupedList(_ context.Context, listID string) ([]string, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	listID = strings.TrimSpace(listID)
+	batchIDs, exists := c.groupedLists[listID]
+	if !exists || len(batchIDs) == 0 {
+		return nil, errors.New("liste introuvable")
+	}
+	out := append([]string{}, batchIDs...)
+	return out, nil
 }
 
 func (c *InMemoryClient) PayGroupedList(ctx context.Context, listID, actorID string) (string, error) {

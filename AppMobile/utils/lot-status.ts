@@ -40,6 +40,20 @@ export function isEnTransit(statut?: string | null): boolean {
   return String(statut ?? '').toLowerCase() === 'en_transit';
 }
 
+/** Le propriétaire peut transférer (réception confirmée ou lot créé). */
+export function canTransferLot(statut?: string | null): boolean {
+  if (isEnTransit(statut)) return false;
+  const s = String(statut ?? '').toLowerCase().trim();
+  if (s === 'exporte' || s === 'paye') return false;
+  return s === 'cree' || s === 'recu' || s === 'transfere' || !s;
+}
+
+/** Agriculteur : transfert uniquement avant envoi à la coopérative. */
+export function canAgriculteurTransfer(statut?: string | null): boolean {
+  const s = String(statut ?? '').toLowerCase().trim();
+  return !s || s === 'cree';
+}
+
 /** Indique si le paiement a été effectué. */
 export function isPaye(statut?: string | null): boolean {
   return String(statut ?? '').toLowerCase() === 'paye';

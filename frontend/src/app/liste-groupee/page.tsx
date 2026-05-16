@@ -70,7 +70,7 @@ export default function ListeGroupeePage() {
       const id = res.data.list_id || listId
       setLastListId(id)
       setHistory((h) => [{ list_id: id, batch_ids: Array.from(selected) }, ...h])
-      setQrUrl(`${getApiBaseUrl()}/qrcode/${encodeURIComponent(id)}`)
+      setQrUrl(`${getApiBaseUrl()}/qrcode/${encodeURIComponent(id)}?format=png`)
       setSelected(new Set())
       toast.success('Liste groupée créée sur la blockchain')
     } catch (err: unknown) {
@@ -160,9 +160,15 @@ export default function ListeGroupeePage() {
                 className="w-48 h-48 mx-auto border rounded-xl bg-white p-2"
               />
             )}
+            <a
+              href={`/paiement-liste?list=${encodeURIComponent(lastListId)}`}
+              className="mt-4 block w-full py-3 text-center bg-[#33691E] text-white rounded-xl text-sm font-bold hover:brightness-110"
+            >
+              Payer cette liste groupée
+            </a>
             <p className="text-xs text-center text-gray-500 mt-4">
-              QR de traçabilité pour la coopérative. Sur le web, le transformateur ou l&apos;exportateur paie via{' '}
-              <strong>Paiement lot</strong> en saisissant l&apos;identifiant du lot (pas de scan QR sur le web).
+              Menu <strong>Payer liste groupée</strong> avec l&apos;identifiant <strong>LIST-…</strong> (pas un lot{' '}
+              <strong>TC-…</strong> sur Paiement lot).
             </p>
           </div>
         )}

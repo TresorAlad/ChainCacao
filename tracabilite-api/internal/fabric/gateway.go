@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hyperledger/fabric-gateway/pkg/client"
@@ -448,6 +449,18 @@ func (g *GatewayClient) CreateGroupedList(ctx context.Context, listID string, ba
 	batchIDsJSON, _ := json.Marshal(batchIDs)
 	txID, _, err := g.submit(ctx, "CreateGroupedList", listID, string(batchIDsJSON), actorID)
 	return txID, err
+}
+
+func (g *GatewayClient) GetGroupedList(ctx context.Context, listID string) ([]string, error) {
+	data, err := g.contract.EvaluateTransaction("GetGroupedList", strings.TrimSpace(listID))
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	if err := json.Unmarshal(data, &ids); err != nil {
+		return nil, fmt.Errorf("decode grouped list: %w", err)
+	}
+	return ids, nil
 }
 
 func (g *GatewayClient) PayGroupedList(ctx context.Context, listID, actorID string) (string, error) {

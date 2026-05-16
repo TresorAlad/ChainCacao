@@ -54,6 +54,11 @@ function PaiementLotContent() {
       toast.error('Saisissez un identifiant de lot')
       return
     }
+    if (trimmed.toUpperCase().startsWith('LIST-')) {
+      router.push(`/paiement-liste?list=${encodeURIComponent(trimmed)}`)
+      toast('Identifiant de liste groupée : redirection vers Payer liste groupée.', { icon: 'ℹ️' })
+      return
+    }
     setSearching(true)
     setLot(null)
     setPreview(null)
