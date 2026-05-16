@@ -1,33 +1,46 @@
+import Constants from 'expo-constants';
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
+import { router } from 'expo-router';
 import { Platform } from 'react-native';
 
-function notificationGranted(perm: Notifications.NotificationPermissionsStatus): boolean {
-  const p = perm as Notifications.NotificationPermissionsStatus & {
-    granted?: boolean;
-    status?: string;
-  };
-  return p.granted === true || p.status === 'granted';
-}
-import { router } from 'expo-router';
-import { deviceApi } from '@/services/api';
 import { homePathForActor } from '@/lib/home-path';
+import { deviceApi } from '@/services/api';
 import type { ActorInfo } from '@/services/api';
 
-/** Affichage en tête d'écran (style WhatsApp) lorsque l'app est au premier plan. */
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+/** Expo Go (SDK 53+) : pas de push Android distante — éviter le chargement du module au parse. */
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
+
+type NotificationsModule = typeof import('expo-notifications');
+
+function getNotifications(): NotificationsModule | null {
+  if (isExpoGo) return null;
+  // require différé : évite l'erreur Expo Go au chargement du bundle pour expo-notifications.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require('expo-notifications') as NotificationsModule;
+}
+
+function notificationGranted(perm: { granted?: boolean; status?: string }): boolean {
+  return perm.granted === true || perm.status === 'granted';
+}
+
+(() => {
+  const Notifications = getNotifications();
+  if (!Notifications) return;
+  /** Affichage en tête d'écran (style WhatsApp) lorsque l'app est au premier plan. */
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+})();
 
 const ANDROID_CHANNEL_ID = 'chaincacao_default';
 
-async function ensureAndroidChannel(): Promise<void> {
+async function ensureAndroidChannel(Notifications: NotificationsModule): Promise<void> {
   if (Platform.OS !== 'android') return;
   await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
     name: 'ChainCacao',
@@ -42,11 +55,12 @@ async function ensureAndroidChannel(): Promise<void> {
 
 /** Demande les permissions et enregistre le jeton FCM côté backend. */
 export async function registerForPushNotifications(): Promise<string | null> {
-  if (!Device.isDevice) {
+  const Notifications = getNotifications();
+  if (!Notifications || !Device.isDevice) {
     return null;
   }
 
-  await ensureAndroidChannel();
+  await ensureAndroidChannel(Notifications);
 
   const existing = await Notifications.getPermissionsAsync();
   let granted = notificationGranted(existing);
@@ -110,6 +124,11 @@ function navigateFromNotificationData(data: Record<string, unknown> | undefined,
 
 /** Écoute les notifications (foreground + tap). Retourne une fonction de nettoyage. */
 export function setupNotificationListeners(user: ActorInfo | null): () => void {
+  const Notifications = getNotifications();
+  if (!Notifications) {
+    return () => {};
+  }
+
   const receivedSub = Notifications.addNotificationReceivedListener((notification) => {
     // Le handler ci-dessus affiche déjà la bannière système en foreground.
     console.log('Notification reçue:', notification.request.content.title);
@@ -128,6 +147,9 @@ export function setupNotificationListeners(user: ActorInfo | null): () => void {
 
 /** Dernière notification tapée au démarrage (app fermée). */
 export async function handleInitialNotification(user: ActorInfo | null): Promise<void> {
+  const Notifications = getNotifications();
+  if (!Notifications) return;
+
   const last = await Notifications.getLastNotificationResponseAsync();
   if (!last) return;
   const data = last.notification.request.content.data as Record<string, unknown> | undefined;

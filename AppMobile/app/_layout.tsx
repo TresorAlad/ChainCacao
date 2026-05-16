@@ -67,9 +67,6 @@ export default function RootLayout() {
           <SessionInvalidateBridge />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" />
-            <Stack.Screen name="(agriculteur)" />
-            <Stack.Screen name="(cooperative)" />
-            <Stack.Screen name="(exportateur)" />
             <Stack.Screen name="login" />
             <Stack.Screen name="pin-unlock" />
             <Stack.Screen name="register" />

@@ -19,6 +19,7 @@ func TestIsLedgerTransportError(t *testing.T) {
 		{"resolver", errors.New("name resolver error: produced zero addresses"), true},
 		{"conn_refused", errors.New("connection refused"), true},
 		{"wrapped", fmt.Errorf("evaluate: %w", errors.New("rpc error: code = Unavailable desc = transport")), true},
+		{"chaincode_fn_not_found", errors.New(`rpc error: code = Unknown desc = evaluate call to endorser returned error: chaincode response 500, Function GetBatchesByOwner not found in contract SmartContract`), true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -28,3 +29,5 @@ func TestIsLedgerTransportError(t *testing.T) {
 		})
 	}
 }
+
+

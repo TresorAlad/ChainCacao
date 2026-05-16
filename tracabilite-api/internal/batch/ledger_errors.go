@@ -45,6 +45,11 @@ func ledgerTransportStringMatch(msg string) bool {
 		return true
 	case strings.Contains(s, "failed to dial"):
 		return true
+	// Chaincode déployé sans la transaction attendue (ex. GetBatchesByOwner) : dégradation gracieuse côté API.
+	case strings.Contains(s, "not found in contract"):
+		return true
+	case strings.Contains(s, "function") && strings.Contains(s, "not found"):
+		return true
 	}
 	return false
 }
