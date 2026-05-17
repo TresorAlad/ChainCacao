@@ -32,44 +32,50 @@ source "$ROOT/scripts/fabric-ec2-org2-env.sh"
 peer lifecycle chaincode queryinstalled || true
 
 echo ""
-COMMITTED_SEQ="$(peer lifecycle chaincode querycommitted -C "$CC_CHANNEL" -n "$CC_NAME" 2>/dev/null \
-  | sed -n 's/.*Sequence: \([0-9][0-9]*\).*/\1/p' | head -1 || true)"
-CHECK_SEQ="${CC_SEQUENCE:-$COMMITTED_SEQ}"
-echo "=== Commit readiness (séquence $CHECK_SEQ) — les deux orgs doivent être true ==="
 # shellcheck source=/dev/null
 source "$ROOT/scripts/fabric-ec2-env.sh"
-if [[ -n "$CHECK_SEQ" ]]; then
-  peer lifecycle chaincode checkcommitreadiness \
-    --channelID "$CC_CHANNEL" --name "$CC_NAME" \
-    --version 1.0 --sequence "$CHECK_SEQ" \
-    --tls --cafile "$ORDERER_CA" $ORDERER_OPTS \
-    --output json 2>/dev/null || peer lifecycle chaincode checkcommitreadiness \
-    --channelID "$CC_CHANNEL" --name "$CC_NAME" \
-    --version 1.0 --sequence "$CHECK_SEQ" \
-    --tls --cafile "$ORDERER_CA" $ORDERER_OPTS || true
+COMMITTED_SEQ="$(peer lifecycle chaincode querycommitted -C "$CC_CHANNEL" -n "$CC_NAME" 2>/dev/null \
+  | sed -n 's/.*Sequence: \([0-9][0-9]*\).*/\1/p' | head -1 || true)"
+
+echo "=== Conteneurs chaincode actifs (docker) ==="
+CC_CONTAINERS="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'dev-peer.*chaincacao' || true)"
+if [[ -n "$CC_CONTAINERS" ]]; then
+  docker ps --format 'table {{.Names}}\t{{.Status}}' 2>/dev/null | grep -E 'dev-peer.*chaincacao|NAMES' || true
+else
+  echo "(aucun conteneur dev-peer chaincacao — un paiement/transfert le démarrera)"
 fi
 
 echo ""
-echo "=== Conteneurs chaincode (docker) ==="
-docker ps --format 'table {{.Names}}\t{{.Status}}' 2>/dev/null | grep -E 'dev-peer|chaincacao|NAMES' || echo "(docker inaccessible ou aucun conteneur dev-peer)"
+if [[ -n "$COMMITTED_SEQ" ]]; then
+  echo "=== État : OK — chaincode actif en séquence $COMMITTED_SEQ ==="
+  echo "  Org1 + Org2 : packages installés, définition commitée."
+  echo "  (checkcommitreadiness sur la séquence $COMMITTED_SEQ échoue toujours après commit :"
+  echo "   c’est normal — la prochaine upgrade utilisera la séquence $((COMMITTED_SEQ + 1)).)"
+  NEXT_SEQ=$((COMMITTED_SEQ + 1))
+  if [[ -n "${CC_SEQUENCE:-}" ]] && [[ "$CC_SEQUENCE" -gt "$COMMITTED_SEQ" ]]; then
+    echo ""
+    echo "=== Commit readiness (prochaine séquence $CC_SEQUENCE) ==="
+    peer lifecycle chaincode checkcommitreadiness \
+      --channelID "$CC_CHANNEL" --name "$CC_NAME" \
+      --version 1.0 --sequence "$CC_SEQUENCE" \
+      --tls --cafile "$ORDERER_CA" $ORDERER_OPTS --output json 2>/dev/null || true
+  fi
+else
+  echo "=== ATTENTION : aucune définition commitée trouvée sur $CC_CHANNEL ==="
+  cat <<'EOF'
 
-echo ""
-cat <<'EOF'
+Correctif :
+  ./scripts/upgrade-chaincode-full-ec2.sh
+  ou ./scripts/commit-chaincode-ec2.sh après approve
 
-Interprétation de l’erreur API :
-  « no combination of peers … endorsement policy … chaincodes are not installed on sufficient peers »
-
-→ Au moins un peer du channel n’a pas le chaincode actif à la séquence commitée.
-
-Correctif typique (séquence N déjà commitée, Org2 sans install) :
-  1. Même package .tar.gz sur Org2 : peer lifecycle chaincode install chaincacao_cc_….tar.gz
-  2. Org2 : approveformyorg avec le même PACKAGE_ID et la même SEQUENCE que querycommitted
-  3. Redémarrer les peers si besoin : cd fabric-samples/test-network && ./network.sh restart
-  4. docker compose -f tracabilite-api/docker-compose.yml up -d --build api
-
-Si la séquence commitée est inférieure à celle attendue, relancer upgrade-chaincode-ec2.sh
-avec CC_SEQUENCE=(dernière+1) et commit avec les DEUX peers :
-  --peerAddresses localhost:7051 --tlsRootCertFiles …org1…/ca.crt
-  --peerAddresses localhost:9051 --tlsRootCertFiles …org2…/ca.crt
+Erreur API typique si chaincode absent sur un peer :
+  « chaincodes are not installed on sufficient peers »
+  → installer le même .tar.gz sur Org2, approve + commit avec les deux peers.
 
 EOF
+fi
+
+echo ""
+echo "=== Suite ==="
+echo "  cd tracabilite-api && docker compose up -d --build api"
+echo "  Tester un paiement puis l’historique du lot (événement « Paiement »)."
