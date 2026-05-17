@@ -24,6 +24,10 @@ import {
   type BatchResponse,
 } from '@/services/api';
 import { canIncludeInGroupedList } from '@/utils/lot-status';
+import {
+  groupedListPartialSuccessMessage,
+  isGroupedListPartialSuccess,
+} from '@/utils/grouped-list-error';
 
 function generateListId() {
   const d = new Date();
@@ -110,8 +114,7 @@ export default function GenerationListeScreen() {
     }
     const listId = generateListId();
     setCreating(true);
-    try {
-      await groupedListApi.create(listId, selectedIds);
+    const finishSuccess = async (title: string, message: string) => {
       setLastListId(listId);
       setSelectedIds([]);
       try {
@@ -120,8 +123,16 @@ export default function GenerationListeScreen() {
       } catch {
         setQrBase64(null);
       }
-      Alert.alert('Succès', `Liste ${listId} créée sur la blockchain.`);
+      Alert.alert(title, message);
+    };
+    try {
+      await groupedListApi.create(listId, selectedIds);
+      await finishSuccess('Succès', `Liste ${listId} créée sur la blockchain.`);
     } catch (e) {
+      if (isGroupedListPartialSuccess(e)) {
+        await finishSuccess('Liste créée (avec avertissement)', groupedListPartialSuccessMessage(listId));
+        return;
+      }
       Alert.alert('Erreur', getApiError(e));
     } finally {
       setCreating(false);

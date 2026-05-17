@@ -12,6 +12,13 @@ export function canTransferLot(statut?: string | null): boolean {
   return s === 'cree' || s === 'recu' || s === 'transfere' || !s
 }
 
+/** Lot éligible à une liste groupée (réception confirmée, pas en transit ni déjà payé). */
+export function canIncludeInGroupedList(statut?: string | null): boolean {
+  const s = String(statut ?? '').toLowerCase().trim()
+  if (!s || s === 'en_transit' || s === 'paye' || s === 'exporte') return false
+  return s === 'recu' || s === 'cree' || s === 'transfere'
+}
+
 /** Acheteur (coop, transformateur, exportateur) peut payer un lot reçu, pas déjà payé. */
 export function canPayLot(statut?: string | null): boolean {
   if (isEnTransit(statut)) return false

@@ -6,6 +6,11 @@ import { useRouter } from 'next/navigation'
 import { RoleLayout } from '@/components/RoleLayout'
 import api, { type Batch } from '@/lib/api'
 import { getApiBaseUrl } from '@/lib/api-base'
+import {
+  groupedListPartialSuccessMessage,
+  isGroupedListPartialSuccess,
+} from '@/lib/grouped-list-error'
+import { canIncludeInGroupedList } from '@/lib/lot-workflow'
 import { RectangleStackIcon, QrCodeIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
@@ -41,7 +46,9 @@ export default function ListeGroupeePage() {
     setLotsLoading(true)
     api
       .get<{ success: boolean; lots: Batch[] }>('/actors/me/lots')
-      .then((res) => setLots(res.data.lots || []))
+      .then((res) =>
+        setLots((res.data.lots || []).filter((lot) => canIncludeInGroupedList(lot.statut)))
+      )
       .catch(() => setLots([]))
       .finally(() => setLotsLoading(false))
   }, [isAuthenticated, user])
@@ -61,19 +68,27 @@ export default function ListeGroupeePage() {
       return
     }
     const listId = generateListId()
+    const batchIds = Array.from(selected)
     setCreating(true)
+    const applySuccess = (id: string, toastMsg: string) => {
+      setLastListId(id)
+      setHistory((h) => [{ list_id: id, batch_ids: batchIds }, ...h])
+      setQrUrl(`${getApiBaseUrl()}/qrcode/${encodeURIComponent(id)}?format=png`)
+      setSelected(new Set())
+      toast.success(toastMsg, { duration: 6000 })
+    }
     try {
       const res = await api.post<{ success: boolean; list_id: string; tx_hash?: string }>('/liste-groupee', {
         list_id: listId,
-        batch_ids: Array.from(selected),
+        batch_ids: batchIds,
       })
       const id = res.data.list_id || listId
-      setLastListId(id)
-      setHistory((h) => [{ list_id: id, batch_ids: Array.from(selected) }, ...h])
-      setQrUrl(`${getApiBaseUrl()}/qrcode/${encodeURIComponent(id)}?format=png`)
-      setSelected(new Set())
-      toast.success('Liste groupée créée sur la blockchain')
+      applySuccess(id, 'Liste groupée créée sur la blockchain')
     } catch (err: unknown) {
+      if (isGroupedListPartialSuccess(err)) {
+        applySuccess(listId, groupedListPartialSuccessMessage(listId))
+        return
+      }
       toast.error(err instanceof Error ? err.message : 'Échec de création')
     } finally {
       setCreating(false)
@@ -118,7 +133,10 @@ export default function ListeGroupeePage() {
           {lotsLoading ? (
             <p className="text-center py-8 text-gray-400">Chargement…</p>
           ) : lots.length === 0 ? (
-            <p className="text-center py-8 text-gray-400">Aucun lot disponible.</p>
+            <p className="text-center py-8 text-gray-400">
+              Aucun lot éligible. Confirmez d’abord la réception des lots en transit, puis revenez ici (minimum 2
+              lots au statut reçu).
+            </p>
           ) : (
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {lots.map((lot) => (

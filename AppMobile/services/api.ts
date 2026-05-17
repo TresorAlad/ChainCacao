@@ -574,10 +574,11 @@ export const marginApi = {
 
 export const groupedListApi = {
   create: (list_id: string, batch_ids: string[]) =>
-    api.post<{ success?: boolean; list_id?: string; tx_hash?: string }>('/api/v1/liste-groupee', {
-      list_id,
-      batch_ids,
-    }),
+    api.post<{ success?: boolean; list_id?: string; tx_hash?: string }>(
+      '/api/v1/liste-groupee',
+      { list_id, batch_ids },
+      { timeout: 120000 }
+    ),
   preview: (listId: string, prix_par_kg: number) =>
     api.post<PaymentPreviewSummary & { success?: boolean; list_id?: string }>(
       `/api/v1/liste-groupee/${encodeURIComponent(listId)}/preview`,
