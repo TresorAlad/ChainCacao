@@ -3,6 +3,7 @@ package batch
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"tracabilite-api/internal/fabric"
 	"tracabilite-api/internal/groupedlist"
@@ -62,18 +63,32 @@ func (s *Service) executePaymentSummaryPG(ctx context.Context, payerID string, c
 		coopActor = "actor-coop-001"
 	}
 	credits := make([]wallet.CreditLine, 0, len(summary.Lines)+1)
+	lotID := ""
 	for _, ln := range summary.Lines {
 		if ln.MontantNet > 0 && ln.SellerID != "" {
-			credits = append(credits, wallet.CreditLine{ActorID: ln.SellerID, Amount: ln.MontantNet})
+			if lotID == "" {
+				lotID = ln.LotID
+			}
+			credits = append(credits, wallet.CreditLine{
+				ActorID: ln.SellerID,
+				Amount:  ln.MontantNet,
+				LotID:   ln.LotID,
+				Kind:    "paiement_recu",
+			})
 		}
 	}
 	if summary.MargeFCFA > 0 && coopActor != "" {
-		credits = append(credits, wallet.CreditLine{ActorID: coopActor, Amount: summary.MargeFCFA})
+		credits = append(credits, wallet.CreditLine{
+			ActorID: coopActor,
+			Amount:  summary.MargeFCFA,
+			Kind:    "marge_coop",
+		})
 	}
-	if err := s.wallets.ApplyPayment(ctx, payerID, summary.MontantBrut, credits); err != nil {
+	meta := wallet.PaymentMeta{EventType: eventType, ListID: listID, LotID: lotID}
+	if err := s.wallets.ApplyPayment(ctx, payerID, summary.MontantBrut, credits, meta); err != nil {
 		return "", err
 	}
-	return s.fabricClient.RecordPaymentOnLedger(ctx, fabric.PaymentCreditInput{
+	txHash, err := s.fabricClient.RecordPaymentOnLedger(ctx, fabric.PaymentCreditInput{
 		PayerID:     payerID,
 		CoopActorID: coopActor,
 		TotalBrut:   summary.MontantBrut,
@@ -82,6 +97,13 @@ func (s *Service) executePaymentSummaryPG(ctx context.Context, payerID string, c
 		EventType:   eventType,
 		ListID:      listID,
 	})
+	if err != nil {
+		if revErr := s.wallets.ReversePayment(ctx, payerID, summary.MontantBrut, credits, meta); revErr != nil {
+			return "", fmt.Errorf("%w (échec annulation portefeuille: %v)", err, revErr)
+		}
+		return "", err
+	}
+	return txHash, nil
 }
 
 func (s *Service) ConfirmBatchReceiptWithSummary(ctx context.Context, batchID, actorID string, prixParKg float64) (string, PaymentSummary, error) {

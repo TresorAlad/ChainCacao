@@ -28,7 +28,7 @@ export default function PortefeuillePage() {
   const [submitting, setSubmitting] = useState(false)
   const [transactions, setTransactions] = useState<WalletTx[]>([])
 
-  const allowedRoles: string[] = ['cooperative', 'transformateur', 'exportateur', 'ministere', 'admin']
+  const allowedRoles: string[] = ['agriculteur', 'cooperative', 'transformateur', 'exportateur', 'ministere', 'admin']
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace('/login')
@@ -46,9 +46,36 @@ export default function PortefeuillePage() {
       .finally(() => setBalanceLoading(false))
   }
 
+  const fetchHistorique = () => {
+    api
+      .get<{
+        success: boolean
+        transactions: {
+          id: number
+          kind: string
+          amount: number
+          lot_id?: string
+          list_id?: string
+          created_at: string
+        }[]
+      }>('/portefeuille/historique')
+      .then((res) => {
+        const rows = (res.data.transactions || []).map((t) => ({
+          id: String(t.id),
+          type: (t.amount >= 0 ? 'depot' : 'retrait') as WalletTx['type'],
+          montant: Math.abs(t.amount),
+          date: t.created_at,
+          reference: t.lot_id || t.list_id || t.kind,
+        }))
+        setTransactions(rows)
+      })
+      .catch(() => setTransactions([]))
+  }
+
   useEffect(() => {
     if (!isAuthenticated || !user?.role || !allowedRoles.includes(user.role)) return
     fetchBalance()
+    fetchHistorique()
     const welcome = sessionStorage.getItem('chaincacao_wallet_welcome')
     if (welcome) {
       sessionStorage.removeItem('chaincacao_wallet_welcome')
@@ -80,6 +107,7 @@ export default function PortefeuillePage() {
       setMontant('')
       setPin('')
       fetchBalance()
+      fetchHistorique()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Échec du dépôt')
     } finally {
@@ -115,6 +143,7 @@ export default function PortefeuillePage() {
       setMontant('')
       setPin('')
       fetchBalance()
+      fetchHistorique()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Échec du retrait')
     } finally {
@@ -133,7 +162,21 @@ export default function PortefeuillePage() {
   if (!isAuthenticated || !user?.role || !allowedRoles.includes(user.role)) return null
 
   return (
-    <RoleLayout role={user.role === 'admin' ? 'admin' : user.role === 'ministere' ? 'ministere' : 'cooperative'}>
+    <RoleLayout
+      role={
+        user.role === 'admin'
+          ? 'admin'
+          : user.role === 'ministere'
+            ? 'ministere'
+            : user.role === 'agriculteur'
+              ? 'agriculteur'
+              : user.role === 'exportateur'
+                ? 'exportateur'
+                : user.role === 'transformateur'
+                  ? 'transformateur'
+                  : 'cooperative'
+      }
+    >
       <div className="w-full py-6 sm:py-8 max-w-3xl mx-auto">
         <header className="mb-10">
           <h1 className="text-4xl font-bold tracking-tight text-[var(--color-primary)] flex items-center gap-3">

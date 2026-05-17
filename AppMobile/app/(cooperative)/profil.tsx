@@ -1,40 +1,61 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  StatusBar,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Font from 'expo-font';
 import { CoopBottomNav } from '@/components/CoopBottomNav';
 import { useAuth } from '@/hooks/use-auth';
+import { walletApi } from '@/services/api';
 
-const { width } = Dimensions.get('window');
-
-export default function ProfileScreen() {
+export default function ProfilCooperativeScreen() {
   const router = useRouter();
-  const [fontsLoaded, setFontsLoaded] = useState(false);
-
   const { user, logout } = useAuth();
-  
-  const userNom = user?.name || "Coopérative Admin";
-  const userSolde = "—"; // Le solde peut venir d'une API de portefeuille si la coopérative en a un
+  const [fontsLoaded, setFontsLoaded] = useState(false);
+  const [solde, setSolde] = useState<number | null>(null);
 
-  // CHARGEMENT DES POLICES (Chemin corrigé pour dossier de groupe)
   useEffect(() => {
-    async function loadFonts() {
+    async function init() {
       try {
         await Font.loadAsync({
           'Montserrat-Bold': require('../../assets/fonts/Montserrat-Bold.ttf'),
           'Montserrat-Regular': require('../../assets/fonts/Montserrat-Regular.ttf'),
         });
+        try {
+          const { data } = await walletApi.solde();
+          if (typeof data.balance === 'number') setSolde(data.balance);
+        } catch {
+          setSolde(null);
+        }
+      } finally {
         setFontsLoaded(true);
-      } catch (e) {
-        console.warn("Erreur chargement polices Profil : ", e);
-        setFontsLoaded(true); // On affiche quand même en cas d'erreur
       }
     }
-    loadFonts();
+    void init();
   }, []);
+
+  const handleLogout = () => {
+    Alert.alert('Déconnexion', 'Voulez-vous vraiment vous déconnecter ?', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Déconnexion',
+        style: 'destructive',
+        onPress: async () => {
+          await logout();
+          router.replace('/login' as never);
+        },
+      },
+    ]);
+  };
 
   if (!fontsLoaded) {
     return (
@@ -44,165 +65,145 @@ export default function ProfileScreen() {
     );
   }
 
+  const displayName = user?.nom || user?.name || 'Coopérative';
+  const org = user?.org_id || user?.orgID || '—';
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
+      <StatusBar barStyle="light-content" />
 
-      <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: 88 }} showsVerticalScrollIndicator={false}>
-        
-        {/* --- FRAME SOLDE DESIGN --- */}
-        <View style={styles.walletWrapper}>
-          <LinearGradient colors={['#1B5E20', '#2E7D32']} style={styles.walletCard}>
-            {/* Cercles déco en arrière-plan */}
-            <View style={[styles.circleDeco, { top: -50, right: -50, opacity: 0.2 }]} />
-            <View style={[styles.circleDeco, { bottom: -70, left: -40, width: 150, height: 150, opacity: 0.1 }]} />
+      <View style={styles.header}>
+        <Text style={styles.brandText}>Mon Profil</Text>
+      </View>
 
-            <View style={styles.walletHeader}>
-               <View>
-                 <Text style={styles.walletLabel}>{userNom}</Text>
-                 <Text style={styles.walletValue}>{userSolde} <Text style={styles.currency}>FCFA</Text></Text>
-               </View>
-               <MaterialCommunityIcons name="shield-check" size={24} color="white" />
+      <View style={styles.body}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.profileHeader}>
+            <View style={styles.avatarContainer}>
+              <MaterialCommunityIcons name="account" size={60} color="#2E7D32" />
             </View>
-
-            <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.actionBtn}>
-                <View style={styles.actionIcon}>
-                  <MaterialCommunityIcons name="plus" size={22} color="#1B5E20" />
-                </View>
-                <Text style={styles.actionText}>Déposer</Text>
-              </TouchableOpacity>
-
-              <View style={styles.divider} />
-
-              <TouchableOpacity style={styles.actionBtn}>
-                <View style={styles.actionIcon}>
-                  <MaterialCommunityIcons name="minus" size={22} color="#1B5E20" />
-                </View>
-                <Text style={styles.actionText}>Retirer</Text>
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
-        </View>
-
-        {/* --- SECTION PARAMÈTRES --- */}
-        <View style={styles.settingsFrame}>
-          <View style={styles.settingsHeader}>
-            <Text style={styles.settingsTitle}>Paramètres</Text>
-            <MaterialCommunityIcons name="cog-outline" size={20} color="#999" />
+            <Text style={styles.userName}>{displayName}</Text>
+            <Text style={styles.userPhone}>{user?.email || '—'}</Text>
+            <Text style={styles.roleLine}>
+              {user?.role || 'cooperative'} · {org}
+            </Text>
+            {user?.org_name ? <Text style={styles.metaLine}>{user.org_name}</Text> : null}
+            {solde !== null && (
+              <View style={styles.soldeBadge}>
+                <MaterialCommunityIcons name="wallet" size={18} color="#1B5E20" />
+                <Text style={styles.soldeText}>
+                  Solde : {Math.round(solde).toLocaleString('fr-FR')} FCFA
+                </Text>
+              </View>
+            )}
           </View>
 
-          <SettingItem 
-            icon="account-outline" 
-            label="Modifier le profil" 
-            onPress={() => {}} 
-          />
-          <SettingItem 
-            icon="lock-reset" 
-            label="Changer le code PIN" 
-            onPress={() => {}} 
-          />
-          <SettingItem 
-            icon="bell-outline" 
-            label="Notifications" 
-            onPress={() => {}} 
-          />
-          
-          <View style={styles.itemDivider} />
+          <View style={styles.settingsFrame}>
+            <Text style={styles.settingsTitle}>Paramètres</Text>
+            <SettingItem
+              icon="format-list-bulleted-type"
+              label="Liste groupée"
+              onPress={() => router.push('/(cooperative)/generation_liste' as never)}
+            />
+            <SettingItem
+              icon="lock-reset"
+              label="Changer le code PIN"
+              onPress={() => Alert.alert('PIN', 'Contactez l’administrateur pour réinitialiser le PIN.')}
+            />
+            <View style={styles.itemDivider} />
+            <SettingItem icon="logout" label="Déconnexion" isDestructive onPress={handleLogout} />
+          </View>
 
-          <SettingItem 
-            icon="logout" 
-            label="Déconnexion" 
-            isDestructive 
-            onPress={async () => {
-              await logout();
-              router.replace('/');
-            }} 
-          />
-        </View>
+          <View style={{ height: 100 }} />
+        </ScrollView>
+      </View>
 
-        <Text style={styles.versionText}>Chaincacao v1.0.4</Text>
-      </ScrollView>
       <CoopBottomNav activeTab="profil" />
     </SafeAreaView>
   );
 }
 
-const SettingItem = ({ icon, label, onPress, isDestructive = false }: any) => (
-  <TouchableOpacity style={styles.settingItem} onPress={onPress}>
-    <View style={styles.settingLeft}>
-      <View style={[styles.settingIconBg, isDestructive && { backgroundColor: '#FFEBEE' }]}>
-        <MaterialCommunityIcons 
-          name={icon} 
-          size={22} 
-          color={isDestructive ? '#C62828' : '#2E7D32'} 
-        />
+function SettingItem({
+  icon,
+  label,
+  onPress,
+  isDestructive = false,
+}: {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  label: string;
+  onPress: () => void;
+  isDestructive?: boolean;
+}) {
+  return (
+    <TouchableOpacity style={styles.settingItem} onPress={onPress} activeOpacity={0.7}>
+      <View style={styles.settingLeft}>
+        <View style={[styles.settingIconBg, isDestructive && { backgroundColor: '#FFEBEE' }]}>
+          <MaterialCommunityIcons name={icon} size={22} color={isDestructive ? '#C62828' : '#2E7D32'} />
+        </View>
+        <Text style={[styles.settingLabel, isDestructive && { color: '#C62828' }]}>{label}</Text>
       </View>
-      <Text style={[styles.settingLabel, isDestructive && { color: '#C62828' }]}>{label}</Text>
-    </View>
-    <MaterialCommunityIcons 
-      name="chevron-right" 
-      size={24} 
-      color={isDestructive ? '#C62828' : '#2E7D32'} 
-    />
-  </TouchableOpacity>
-);
+      <MaterialCommunityIcons name="chevron-right" size={24} color={isDestructive ? '#C62828' : '#2E7D32'} />
+    </TouchableOpacity>
+  );
+}
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FA' },
-  loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  body: { flex: 1 },
-  
-  // Wallet Design
-  walletWrapper: { padding: 20, marginTop: 10 },
-  walletCard: {
-    borderRadius: 25,
-    padding: 25,
-    height: 210,
-    overflow: 'hidden',
-    justifyContent: 'space-between',
-    elevation: 8,
-    shadowColor: '#1B5E20',
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-  },
-  circleDeco: { position: 'absolute', width: 200, height: 200, borderRadius: 100, backgroundColor: 'white' },
-  walletHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  walletLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontFamily: 'Montserrat-Regular' },
-  walletValue: { color: 'white', fontSize: 30, fontFamily: 'Montserrat-Bold', marginTop: 5 },
-  currency: { fontSize: 16, fontFamily: 'Montserrat-Regular' },
-  
-  actionRow: {
+  container: { flex: 1, backgroundColor: '#1B5E20' },
+  loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F5F5' },
+  header: {
+    height: 60,
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 18,
-    padding: 12,
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
   },
-  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  actionIcon: {
-    backgroundColor: 'white',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  brandText: { color: 'white', fontSize: 22, fontFamily: 'Montserrat-Bold' },
+  body: { flex: 1, backgroundColor: '#F5F5F5', borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  content: { padding: 20 },
+  profileHeader: { alignItems: 'center', marginVertical: 10 },
+  avatarContainer: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#E8F5E9',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#A5D6A7',
   },
-  actionText: { color: 'white', fontFamily: 'Montserrat-Bold', fontSize: 14 },
-  divider: { width: 1, height: 20, backgroundColor: 'rgba(255,255,255,0.3)' },
-
-  // Settings Design
+  userName: { fontSize: 20, fontFamily: 'Montserrat-Bold', color: '#1A1A1A' },
+  userPhone: { fontSize: 14, fontFamily: 'Montserrat-Regular', color: '#666', marginTop: 4 },
+  roleLine: { fontSize: 13, fontFamily: 'Montserrat-Regular', color: '#444', marginTop: 6 },
+  metaLine: { fontSize: 12, fontFamily: 'Montserrat-Regular', color: '#666', marginTop: 4 },
+  soldeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#E8F5E9',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+  },
+  soldeText: { fontFamily: 'Montserrat-Bold', color: '#1B5E20', fontSize: 14 },
   settingsFrame: {
     backgroundColor: 'white',
-    marginHorizontal: 20,
-    borderRadius: 25,
+    borderRadius: 20,
     padding: 20,
+    marginTop: 20,
     elevation: 2,
   },
-  settingsHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-  settingsTitle: { fontSize: 18, fontFamily: 'Montserrat-Bold', color: '#333' },
-  settingItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
+  settingsTitle: { fontSize: 17, fontFamily: 'Montserrat-Bold', color: '#333', marginBottom: 12 },
+  settingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
   settingLeft: { flexDirection: 'row', alignItems: 'center' },
   settingIconBg: {
     width: 42,
@@ -215,5 +216,4 @@ const styles = StyleSheet.create({
   },
   settingLabel: { fontSize: 15, color: '#444', fontFamily: 'Montserrat-Bold' },
   itemDivider: { height: 1, backgroundColor: '#F0F0F0', marginVertical: 8 },
-  versionText: { textAlign: 'center', color: '#BBB', fontSize: 11, fontFamily: 'Montserrat-Regular', marginTop: 20, marginBottom: 30 },
 });

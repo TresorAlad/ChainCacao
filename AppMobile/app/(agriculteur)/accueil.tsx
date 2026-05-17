@@ -16,7 +16,7 @@ import * as Font from 'expo-font';
 import Svg, { Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { myLotsApi, getApiError } from '@/services/api';
+import { myLotsApi, walletApi, getApiError } from '@/services/api';
 import { AG, logNavigation } from '@/lib/agriculteur-routes';
 
 const { width } = Dimensions.get('window');
@@ -25,11 +25,8 @@ export default function AccueilAgriculteur() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [fontsLoaded, setFontsLoaded] = useState(false);
-  const [activeTab, setActiveTab] = useState<'Semaine' | 'Mois'>('Semaine'); 
-  // Données dynamiques
-  const [stats, setStats] = useState({ production: 840, revenus: 450000 });
-  const objectifPourcentage = 68;
-  const lastUpdate = "13 Mai 2026 à 15:45"; 
+  const [stats, setStats] = useState({ production: 0, revenus: 0 });
+  const [lotsCount, setLotsCount] = useState(0);
 
   useEffect(() => {
     async function init() {
@@ -40,26 +37,27 @@ export default function AccueilAgriculteur() {
           'Montserrat-Regular': require('../../assets/fonts/Montserrat-Regular.ttf'),
         });
 
-        const cachedData = await AsyncStorage.getItem('user_stats');
-        if (cachedData) {
-          setStats(JSON.parse(cachedData));
-        }
-
+        let production = 0;
+        let count = 0;
         try {
           const { data } = await myLotsApi.list();
           const lots = data.lots ?? [];
-          const production = lots.reduce((s, b) => s + (b.quantite ?? 0), 0);
-          setStats((prev) => {
-            const next = {
-              production: Math.round(production) || prev.production,
-              revenus: prev.revenus,
-            };
-            void AsyncStorage.setItem('user_stats', JSON.stringify(next));
-            return next;
-          });
+          count = lots.length;
+          production = lots.reduce((s, b) => s + (b.quantite ?? 0), 0);
         } catch (e) {
           console.warn(getApiError(e));
         }
+        let revenus = 0;
+        try {
+          const { data } = await walletApi.solde();
+          if (typeof data.balance === 'number') revenus = data.balance;
+        } catch (e) {
+          console.warn(getApiError(e));
+        }
+        const next = { production: Math.round(production), revenus: Math.round(revenus) };
+        setStats(next);
+        setLotsCount(count);
+        await AsyncStorage.setItem('user_stats', JSON.stringify(next));
       } catch (e) {
         console.warn("Erreur lors de l'initialisation :", e);
       } finally {
@@ -73,6 +71,13 @@ export default function AccueilAgriculteur() {
     logNavigation('accueil', path);
     router.push(path as any);
   };
+
+  const objectifKg = Math.max(stats.production, 500);
+  const objectifPourcentage = objectifKg > 0 ? Math.min(100, Math.round((stats.production / objectifKg) * 100)) : 0;
+  const lastUpdate = new Date().toLocaleString('fr-FR', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
 
   if (!fontsLoaded) {
     return (
@@ -100,21 +105,21 @@ export default function AccueilAgriculteur() {
                <View style={styles.rectCard}>
                   <View style={styles.cardHeader}>
                     <MaterialCommunityIcons name="leaf" size={28} color="#2E7D32" />
-                    <Text style={styles.trendTextUp}>+12%</Text>
                   </View>
-                  <Text style={styles.cardLabel}>Production Totale</Text>
+                  <Text style={styles.cardLabel}>Production totale</Text>
                   <Text style={styles.cardMainValue}>{stats.production} <Text style={styles.unit}>Kg</Text></Text>
+                  <Text style={styles.cardSub}>{lotsCount} lot{lotsCount > 1 ? 's' : ''} enregistré{lotsCount > 1 ? 's' : ''}</Text>
                </View>
 
                <View style={[styles.rectCard, { backgroundColor: '#2E7D32' }]}>
                   <View style={styles.cardHeader}>
                     <MaterialCommunityIcons name="cash-multiple" size={28} color="white" />
-                    <Text style={styles.trendTextWhite}>+5%</Text>
                   </View>
-                  <Text style={[styles.cardLabel, { color: 'rgba(255,255,255,0.8)' }]}>Revenus Estimés</Text>
+                  <Text style={[styles.cardLabel, { color: 'rgba(255,255,255,0.8)' }]}>Solde portefeuille</Text>
                   <Text style={[styles.cardMainValue, { color: 'white' }]}>
-                    {stats.revenus.toLocaleString()} <Text style={styles.unitWhite}>CFA</Text>
+                    {stats.revenus.toLocaleString('fr-FR')} <Text style={styles.unitWhite}>FCFA</Text>
                   </Text>
+                  <Text style={[styles.cardSub, { color: 'rgba(255,255,255,0.75)' }]}>Paiements reçus crédités ici</Text>
                </View>
             </View>
 
@@ -133,17 +138,16 @@ export default function AccueilAgriculteur() {
               <MaterialCommunityIcons name="chevron-right" size={24} color="#CCC" />
             </TouchableOpacity>
 
-            {/* OBJECTIF DE SAISON */}
             <View style={styles.rectGoalCard}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.goalTitle}>Objectif de saison</Text>
+                <Text style={styles.goalTitle}>Production enregistrée</Text>
                 <View style={styles.goalLine}>
                   <Text style={styles.metricLabel}>Récolté :</Text>
-                  <Text style={styles.metricValueAtteint}> 1.200 Kg</Text>
+                  <Text style={styles.metricValueAtteint}> {stats.production} Kg</Text>
                 </View>
                 <View style={styles.goalLine}>
-                  <Text style={styles.metricLabel}>À venir :</Text>
-                  <Text style={styles.metricValueRestant}> 800 Kg</Text>
+                  <Text style={styles.metricLabel}>Référence :</Text>
+                  <Text style={styles.metricValueRestant}> {objectifKg} Kg</Text>
                 </View>
               </View>
               <View style={styles.progressWrapper}>
@@ -159,39 +163,20 @@ export default function AccueilAgriculteur() {
               </View>
             </View>
 
-            {/* GRAPHIQUE D'ACTIVITÉ */}
-            <View style={styles.rectChartCard}>
-              <View style={styles.chartHeader}>
-                <Text style={styles.chartTitle}>Analyse d'activité</Text>
-                <View style={styles.toggleContainer}>
-                  {(['Semaine', 'Mois'] as const).map((tab) => (
-                    <TouchableOpacity 
-                      key={tab}
-                      onPress={() => setActiveTab(tab)}
-                      style={[styles.toggleBtn, activeTab === tab && styles.toggleBtnActive]}
-                    >
-                      <Text style={[styles.toggleText, activeTab === tab && styles.toggleTextActive]}>{tab}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.barChartContainer}>
-                {(activeTab === 'Semaine' ? [45, 60, 35, 80, 55, 40, 70] : [30, 50, 85, 45]).map((val, i) => (
-                  <View key={i} style={styles.barWrapper}>
-                    <View style={[styles.bar, { height: val }]} />
-                    <Text style={styles.barLabel}>
-                      {(activeTab === 'Semaine' ? ['L', 'M', 'M', 'J', 'V', 'S', 'D'] : ['S1','S2','S3','S4'])[i]}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-
+            <TouchableOpacity
+              style={styles.rectChartCard}
+              onPress={() => handleNavigation(AG.portefeuille)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.chartTitle}>Portefeuille et historique</Text>
+              <Text style={styles.chartHint}>
+                Consultez les paiements reçus, dépôts et retraits dans l’onglet Portefeuille.
+              </Text>
               <View style={styles.updateWrapper}>
                 <MaterialCommunityIcons name="clock-outline" size={12} color="#AAA" />
                 <Text style={styles.updateText}> Mis à jour : {lastUpdate}</Text>
               </View>
-            </View>
+            </TouchableOpacity>
           </ScrollView>
         </View>
 
@@ -246,6 +231,7 @@ const styles = StyleSheet.create({
   trendTextWhite: { color: '#A5D6A7', fontSize: 12, fontWeight: 'bold' },
   cardLabel: { fontSize: 11, color: '#666' },
   cardMainValue: { fontSize: 18, fontWeight: 'bold', color: '#1A1A1A', marginTop: 5 },
+  cardSub: { fontSize: 11, fontFamily: 'Montserrat-Regular', color: '#888', marginTop: 6 },
   unit: { fontSize: 12, color: '#888' },
   unitWhite: { fontSize: 12, color: 'white' },
   rectGoalCard: { backgroundColor: 'white', padding: 15, borderRadius: 12, flexDirection: 'row', alignItems: 'center', marginBottom: 15, elevation: 2 },
@@ -259,6 +245,7 @@ const styles = StyleSheet.create({
   rectChartCard: { backgroundColor: 'white', borderRadius: 12, elevation: 2, padding: 15 },
   chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   chartTitle: { fontSize: 14, fontWeight: 'bold' },
+  chartHint: { fontSize: 13, fontFamily: 'Montserrat-Regular', color: '#666', marginTop: 8, lineHeight: 20 },
   toggleContainer: { flexDirection: 'row', backgroundColor: '#F0F0F0', borderRadius: 6, padding: 2 },
   toggleBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 4 },
   toggleBtnActive: { backgroundColor: 'white', elevation: 1 },

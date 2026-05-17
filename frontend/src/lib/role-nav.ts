@@ -186,7 +186,7 @@ export const NAV_ITEMS: NavItemDef[] = [
     icon: WalletIcon,
     label: 'Portefeuille',
     href: '/portefeuille',
-    roles: ['cooperative', 'transformateur', 'exportateur', 'admin'],
+    roles: ['agriculteur', 'cooperative', 'transformateur', 'exportateur', 'admin'],
     section: 'ops',
   },
 ]
@@ -206,7 +206,7 @@ const ROUTE_ACCESS: Record<string, UserRole[]> = {
   '/dashboard-ministere': ['ministere', 'admin'],
   '/blockchain': ['admin', 'ministere'],
   '/actors': ['cooperative', 'ministere', 'admin'],
-  '/portefeuille': ['cooperative', 'transformateur', 'exportateur', 'admin'],
+  '/portefeuille': ['agriculteur', 'cooperative', 'transformateur', 'exportateur', 'admin'],
   '/admin': ['admin'],
   '/admin/utilisateurs': ['admin'],
   '/admin/marges': ['admin'],

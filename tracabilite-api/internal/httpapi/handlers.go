@@ -25,6 +25,7 @@ import (
 	"tracabilite-api/internal/config"
 	"tracabilite-api/internal/exif"
 	"tracabilite-api/internal/groupedlist"
+	"tracabilite-api/internal/wallet"
 	"tracabilite-api/internal/incidents"
 	"tracabilite-api/internal/media"
 	"tracabilite-api/internal/notifications"
@@ -1232,6 +1233,19 @@ func (h *Handler) GetPortefeuilleSolde(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "balance": balance, "currency": "FCFA"})
+}
+
+func (h *Handler) GetPortefeuilleHistorique(c *gin.Context) {
+	actorID := c.GetString(auth.ContextActorID)
+	txs, err := h.batch.ListWalletTransactions(c.Request.Context(), actorID, 80)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if txs == nil {
+		txs = []wallet.Transaction{}
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "transactions": txs})
 }
 
 func (h *Handler) PortefeuilleDepot(c *gin.Context) {

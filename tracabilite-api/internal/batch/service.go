@@ -176,6 +176,12 @@ func (s *Service) GetHistory(ctx context.Context, id string) ([]models.BatchHist
 	if err != nil {
 		return nil, err
 	}
+	if !historyHasPayment(events) && s.wallets != nil {
+		txs, wErr := s.wallets.ListTransactionsForLot(ctx, id)
+		if wErr == nil && len(txs) > 0 {
+			events = mergeWalletPaymentHistory(id, events, txs)
+		}
+	}
 	linkActorsFromEvents(s.traceIndex, strings.TrimSpace(id), events)
 	return events, nil
 }
@@ -284,6 +290,13 @@ func (s *Service) DepositWallet(ctx context.Context, actorID string, amount floa
 		return "pg-wallet-deposit", nil
 	}
 	return s.fabricClient.DepositWallet(ctx, actorID, amount)
+}
+
+func (s *Service) ListWalletTransactions(ctx context.Context, actorID string, limit int) ([]wallet.Transaction, error) {
+	if s.wallets == nil {
+		return []wallet.Transaction{}, nil
+	}
+	return s.wallets.ListTransactions(ctx, actorID, limit)
 }
 
 func (s *Service) WithdrawWallet(ctx context.Context, actorID string, amount float64) (string, error) {

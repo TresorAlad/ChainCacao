@@ -15,7 +15,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { walletApi, getApiError } from '@/services/api';
+import { walletApi, getApiError, type WalletTransactionDto } from '@/services/api';
 
 const TX_STORAGE_KEY = 'user_transactions';
 const SOLDE_STORAGE_KEY = 'user_solde';
@@ -34,6 +34,41 @@ type WalletModal = null | 'depot' | 'retrait';
 
 function fmtFcfa(n: number) {
   return Math.round(n).toLocaleString('fr-FR');
+}
+
+function kindLabel(kind: string, tx: WalletTransactionDto): string {
+  switch (kind) {
+    case 'depot':
+      return 'Dépôt';
+    case 'retrait':
+      return 'Retrait';
+    case 'paiement_recu':
+      return tx.lot_id ? `Paiement reçu · ${tx.lot_id}` : 'Paiement reçu (vente)';
+    case 'marge_coop':
+      return 'Marge coopérative';
+    case 'paiement_liste_envoye':
+      return tx.list_id ? `Paiement liste · ${tx.list_id}` : 'Paiement liste groupée';
+    case 'paiement_envoye':
+      return tx.lot_id ? `Paiement lot · ${tx.lot_id}` : 'Paiement envoyé';
+    case 'paiement_annule':
+      return 'Annulation (blockchain)';
+    default:
+      return kind.replace(/_/g, ' ');
+  }
+}
+
+function mapDtoToTx(t: WalletTransactionDto): WalletTransaction {
+  const d = new Date(t.created_at);
+  const isCredit = t.amount > 0;
+  return {
+    id: String(t.id),
+    type: isCredit ? 'depot' : 'retrait',
+    libelle: kindLabel(t.kind, t),
+    montant: t.amount,
+    date: d.toLocaleDateString('fr-FR'),
+    heure: d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+    isSynced: true,
+  };
 }
 
 type Props = {
@@ -66,6 +101,19 @@ export function WalletPortefeuilleContent({
   const [submitting, setSubmitting] = useState(false);
 
   const loadTransactions = useCallback(async () => {
+    try {
+      const { data } = await walletApi.historique();
+      const rows = (data.transactions ?? []).map(mapDtoToTx);
+      if (rows.length > 0) {
+        setTransactions(rows);
+        if (persistLocalHistory) {
+          await AsyncStorage.setItem(TX_STORAGE_KEY, JSON.stringify(rows));
+        }
+        return;
+      }
+    } catch {
+      /* repli cache local */
+    }
     if (!persistLocalHistory) {
       setTransactions([]);
       return;
@@ -73,6 +121,7 @@ export function WalletPortefeuilleContent({
     try {
       const raw = await AsyncStorage.getItem(TX_STORAGE_KEY);
       if (raw) setTransactions(JSON.parse(raw) as WalletTransaction[]);
+      else setTransactions([]);
     } catch {
       setTransactions([]);
     }
@@ -211,9 +260,7 @@ export function WalletPortefeuilleContent({
         ListHeaderComponent={listHeader}
         ListEmptyComponent={
           <Text style={styles.emptyHistory}>
-            {persistLocalHistory
-              ? 'Aucune transaction pour le moment.'
-              : 'Les dépôts et retraits apparaîtront ici après confirmation.'}
+            Aucune transaction pour le moment. Les paiements reçus et les mouvements apparaîtront ici.
           </Text>
         }
         renderItem={({ item }) => (
@@ -288,6 +335,9 @@ export function WalletPortefeuilleContent({
                 value={pin}
                 onChangeText={(t) => setPin(t.replace(/\D/g, '').slice(0, 6))}
               />
+              {pin.length > 0 ? (
+                <Text style={styles.pinDots}>{'•'.repeat(pin.length).padEnd(4, '○')}</Text>
+              ) : null}
               <View style={styles.modalActions}>
                 <TouchableOpacity style={styles.modalBtnGhost} onPress={closeModal} disabled={submitting}>
                   <Text style={styles.modalBtnGhostText}>Annuler</Text>
@@ -409,7 +459,17 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     fontSize: 16,
     fontFamily: 'Montserrat-Regular',
-    color: '#111',
+    color: '#1B5E20',
+    backgroundColor: '#FFFFFF',
+  },
+  pinDots: {
+    textAlign: 'center',
+    fontSize: 18,
+    letterSpacing: 6,
+    color: '#2E7D32',
+    marginTop: -8,
+    marginBottom: 10,
+    fontFamily: 'Montserrat-Bold',
   },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
   modalBtnGhost: {

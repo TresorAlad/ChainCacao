@@ -65,6 +65,7 @@ func NewRouter(handler *Handler, jwt *auth.JWTService, rdb *redis.Client) *gin.E
 			protected.POST("/liste-groupee/:id/payer", auth.RequireAnyRole(models.RoleCooperative, models.RoleTransformateur, models.RoleExportateur, models.RoleAdmin), handler.PayerListeGroupee)
 			
 			protected.GET("/portefeuille/solde", handler.GetPortefeuilleSolde)
+			protected.GET("/portefeuille/historique", handler.GetPortefeuilleHistorique)
 			protected.POST("/portefeuille/depot", handler.PortefeuilleDepot)
 			protected.POST("/portefeuille/retrait", handler.PortefeuilleRetrait)
 

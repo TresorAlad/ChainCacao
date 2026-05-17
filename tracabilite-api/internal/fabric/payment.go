@@ -2,20 +2,22 @@ package fabric
 
 // PaymentCreditLine distribution portefeuille pour un lot.
 type PaymentCreditLine struct {
-	BatchID  string
-	SellerID string
-	Brut     float64
-	Marge    float64
-	Net      float64
+	BatchID  string  `json:"BatchID"`
+	SellerID string  `json:"SellerID"`
+	Brut     float64 `json:"Brut"`
+	Marge    float64 `json:"Marge"`
+	Net      float64 `json:"Net"`
 }
 
 // PaymentCreditInput paiement avec split marge coopérative.
 type PaymentCreditInput struct {
-	PayerID     string
-	CoopActorID string
-	TotalBrut   float64
-	TotalMarge  float64
-	Lines       []PaymentCreditLine
-	EventType   string // paiement | paiement_liste
-	ListID      string
+	PayerID     string              `json:"PayerID"`
+	CoopActorID string              `json:"CoopActorID"`
+	TotalBrut   float64             `json:"TotalBrut"`
+	TotalMarge  float64             `json:"TotalMarge"`
+	Lines       []PaymentCreditLine `json:"Lines"`
+	EventType   string              `json:"EventType"` // paiement | paiement_liste
+	ListID      string              `json:"ListID"`
+	// SkipWallet : enregistrement ledger uniquement (portefeuille PostgreSQL déjà débité).
+	SkipWallet bool `json:"SkipWallet,omitempty"`
 }

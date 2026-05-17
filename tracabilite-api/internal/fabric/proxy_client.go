@@ -265,18 +265,10 @@ func (c *ProxyClient) ExecutePayment(ctx context.Context, in PaymentCreditInput)
 }
 
 func (c *ProxyClient) RecordPaymentOnLedger(ctx context.Context, in PaymentCreditInput) (string, error) {
-	var lastTx string
-	for _, ln := range in.Lines {
-		tx, err := c.ConfirmBatchReceipt(ctx, ln.BatchID, in.PayerID)
-		if err != nil {
-			return lastTx, err
-		}
-		lastTx = tx
-	}
-	if lastTx == "" {
-		return "proxy-payment-ledger", nil
-	}
-	return lastTx, nil
+	in.SkipWallet = true
+	var out proxyTxBatchResponse
+	err := c.doJSON(ctx, http.MethodPost, "/v1/fabric/payment/record-ledger", in, &out)
+	return out.TxHash, err
 }
 
 func (c *ProxyClient) GetWalletBalance(ctx context.Context, actorID string) (float64, error) {

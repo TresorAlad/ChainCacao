@@ -82,11 +82,27 @@ export default function PaiementListeScreen() {
         pin: pin.trim(),
         prix_par_kg: preview.prix_par_kg ?? parseFloat(prixParKg),
       });
+      const { data } = await portefeuilleApi.solde();
+      setBalance(data.balance ?? balance);
       Alert.alert('Succès', 'Paiement de la liste effectué.', [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (e) {
-      Alert.alert('Erreur', getApiError(e));
+      const msg = getApiError(e);
+      const isFabric =
+        /endorse|fabric|rpc error|chaincode/i.test(msg);
+      try {
+        const { data } = await portefeuilleApi.solde();
+        setBalance(data.balance ?? null);
+      } catch {
+        /* ignore */
+      }
+      Alert.alert(
+        isFabric ? 'Erreur blockchain' : 'Erreur',
+        isFabric
+          ? `${msg}\n\nLa prévisualisation ne débite pas le portefeuille, mais un échec à l’enregistrement sur la chaîne peut avoir débité votre solde. Vérifiez le solde affiché ci-dessous avant de réessayer. Contactez l’administrateur si le montant a été prélevé sans confirmation.`
+          : msg
+      );
     } finally {
       setSubmitting(false);
     }
@@ -97,7 +113,13 @@ export default function PaiementListeScreen() {
       <Stack.Screen options={{ title: 'Payer liste groupée', headerShown: true }} />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.label}>Identifiant liste (LIST-…)</Text>
-        <TextInput style={styles.input} value={listId} onChangeText={setListId} autoCapitalize="characters" />
+        <TextInput
+          style={styles.input}
+          value={listId}
+          onChangeText={setListId}
+          autoCapitalize="characters"
+          placeholderTextColor="#9E9E9E"
+        />
 
         <Text style={styles.label}>Prix par kg (FCFA)</Text>
         <TextInput
@@ -106,6 +128,7 @@ export default function PaiementListeScreen() {
           onChangeText={setPrixParKg}
           keyboardType="numeric"
           placeholder="1200"
+          placeholderTextColor="#9E9E9E"
         />
 
         <TouchableOpacity style={styles.btnSecondary} onPress={runPreview} disabled={loadingPreview}>
@@ -133,15 +156,22 @@ export default function PaiementListeScreen() {
               Net producteurs : {fmt(preview.montant_net_agriculteurs ?? 0)} FCFA
             </Text>
 
-            <Text style={styles.label}>Code PIN</Text>
+            <Text style={styles.label}>Code PIN (4 chiffres)</Text>
             <TextInput
-              style={styles.input}
+              style={styles.pinInput}
               value={pin}
-              onChangeText={setPin}
+              onChangeText={(t) => setPin(t.replace(/\D/g, '').slice(0, 4))}
               secureTextEntry
               keyboardType="number-pad"
               maxLength={4}
+              placeholder="••••"
+              placeholderTextColor="#9E9E9E"
+              autoComplete="off"
+              textContentType="password"
             />
+            <Text style={styles.pinHint} accessibilityLabel={`${pin.length} chiffres saisis`}>
+              {pin.length > 0 ? '•'.repeat(pin.length).padEnd(4, '○') : '○○○○'}
+            </Text>
 
             <TouchableOpacity
               style={styles.btn}
@@ -171,7 +201,30 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 14,
     marginTop: 8,
-    backgroundColor: 'white',
+    backgroundColor: '#FFFFFF',
+    color: '#1B5E20',
+    fontSize: 16,
+  },
+  pinInput: {
+    borderWidth: 2,
+    borderColor: '#2E7D32',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 8,
+    backgroundColor: '#FFFFFF',
+    color: '#1B5E20',
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: 12,
+    textAlign: 'center',
+  },
+  pinHint: {
+    marginTop: 8,
+    fontSize: 20,
+    letterSpacing: 6,
+    textAlign: 'center',
+    color: '#2E7D32',
+    fontWeight: '600',
   },
   btnSecondary: {
     marginTop: 16,

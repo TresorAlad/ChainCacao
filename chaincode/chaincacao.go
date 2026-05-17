@@ -267,6 +267,8 @@ type paymentInput struct {
 	Lines       []paymentLine `json:"Lines"`
 	EventType   string        `json:"EventType"`
 	ListID      string        `json:"ListID"`
+	// SkipWallet : soldes gérés en PostgreSQL ; n'écrire que statut payé + historique lot.
+	SkipWallet bool `json:"SkipWallet"`
 }
 
 func (s *SmartContract) executePaymentCore(ctx contractapi.TransactionContextInterface, in paymentInput) error {
@@ -281,28 +283,30 @@ func (s *SmartContract) executePaymentCore(ctx contractapi.TransactionContextInt
 			totalMarge += ln.Marge
 		}
 	}
-	bal, err := s.walletGet(ctx, in.PayerID)
-	if err != nil {
-		return err
-	}
-	if bal < totalBrut-1e-9 {
-		return fmt.Errorf("solde insuffisant")
-	}
-	if err := s.walletPut(ctx, in.PayerID, bal-totalBrut); err != nil {
-		return err
-	}
-	for _, ln := range in.Lines {
-		if ln.Net > 0 && strings.TrimSpace(ln.SellerID) != "" {
-			sb, _ := s.walletGet(ctx, ln.SellerID)
-			if err := s.walletPut(ctx, ln.SellerID, sb+ln.Net); err != nil {
-				return err
+	if !in.SkipWallet {
+		bal, err := s.walletGet(ctx, in.PayerID)
+		if err != nil {
+			return err
+		}
+		if bal < totalBrut-1e-9 {
+			return fmt.Errorf("solde insuffisant")
+		}
+		if err := s.walletPut(ctx, in.PayerID, bal-totalBrut); err != nil {
+			return err
+		}
+		for _, ln := range in.Lines {
+			if ln.Net > 0 && strings.TrimSpace(ln.SellerID) != "" {
+				sb, _ := s.walletGet(ctx, ln.SellerID)
+				if err := s.walletPut(ctx, ln.SellerID, sb+ln.Net); err != nil {
+					return err
+				}
 			}
 		}
-	}
-	if strings.TrimSpace(in.CoopActorID) != "" && totalMarge > 0 {
-		cb, _ := s.walletGet(ctx, in.CoopActorID)
-		if err := s.walletPut(ctx, in.CoopActorID, cb+totalMarge); err != nil {
-			return err
+		if strings.TrimSpace(in.CoopActorID) != "" && totalMarge > 0 {
+			cb, _ := s.walletGet(ctx, in.CoopActorID)
+			if err := s.walletPut(ctx, in.CoopActorID, cb+totalMarge); err != nil {
+				return err
+			}
 		}
 	}
 	now := time.Now().UTC().Format(time.RFC3339)

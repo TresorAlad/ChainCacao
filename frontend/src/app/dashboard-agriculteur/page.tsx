@@ -20,6 +20,7 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { LocationMap } from '@/components/maps/LocationMapDynamic'
 import { coordsFromLot, type MapMarker } from '@/lib/geo-utils'
+import { historyEventLabel } from '@/lib/lot-workflow'
 
 interface LotWithHistory {
   lot: Batch
@@ -259,20 +260,24 @@ export default function AgriculteurDashboardPage() {
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
                         Blockchain · {history.length} événement{history.length > 1 ? 's' : ''}
                       </p>
-                      {history.map((ev, idx) => (
+                      {history.map((ev, idx) => {
+                        const evType = String(ev.type ?? '').toLowerCase()
+                        const isPayment = evType === 'paiement' || evType === 'paiement_liste'
+                        return (
                         <div key={idx} className="flex items-start gap-3">
                           <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0 ${
-                            ev.type === 'transfert' ? 'bg-blue-100 text-blue-700' :
-                            ev.type === 'creation' ? 'bg-green-100 text-green-700' :
-                            ev.type === 'export' ? 'bg-purple-100 text-purple-700' :
+                            evType === 'transfert' ? 'bg-blue-100 text-blue-700' :
+                            evType === 'creation' ? 'bg-green-100 text-green-700' :
+                            isPayment ? 'bg-emerald-100 text-emerald-800' :
+                            evType === 'export' ? 'bg-purple-100 text-purple-700' :
                             'bg-gray-100 text-gray-500'
                           }`}>
-                            {ev.type === 'creation' ? '+' : ev.type === 'transfert' ? '→' : ev.type === 'export' ? '✓' : '·'}
+                            {evType === 'creation' ? '+' : evType === 'transfert' ? '→' : isPayment ? '₣' : evType === 'export' ? '✓' : '·'}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap gap-2 items-center">
-                              <span className="text-xs font-black text-[var(--color-primary)] uppercase">{ev.type}</span>
-                              {ev.type === 'transfert' && (
+                              <span className="text-xs font-black text-[var(--color-primary)] uppercase">{historyEventLabel(ev.type)}</span>
+                              {evType === 'transfert' && (
                                 <span className="text-xs text-gray-500">{ev.from_actor_id} → {ev.to_actor_id}</span>
                               )}
                               {ev.commentaire && <span className="text-xs text-gray-400 italic">· {ev.commentaire}</span>}
@@ -283,7 +288,8 @@ export default function AgriculteurDashboardPage() {
                             </div>
                           </div>
                         </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                 </div>

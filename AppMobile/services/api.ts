@@ -469,8 +469,24 @@ export interface WalletMutationResponse {
   message?: string;
 }
 
+export interface WalletTransactionDto {
+  id: number;
+  actor_id: string;
+  kind: string;
+  amount: number;
+  counterparty_id?: string;
+  lot_id?: string;
+  list_id?: string;
+  reference?: string;
+  created_at: string;
+}
+
 export const walletApi = {
   solde: () => api.get<WalletSoldeResponse>('/api/v1/portefeuille/solde'),
+  historique: () =>
+    api.get<{ success?: boolean; transactions?: WalletTransactionDto[] }>(
+      '/api/v1/portefeuille/historique'
+    ),
   depot: (payload: WalletMutationPayload) =>
     api.post<WalletMutationResponse>('/api/v1/portefeuille/depot', payload),
   retrait: (payload: WalletMutationPayload) =>

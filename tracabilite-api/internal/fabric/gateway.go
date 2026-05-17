@@ -503,6 +503,9 @@ func (g *GatewayClient) ExecutePayment(ctx context.Context, in PaymentCreditInpu
 	if err == nil {
 		return txID, nil
 	}
+	if in.SkipWallet {
+		return "", err
+	}
 	if _, wErr := g.WithdrawWallet(ctx, in.PayerID, in.TotalBrut); wErr != nil {
 		return "", wErr
 	}
@@ -534,18 +537,11 @@ func (g *GatewayClient) ExecutePayment(ctx context.Context, in PaymentCreditInpu
 }
 
 func (g *GatewayClient) RecordPaymentOnLedger(ctx context.Context, in PaymentCreditInput) (string, error) {
-	var lastTx string
-	for _, ln := range in.Lines {
-		tx, err := g.ConfirmBatchReceipt(ctx, ln.BatchID, in.PayerID)
-		if err != nil {
-			return lastTx, err
-		}
-		lastTx = tx
+	in.SkipWallet = true
+	if strings.TrimSpace(in.EventType) == "" {
+		in.EventType = "paiement"
 	}
-	if lastTx == "" {
-		return newTxHash(), nil
-	}
-	return lastTx, nil
+	return g.ExecutePayment(ctx, in)
 }
 
 func (g *GatewayClient) GetWalletBalance(ctx context.Context, actorID string) (float64, error) {
