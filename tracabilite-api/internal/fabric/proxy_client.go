@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -226,7 +227,7 @@ func (c *ProxyClient) GetGroupedList(ctx context.Context, listID string) ([]stri
 	var out struct {
 		BatchIDs []string `json:"batch_ids"`
 	}
-	err := c.doJSON(ctx, http.MethodGet, "/v1/fabric/groupedlist/"+listID, nil, &out)
+	err := c.doJSON(ctx, http.MethodGet, "/v1/fabric/groupedlist/"+url.PathEscape(listID), nil, &out)
 	return out.BatchIDs, err
 }
 

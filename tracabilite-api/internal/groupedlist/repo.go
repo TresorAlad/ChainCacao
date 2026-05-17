@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ type List struct {
 type Repo interface {
 	Save(ctx context.Context, listID, createdBy string, batchIDs []string) error
 	Get(ctx context.Context, listID string) (List, error)
+	Delete(ctx context.Context, listID string) error
 }
 
 type MemoryRepo struct {
@@ -51,6 +53,12 @@ func (m *MemoryRepo) Get(_ context.Context, listID string) (List, error) {
 	return l, nil
 }
 
+func (m *MemoryRepo) Delete(_ context.Context, listID string) error {
+	listID = strings.TrimSpace(listID)
+	delete(m.m, listID)
+	return nil
+}
+
 type PGRepo struct {
 	pool *pgxpool.Pool
 }
@@ -58,14 +66,38 @@ type PGRepo struct {
 func NewPGRepo(pool *pgxpool.Pool) *PGRepo { return &PGRepo{pool: pool} }
 
 func (p *PGRepo) Save(ctx context.Context, listID, createdBy string, batchIDs []string) error {
+	listID = strings.TrimSpace(listID)
+	createdBy = strings.TrimSpace(createdBy)
 	if listID == "" || createdBy == "" || len(batchIDs) == 0 {
 		return errors.New("liste invalide")
 	}
-	raw, _ := json.Marshal(batchIDs)
-	_, err := p.pool.Exec(ctx, `
+	ids := make([]string, 0, len(batchIDs))
+	for _, bid := range batchIDs {
+		bid = strings.TrimSpace(bid)
+		if bid != "" {
+			ids = append(ids, bid)
+		}
+	}
+	if len(ids) == 0 {
+		return errors.New("liste invalide: aucun lot")
+	}
+	raw, err := json.Marshal(ids)
+	if err != nil {
+		return err
+	}
+	_, err = p.pool.Exec(ctx, `
 		INSERT INTO grouped_lists (id, created_by, batch_ids) VALUES ($1,$2,$3::jsonb)
 		ON CONFLICT (id) DO UPDATE SET batch_ids=EXCLUDED.batch_ids, created_by=EXCLUDED.created_by
-	`, listID, createdBy, raw)
+	`, listID, createdBy, string(raw))
+	return err
+}
+
+func (p *PGRepo) Delete(ctx context.Context, listID string) error {
+	listID = strings.TrimSpace(listID)
+	if listID == "" {
+		return nil
+	}
+	_, err := p.pool.Exec(ctx, `DELETE FROM grouped_lists WHERE id=$1`, listID)
 	return err
 }
 
@@ -84,7 +116,12 @@ func (p *PGRepo) Get(ctx context.Context, listID string) (List, error) {
 	if err != nil {
 		return List{}, err
 	}
-	_ = json.Unmarshal(rawIDs, &l.BatchIDs)
+	if err := json.Unmarshal(rawIDs, &l.BatchIDs); err != nil {
+		return List{}, fmt.Errorf("batch_ids invalides: %w", err)
+	}
+	if len(l.BatchIDs) == 0 {
+		return List{}, errors.New("liste vide")
+	}
 	l.CreatedAt = created.UTC().Format(time.RFC3339)
 	return l, nil
 }

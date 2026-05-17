@@ -1081,20 +1081,44 @@ func (h *Handler) CreerListeGroupee(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload invalide"})
 		return
 	}
-	actorID := c.GetString(auth.ContextActorID)
-	txHash, err := h.batch.CreateGroupedList(c.Request.Context(), req.ListID, req.BatchIDs, actorID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	listID := strings.TrimSpace(req.ListID)
+	if listID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "list_id requis"})
 		return
 	}
+	actorID := strings.TrimSpace(c.GetString(auth.ContextActorID))
+	if actorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "acteur non authentifié"})
+		return
+	}
+
+	// Index PostgreSQL d'abord : le paiement (preview/payer) lit grouped_lists avant Fabric.
 	if h.lists != nil {
-		if err := h.lists.Save(c.Request.Context(), strings.TrimSpace(req.ListID), actorID, req.BatchIDs); err != nil {
-			log.Printf("[CreerListeGroupee] save_postgres list_id=%s err=%v", req.ListID, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "liste créée sur la blockchain mais enregistrement local échoué — réessayez ou contactez l'admin"})
+		if err := h.lists.Save(c.Request.Context(), listID, actorID, req.BatchIDs); err != nil {
+			log.Printf("[CreerListeGroupee] save_postgres list_id=%s err=%v", listID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "impossible d'enregistrer la liste en base — vérifiez les migrations (007_grouped_lists) et les droits PostgreSQL",
+			})
 			return
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": txHash, "list_id": req.ListID})
+
+	txHash, err := h.batch.CreateGroupedList(c.Request.Context(), listID, req.BatchIDs, actorID)
+	if err != nil {
+		if h.lists != nil {
+			if delErr := h.lists.Delete(c.Request.Context(), listID); delErr != nil {
+				log.Printf("[CreerListeGroupee] rollback_postgres list_id=%s err=%v", listID, delErr)
+			}
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if ids, verr := h.batch.GetGroupedListBatchIDs(c.Request.Context(), listID); verr != nil || len(ids) == 0 {
+		log.Printf("[CreerListeGroupee] fabric_verify list_id=%s err=%v len=%d", listID, verr, len(ids))
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "tx_hash": txHash, "list_id": listID})
 }
 
 func (h *Handler) resolveGroupedList(ctx context.Context, listID, payerActorID string) (groupedlist.List, error) {
@@ -1111,8 +1135,8 @@ func (h *Handler) resolveGroupedList(ctx context.Context, listID, payerActorID s
 	if err != nil || len(ids) == 0 {
 		return groupedlist.List{}, fmt.Errorf("liste introuvable")
 	}
-	createdBy := strings.TrimSpace(payerActorID)
-	return groupedlist.List{ID: listID, CreatedBy: createdBy, BatchIDs: ids}, nil
+	// Sans ligne PostgreSQL : marge coop par défaut (évite d'utiliser le payeur comme créateur).
+	return groupedlist.List{ID: listID, CreatedBy: "", BatchIDs: ids}, nil
 }
 
 func (h *Handler) PreviewListeGroupee(c *gin.Context) {
