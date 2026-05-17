@@ -73,6 +73,7 @@ export default function GenerationListeScreen() {
   const [search, setSearch] = useState('');
   const [lastListId, setLastListId] = useState<string | null>(null);
   const [qrBase64, setQrBase64] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<{ type: 'error' | 'info'; text: string } | null>(null);
 
   const loadLots = useCallback(async () => {
     setLoading(true);
@@ -109,12 +110,16 @@ export default function GenerationListeScreen() {
 
   const createList = async () => {
     if (selectedIds.length < 2) {
-      Alert.alert('Sélection', 'Choisissez au moins 2 lots.');
+      const msg = 'Choisissez au moins 2 lots.';
+      setStatusMessage({ type: 'error', text: msg });
+      Alert.alert('Sélection', msg);
       return;
     }
     const listId = generateListId();
     setCreating(true);
+    setStatusMessage({ type: 'info', text: 'Création en cours…' });
     const finishSuccess = async (title: string, message: string) => {
+      setStatusMessage(null);
       setLastListId(listId);
       setSelectedIds([]);
       try {
@@ -133,7 +138,9 @@ export default function GenerationListeScreen() {
         await finishSuccess('Liste créée (avec avertissement)', groupedListPartialSuccessMessage(listId));
         return;
       }
-      Alert.alert('Erreur', getApiError(e));
+      const msg = getApiError(e);
+      setStatusMessage({ type: 'error', text: msg });
+      Alert.alert('Erreur', msg);
     } finally {
       setCreating(false);
     }
@@ -165,6 +172,24 @@ export default function GenerationListeScreen() {
             ) : (
               <Text style={styles.qrHint}>{getApiBaseUrl()}/qrcode/{lastListId}</Text>
             )}
+          </View>
+        )}
+
+        {statusMessage && (
+          <View
+            style={[
+              styles.statusBanner,
+              statusMessage.type === 'error' ? styles.statusBannerError : styles.statusBannerInfo,
+            ]}
+          >
+            <Text
+              style={[
+                styles.statusBannerText,
+                statusMessage.type === 'error' ? styles.statusBannerTextError : styles.statusBannerTextInfo,
+              ]}
+            >
+              {statusMessage.text}
+            </Text>
           </View>
         )}
 
@@ -228,7 +253,13 @@ export default function GenerationListeScreen() {
             <Text style={styles.framePoids}>{poidsTotal} kg</Text>
           </View>
           <View style={styles.frameCenter}>
-            <TouchableOpacity style={styles.generateBtn} onPress={createList} disabled={creating}>
+            <TouchableOpacity
+              style={[styles.generateBtn, creating && styles.generateBtnDisabled]}
+              onPress={() => void createList()}
+              disabled={creating}
+              activeOpacity={0.85}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
               {creating ? (
                 <ActivityIndicator color="white" />
               ) : (
@@ -315,8 +346,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    elevation: 10,
+    elevation: 24,
+    zIndex: 100,
   },
+  statusBanner: {
+    marginHorizontal: 20,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 12,
+  },
+  statusBannerError: { backgroundColor: '#FFEBEE' },
+  statusBannerInfo: { backgroundColor: '#FFF8E1' },
+  statusBannerText: { fontSize: 13, lineHeight: 18 },
+  statusBannerTextError: { color: '#B71C1C' },
+  statusBannerTextInfo: { color: '#E65100' },
   frameLeft: { flex: 1, justifyContent: 'center' },
   frameCenter: { flex: 2, alignItems: 'center', justifyContent: 'center' },
   frameText: { fontSize: 11, color: '#666' },
@@ -328,7 +371,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 15,
+    minWidth: 140,
+    justifyContent: 'center',
   },
+  generateBtnDisabled: { opacity: 0.7 },
   generateBtnText: { color: 'white', marginLeft: 8, fontSize: 14, fontWeight: 'bold' },
   emptyContainer: { alignItems: 'center', marginTop: 80 },
   emptyText: { fontSize: 16, color: '#999', marginTop: 10 },

@@ -32,6 +32,7 @@ export default function ListeGroupeePage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [lotsLoading, setLotsLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [createFeedback, setCreateFeedback] = useState<{ type: 'error' | 'info'; text: string } | null>(null)
   const [lastListId, setLastListId] = useState<string | null>(null)
   const [qrUrl, setQrUrl] = useState<string | null>(null)
   const [history, setHistory] = useState<{ list_id: string; batch_ids: string[] }[]>([])
@@ -64,17 +65,21 @@ export default function ListeGroupeePage() {
 
   const createGroupedList = async () => {
     if (selected.size < 2) {
-      toast.error('Sélectionnez au moins 2 lots')
+      const msg = 'Sélectionnez au moins 2 lots'
+      setCreateFeedback({ type: 'error', text: msg })
+      toast.error(msg)
       return
     }
     const listId = generateListId()
     const batchIds = Array.from(selected)
     setCreating(true)
+    setCreateFeedback({ type: 'info', text: 'Création en cours sur le serveur (blockchain)…' })
     const applySuccess = (id: string, toastMsg: string) => {
       setLastListId(id)
       setHistory((h) => [{ list_id: id, batch_ids: batchIds }, ...h])
       setQrUrl(`${getApiBaseUrl()}/qrcode/${encodeURIComponent(id)}?format=png`)
       setSelected(new Set())
+      setCreateFeedback(null)
       toast.success(toastMsg, { duration: 6000 })
     }
     try {
@@ -89,7 +94,9 @@ export default function ListeGroupeePage() {
         applySuccess(listId, groupedListPartialSuccessMessage(listId))
         return
       }
-      toast.error(err instanceof Error ? err.message : 'Échec de création')
+      const msg = err instanceof Error ? err.message : 'Échec de création'
+      setCreateFeedback({ type: 'error', text: msg })
+      toast.error(msg)
     } finally {
       setCreating(false)
     }
@@ -117,6 +124,19 @@ export default function ListeGroupeePage() {
             Regroupez plusieurs lots reçus en une liste unique avec QR code (CDC §7.2).
           </p>
         </header>
+
+        {createFeedback && (
+          <div
+            role="alert"
+            className={`mb-4 rounded-xl px-4 py-3 text-sm font-medium ${
+              createFeedback.type === 'error'
+                ? 'bg-red-50 text-red-800 border border-red-200'
+                : 'bg-amber-50 text-amber-900 border border-amber-200'
+            }`}
+          >
+            {createFeedback.text}
+          </div>
+        )}
 
         <div className="card-panel mb-6 sm:mb-8">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">

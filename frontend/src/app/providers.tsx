@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
+import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { WebChannelGuard } from '@/components/WebChannelGuard'
 import { PinUnlockGuard } from '@/components/PinUnlockGuard'
@@ -36,6 +37,13 @@ export default function Providers({ children }: { children: ReactNode }) {
         )}
       </WebChannelGuard>
       </PinUnlockGuard>
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          duration: 5000,
+          style: { maxWidth: 'min(90vw, 28rem)' },
+        }}
+      />
     </AuthProvider>
   )
 }
