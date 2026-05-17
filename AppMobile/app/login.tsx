@@ -7,7 +7,6 @@ import {
 import { useRouter, Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { ServerStatusBanner } from '@/components/ServerStatusBanner';
 import { useAuth } from '@/hooks/use-auth';
 import { homePathForActor } from '@/lib/home-path';
 import {
@@ -102,8 +101,6 @@ export default function LoginScreen() {
               <Text style={[styles.title, { color: brandGreen }]}>Connexion</Text>
               <MaterialCommunityIcons name="leaf" size={28} color={brandGreen} />
             </View>
-
-            <ServerStatusBanner />
 
             {error && (
               <View style={styles.errorBanner}>

@@ -320,7 +320,7 @@ export default function HistoriqueScreen() {
             <View style={styles.myLotsSection}>
               <Text style={styles.myLotsTitle}>Lots sur l&apos;appareil</Text>
               <Text style={styles.myLotsSubtitle}>
-                Lots locaux (hors ligne ou en attente de synchro).
+                Lots locaux en attente de synchronisation.
               </Text>
               {lots.map((lot) => (
                 <TouchableOpacity

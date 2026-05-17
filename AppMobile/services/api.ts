@@ -16,23 +16,19 @@ function normalizeApiRoot(url: string): string {
 }
 
 /** URL de base : `extra.apiUrl` dans app.config.js (EXPO_PUBLIC_API_URL en build). */
+const FALLBACK_API_URL = 'http://13.60.214.56:8080';
+
 export function getApiBaseUrl(): string {
   const fromExtra = (Constants.expoConfig?.extra as ExpoExtra | undefined)?.apiUrl;
-  if (typeof fromExtra === 'string' && fromExtra.trim()) {
-    const url = normalizeApiRoot(fromExtra);
-    if (url.includes('127.0.0.1') || url.includes('localhost')) {
-      console.warn(
-        '[ChainCacao] ⚠️  URL API localhost détectée (' + url + ').\n' +
-        'Ce build pointe vers localhost et ne fonctionnera PAS sur un téléphone réel.\n' +
-        'Rebuild avec : eas build --profile preview --platform android\n' +
-        'Ou en local   : EXPO_PUBLIC_API_URL=http://13.60.214.56:8080 npx expo run:android'
-      );
-    }
-    return url;
+  const raw = typeof fromExtra === 'string' && fromExtra.trim() ? fromExtra : FALLBACK_API_URL;
+  const url = normalizeApiRoot(raw);
+  if (url.includes('127.0.0.1') || url.includes('localhost')) {
+    console.warn(
+      '[ChainCacao] ⚠️  URL API localhost (' + url + ') — ne fonctionne pas sur un téléphone réel.\n' +
+      'Rebuild : eas build --profile preview --platform android'
+    );
   }
-  throw new Error(
-    'API URL non configurée : définissez EXPO_PUBLIC_API_URL ou extra.apiUrl dans app.config.js (racine http(s)://hôte:port, sans /api/v1).'
-  );
+  return url;
 }
 
 export const API_BASE = getApiBaseUrl();
@@ -112,12 +108,7 @@ export function getApiError(e: unknown, kind: GetApiErrorKind = 'default'): stri
       return `Configuration incorrecte : l'URL de l'API pointe vers localhost (${API_BASE}), ce qui ne fonctionne pas sur un téléphone réel. Vérifiez EXPO_PUBLIC_API_URL.`;
     }
     if (kind === 'auth') {
-      return (
-        `Le serveur ChainCacao (${API_BASE}) ne répond pas.\n\n` +
-        `Ce n’est pas le « mode hors-ligne » de l’application (il est désactivé). ` +
-        `Votre connexion Internet peut fonctionner (notifications, navigateur) alors que l’API est injoignable.\n\n` +
-        `Test : ouvrez ${API_BASE}/health dans le navigateur du téléphone.`
-      );
+      return `Serveur injoignable (${API_BASE}). Vérifiez que l’API est démarrée et que ${API_BASE}/health répond sur le téléphone.`;
     }
     return unreachableServerMessage();
   }

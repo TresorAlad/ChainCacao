@@ -88,7 +88,7 @@ module.exports = {
     scheme: 'myapp',
     userInterfaceStyle: 'automatic',
     runtimeVersion: {
-      policy: 'appVersion',
+      policy: 'fingerprint',
     },
     updates: {
       url: 'https://u.expo.dev/f6a18683-7b87-4986-8742-0bf31e0078a3',
