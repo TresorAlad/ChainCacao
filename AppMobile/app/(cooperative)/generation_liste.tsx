@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  ScrollView,
+  Share,
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -74,6 +76,7 @@ export default function GenerationListeScreen() {
   const [lastListId, setLastListId] = useState<string | null>(null);
   const [qrBase64, setQrBase64] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ type: 'error' | 'info'; text: string } | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
   const loadLots = useCallback(async () => {
     setLoading(true);
@@ -118,24 +121,27 @@ export default function GenerationListeScreen() {
     const listId = generateListId();
     setCreating(true);
     setStatusMessage({ type: 'info', text: 'Création en cours…' });
-    const finishSuccess = async (title: string, message: string) => {
+    const finishSuccess = async (id: string, title: string, message: string) => {
       setStatusMessage(null);
-      setLastListId(listId);
+      setLastListId(id);
       setSelectedIds([]);
+      setQrBase64(null);
       try {
-        const qr = await qrcodeApi.getJson(listId);
+        const qr = await qrcodeApi.getJson(id);
         setQrBase64(qr.data.qrcode_png_base64 ?? null);
       } catch {
         setQrBase64(null);
       }
-      Alert.alert(title, message);
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      Alert.alert(title, `${message}\n\nIdentifiant : ${id}`);
     };
     try {
-      await groupedListApi.create(listId, selectedIds);
-      await finishSuccess('Succès', `Liste ${listId} créée sur la blockchain.`);
+      const { data } = await groupedListApi.create(listId, selectedIds);
+      const id = data.list_id?.trim() || listId;
+      await finishSuccess(id, 'Succès', `Liste créée sur la blockchain.`);
     } catch (e) {
       if (isGroupedListPartialSuccess(e)) {
-        await finishSuccess('Liste créée (avec avertissement)', groupedListPartialSuccessMessage(listId));
+        await finishSuccess(listId, 'Liste créée (avec avertissement)', groupedListPartialSuccessMessage(listId));
         return;
       }
       const msg = getApiError(e);
@@ -158,11 +164,24 @@ export default function GenerationListeScreen() {
         <View style={styles.headerBtn} />
       </View>
 
-      <View style={styles.body}>
+      <ScrollView ref={scrollRef} style={styles.body} contentContainerStyle={styles.bodyContent}>
         {lastListId && (
           <View style={styles.successBox}>
-            <Text style={styles.successTitle}>Liste créée</Text>
+            <Text style={styles.successTitle}>Liste créée — conservez cet identifiant</Text>
             <Text style={styles.successId}>{lastListId}</Text>
+            <TouchableOpacity
+              style={styles.copyBtn}
+              onPress={async () => {
+                try {
+                  await Share.share({ message: lastListId, title: 'Identifiant liste groupée' });
+                } catch {
+                  Alert.alert('Identifiant', lastListId);
+                }
+              }}
+            >
+              <MaterialCommunityIcons name="content-copy" size={18} color="#2E7D32" />
+              <Text style={styles.copyBtnText}>Partager l&apos;identifiant</Text>
+            </TouchableOpacity>
             {qrBase64 ? (
               <Image
                 source={{ uri: `data:image/png;base64,${qrBase64}` }}
@@ -170,8 +189,23 @@ export default function GenerationListeScreen() {
                 resizeMode="contain"
               />
             ) : (
-              <Text style={styles.qrHint}>{getApiBaseUrl()}/qrcode/{lastListId}</Text>
+              <ActivityIndicator color={brandGreen} style={{ marginVertical: 12 }} />
             )}
+            <TouchableOpacity
+              style={styles.payBtn}
+              onPress={() =>
+                router.push({
+                  pathname: '/paiement-liste',
+                  params: { listId: lastListId },
+                } as never)
+              }
+            >
+              <MaterialCommunityIcons name="cash-multiple" size={22} color="white" />
+              <Text style={styles.payBtnText}>Payer cette liste</Text>
+            </TouchableOpacity>
+            <Text style={styles.qrHint}>
+              Ou menu web « Payer liste groupée » avec l&apos;identifiant LIST-…
+            </Text>
           </View>
         )}
 
@@ -207,7 +241,9 @@ export default function GenerationListeScreen() {
         {loading ? (
           <ActivityIndicator size="large" color={brandGreen} style={{ marginTop: 40 }} />
         ) : (
+          <View style={styles.listWrap}>
           <FlatList
+            scrollEnabled={false}
             data={filteredLots}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
@@ -243,8 +279,9 @@ export default function GenerationListeScreen() {
               );
             }}
           />
+          </View>
         )}
-      </View>
+      </ScrollView>
 
       {selectedIds.length > 0 && (
         <View style={styles.selectionFrame}>
@@ -294,20 +331,54 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    paddingTop: 10,
   },
+  bodyContent: { paddingTop: 10, paddingBottom: 180 },
+  listWrap: { minHeight: 200 },
   successBox: {
     marginHorizontal: 20,
-    marginBottom: 12,
-    padding: 12,
+    marginBottom: 16,
+    padding: 16,
     backgroundColor: '#E8F5E9',
-    borderRadius: 12,
+    borderRadius: 16,
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#2E7D32',
   },
-  successTitle: { fontWeight: 'bold', color: '#2E7D32' },
-  successId: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 12, marginTop: 4 },
-  qr: { width: 160, height: 160, marginTop: 8 },
-  qrHint: { fontSize: 10, color: '#666', marginTop: 8, textAlign: 'center' },
+  successTitle: { fontWeight: 'bold', color: '#2E7D32', fontSize: 15, textAlign: 'center' },
+  successId: {
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginTop: 8,
+    color: '#1B5E20',
+    textAlign: 'center',
+  },
+  copyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2E7D32',
+    backgroundColor: 'white',
+  },
+  copyBtnText: { marginLeft: 6, color: '#2E7D32', fontWeight: '600', fontSize: 13 },
+  qr: { width: 200, height: 200, marginTop: 12 },
+  payBtn: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2E7D32',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    width: '100%',
+  },
+  payBtnText: { color: 'white', fontWeight: 'bold', fontSize: 15, marginLeft: 8 },
+  qrHint: { fontSize: 11, color: '#666', marginTop: 10, textAlign: 'center', lineHeight: 16 },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',

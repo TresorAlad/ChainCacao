@@ -1,17 +1,19 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { RoleLayout } from '@/components/RoleLayout'
 import api, { type Batch } from '@/lib/api'
-import { getApiBaseUrl } from '@/lib/api-base'
+import { fetchGroupedListQrDataUrl } from '@/lib/grouped-list-qr'
+import { loadGroupedListSession, saveGroupedListSession } from '@/lib/grouped-list-session'
 import {
   groupedListPartialSuccessMessage,
   isGroupedListPartialSuccess,
 } from '@/lib/grouped-list-error'
 import { canIncludeInGroupedList } from '@/lib/lot-workflow'
-import { RectangleStackIcon, QrCodeIcon } from '@heroicons/react/24/outline'
+import { RectangleStackIcon, QrCodeIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
 function generateListId() {
@@ -36,10 +38,29 @@ export default function ListeGroupeePage() {
   const [lastListId, setLastListId] = useState<string | null>(null)
   const [qrUrl, setQrUrl] = useState<string | null>(null)
   const [history, setHistory] = useState<{ list_id: string; batch_ids: string[] }[]>([])
+  const successRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const saved = loadGroupedListSession()
+    if (saved.last) {
+      setLastListId(saved.last.list_id)
+      setHistory(saved.history.map((h) => ({ list_id: h.list_id, batch_ids: h.batch_ids })))
+      void fetchGroupedListQrDataUrl(saved.last.list_id).then(setQrUrl)
+    }
+  }, [])
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace('/login')
   }, [isAuthenticated, loading, router])
+
+  const copyListId = useCallback(async (id: string) => {
+    try {
+      await navigator.clipboard.writeText(id)
+      toast.success('Identifiant copié')
+    } catch {
+      toast.error('Copie impossible — sélectionnez le texte manuellement')
+    }
+  }, [])
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -74,13 +95,22 @@ export default function ListeGroupeePage() {
     const batchIds = Array.from(selected)
     setCreating(true)
     setCreateFeedback({ type: 'info', text: 'Création en cours sur le serveur (blockchain)…' })
-    const applySuccess = (id: string, toastMsg: string) => {
+    const applySuccess = async (id: string, toastMsg: string) => {
       setLastListId(id)
-      setHistory((h) => [{ list_id: id, batch_ids: batchIds }, ...h])
-      setQrUrl(`${getApiBaseUrl()}/qrcode/${encodeURIComponent(id)}?format=png`)
+      const entry = { list_id: id, batch_ids: batchIds, created_at: new Date().toISOString() }
+      saveGroupedListSession(entry)
+      setHistory((h) => [{ list_id: id, batch_ids: batchIds }, ...h.filter((x) => x.list_id !== id)])
       setSelected(new Set())
       setCreateFeedback(null)
-      toast.success(toastMsg, { duration: 6000 })
+      toast.success(toastMsg, { duration: 8000 })
+      try {
+        setQrUrl(await fetchGroupedListQrDataUrl(id))
+      } catch {
+        setQrUrl(null)
+      }
+      requestAnimationFrame(() => {
+        successRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
     }
     try {
       const res = await api.post<{ success: boolean; list_id: string; tx_hash?: string }>('/liste-groupee', {
@@ -88,10 +118,10 @@ export default function ListeGroupeePage() {
         batch_ids: batchIds,
       })
       const id = res.data.list_id || listId
-      applySuccess(id, 'Liste groupée créée sur la blockchain')
+      await applySuccess(id, `Liste créée : ${id}`)
     } catch (err: unknown) {
       if (isGroupedListPartialSuccess(err)) {
-        applySuccess(listId, groupedListPartialSuccessMessage(listId))
+        await applySuccess(listId, groupedListPartialSuccessMessage(listId))
         return
       }
       const msg = err instanceof Error ? err.message : 'Échec de création'
@@ -135,6 +165,49 @@ export default function ListeGroupeePage() {
             }`}
           >
             {createFeedback.text}
+          </div>
+        )}
+
+        {lastListId && (
+          <div
+            ref={successRef}
+            className="card-panel border-2 border-[#33691E] bg-[#F1F8E9] mb-6 sm:mb-8 shadow-md"
+          >
+            <h2 className="text-lg font-black text-[var(--color-primary)] mb-2 flex items-center gap-2">
+              <QrCodeIcon className="w-6 h-6 text-[#33691E]" />
+              Liste créée — conservez cet identifiant
+            </h2>
+            <p className="text-sm text-gray-600 mb-3">
+              Utilisez cet identifiant <strong>LIST-…</strong> ou le QR pour le paiement.
+            </p>
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <p className="font-mono text-base sm:text-lg font-bold text-[#1B5E20] break-all flex-1 min-w-[200px]">
+                {lastListId}
+              </p>
+              <button
+                type="button"
+                onClick={() => void copyListId(lastListId)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#33691E] text-[#33691E] text-sm font-bold hover:bg-white"
+              >
+                <ClipboardDocumentIcon className="w-4 h-4" />
+                Copier
+              </button>
+            </div>
+            {qrUrl ? (
+              <img
+                src={qrUrl}
+                alt={`QR ${lastListId}`}
+                className="w-52 h-52 mx-auto border rounded-xl bg-white p-2 mb-4"
+              />
+            ) : (
+              <p className="text-center text-sm text-amber-800 mb-4">QR en chargement…</p>
+            )}
+            <Link
+              href={`/paiement-liste?list=${encodeURIComponent(lastListId)}`}
+              className="block w-full py-3.5 text-center bg-[#33691E] text-white rounded-xl text-sm font-bold hover:brightness-110"
+            >
+              Payer cette liste groupée
+            </Link>
           </div>
         )}
 
@@ -184,41 +257,25 @@ export default function ListeGroupeePage() {
           )}
         </div>
 
-        {lastListId && (
-          <div className="card-panel border-[#C8E6C9] mb-6 sm:mb-8">
-            <h2 className="text-lg font-black text-[var(--color-primary)] mb-4 flex items-center gap-2">
-              <QrCodeIcon className="w-6 h-6 text-[#33691E]" />
-              QR liste créée
-            </h2>
-            <p className="font-mono text-sm font-bold text-[#33691E] mb-4 break-all">{lastListId}</p>
-            {qrUrl && (
-              <img
-                src={qrUrl}
-                alt={`QR ${lastListId}`}
-                className="w-48 h-48 mx-auto border rounded-xl bg-white p-2"
-              />
-            )}
-            <a
-              href={`/paiement-liste?list=${encodeURIComponent(lastListId)}`}
-              className="mt-4 block w-full py-3 text-center bg-[#33691E] text-white rounded-xl text-sm font-bold hover:brightness-110"
-            >
-              Payer cette liste groupée
-            </a>
-            <p className="text-xs text-center text-gray-500 mt-4">
-              Menu <strong>Payer liste groupée</strong> avec l&apos;identifiant <strong>LIST-…</strong> (pas un lot{' '}
-              <strong>TC-…</strong> sur Paiement lot).
-            </p>
-          </div>
-        )}
 
         {history.length > 0 && (
           <div className="card-panel">
             <h2 className="text-lg font-black text-[var(--color-primary)] mb-4">Historique session</h2>
             <ul className="space-y-3">
               {history.map((item) => (
-                <li key={item.list_id} className="p-4 rounded-xl bg-gray-50">
-                  <p className="font-mono font-bold text-sm break-all">{item.list_id}</p>
-                  <p className="text-xs text-gray-500 mt-1 break-words">{item.batch_ids.length} lots · {item.batch_ids.join(', ')}</p>
+                <li key={item.list_id} className="p-4 rounded-xl bg-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <p className="font-mono font-bold text-sm break-all">{item.list_id}</p>
+                    <p className="text-xs text-gray-500 mt-1 break-words">
+                      {item.batch_ids.length} lots · {item.batch_ids.join(', ')}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/paiement-liste?list=${encodeURIComponent(item.list_id)}`}
+                    className="text-sm font-bold text-[#33691E] hover:underline shrink-0"
+                  >
+                    Payer →
+                  </Link>
                 </li>
               ))}
             </ul>
