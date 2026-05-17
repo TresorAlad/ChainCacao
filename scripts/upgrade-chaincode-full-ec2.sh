@@ -128,7 +128,7 @@ run "source \"$ROOT/scripts/fabric-ec2-env.sh\" && peer lifecycle chaincode chec
   --version \"$CC_VERSION\" --sequence \"$CC_SEQUENCE\" \\
   --tls --cafile \"$ORDERER_CA\" $ORDERER_OPTS --output json || true"
 
-run "peer lifecycle chaincode commit \\
+run "source \"$ROOT/scripts/fabric-ec2-env.sh\" && peer lifecycle chaincode commit \\
   --channelID \"$CC_CHANNEL\" --name \"$CC_NAME\" \\
   --version \"$CC_VERSION\" --sequence \"$CC_SEQUENCE\" \\
   --tls --cafile \"$ORDERER_CA\" $ORDERER_OPTS \\
