@@ -6,7 +6,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 
 import { batchApi, getApiError, isNetworkError } from '@/services/api';
-import { extractLotIdFromScanPayload, isGroupedListId } from '@/utils/lotQr';
+import { extractLotIdFromScanPayload, isGroupedListId, normalizeGroupedListId } from '@/utils/lotQr';
 
 export default function ScannerScreen() {
   const insets = useSafeAreaInsets();
@@ -50,9 +50,10 @@ export default function ScannerScreen() {
       return;
     }
     if (isGroupedListId(scannedId)) {
+      const listId = normalizeGroupedListId(scannedId);
       router.push({
         pathname: '/(exportateur)/paiement-liste',
-        params: { listId: scannedId },
+        params: { listId },
       } as any);
       return;
     }

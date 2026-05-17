@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { RoleLayout } from '@/components/RoleLayout'
 import { getRoleBasedRedirect } from '@/lib/role-utils'
 import api from '@/lib/api'
+import { normalizeGroupedListId } from '@/lib/lot-qr'
 import { BanknotesIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
@@ -55,7 +56,7 @@ function PaiementListeContent() {
 
   useEffect(() => {
     const id = searchParams.get('list')?.trim()
-    if (id) setListId(id)
+    if (id) setListId(normalizeGroupedListId(id))
   }, [searchParams])
 
   useEffect(() => {
@@ -67,7 +68,8 @@ function PaiementListeContent() {
   }, [isAuthenticated])
 
   const runPreview = async () => {
-    const id = listId.trim()
+    const id = normalizeGroupedListId(listId)
+    if (id !== listId.trim()) setListId(id)
     const prix = parseFloat(prixParKg)
     if (!id) {
       toast.error('Identifiant de liste requis')
@@ -85,7 +87,11 @@ function PaiementListeContent() {
       })
       setPreview(res.data)
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Prévisualisation impossible')
+      const base = err instanceof Error ? err.message : 'Prévisualisation impossible'
+      const hint = base.toLowerCase().includes('liste introuvable')
+        ? ' — vérifiez l’identifiant LIST-… exact (écran « Liste créée » côté coopérative).'
+        : ''
+      toast.error(base + hint)
     } finally {
       setLoadingPreview(false)
     }

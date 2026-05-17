@@ -17,6 +17,7 @@ import {
   getApiError,
   type PaymentPreviewSummary,
 } from '@/services/api';
+import { normalizeGroupedListId } from '@/utils/lotQr';
 
 function fmt(n: number) {
   return Math.round(n).toLocaleString('fr-FR');
@@ -25,7 +26,7 @@ function fmt(n: number) {
 export default function PaiementListeScreen() {
   const { listId: listIdParam } = useLocalSearchParams<{ listId?: string }>();
   const router = useRouter();
-  const [listId, setListId] = useState(String(listIdParam ?? ''));
+  const [listId, setListId] = useState(normalizeGroupedListId(String(listIdParam ?? '')));
   const [prixParKg, setPrixParKg] = useState('');
   const [pin, setPin] = useState('');
   const [preview, setPreview] = useState<(PaymentPreviewSummary & { list_id?: string }) | null>(null);
@@ -41,7 +42,8 @@ export default function PaiementListeScreen() {
   }, []);
 
   const runPreview = async () => {
-    const id = listId.trim();
+    const id = normalizeGroupedListId(listId);
+    if (id !== listId.trim()) setListId(id);
     const prix = parseFloat(prixParKg);
     if (!id) {
       Alert.alert('Erreur', 'Identifiant de liste requis');
@@ -57,7 +59,12 @@ export default function PaiementListeScreen() {
       const { data } = await groupedListApi.preview(id, prix);
       setPreview({ ...data, list_id: data.list_id ?? id });
     } catch (e) {
-      Alert.alert('Prévisualisation', getApiError(e));
+      const msg = getApiError(e);
+      const hint =
+        msg.toLowerCase().includes('liste introuvable')
+          ? '\n\nVérifiez l’identifiant exact affiché lors de la création (LIST-…). Si la liste vient d’être créée, demandez à la coopérative de la régénérer ou copier l’ID depuis l’écran « Liste créée ».'
+          : '';
+      Alert.alert('Prévisualisation', msg + hint);
     } finally {
       setLoadingPreview(false);
     }

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { RoleLayout } from '@/components/RoleLayout'
 import { getRoleBasedRedirect } from '@/lib/role-utils'
 import api, { type Batch, unwrapLotFromResponse } from '@/lib/api'
+import { normalizeGroupedListId } from '@/lib/lot-qr'
 import { BanknotesIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
@@ -54,8 +55,8 @@ function PaiementLotContent() {
       toast.error('Saisissez un identifiant de lot')
       return
     }
-    if (trimmed.toUpperCase().startsWith('LIST-')) {
-      router.push(`/paiement-liste?list=${encodeURIComponent(trimmed)}`)
+    if (/^list-/i.test(trimmed)) {
+      router.push(`/paiement-liste?list=${encodeURIComponent(normalizeGroupedListId(trimmed))}`)
       toast('Identifiant de liste groupée : redirection vers Payer liste groupée.', { icon: 'ℹ️' })
       return
     }
