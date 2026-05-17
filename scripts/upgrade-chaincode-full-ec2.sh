@@ -12,6 +12,7 @@
 #
 # Variables optionnelles :
 #   CC_SEQUENCE=3          forcer la séquence (sinon auto = commitée + 1)
+#   SKIP_INSTALL=1         sauter package/install (reprise après échec approve/commit)
 #   SKIP_API_REBUILD=1     ne pas lancer docker compose rebuild api
 #   DRY_RUN=1              afficher les commandes sans les exécuter
 # ============================================================
@@ -31,6 +32,7 @@ CHAINCODE_DIR="${CHAINCODE_DIR:-$ROOT/chaincode}"
 PKG_OUT="${PKG_OUT:-$ROOT/chaincacao_cc_${CC_LABEL}.tar.gz}"
 DRY_RUN="${DRY_RUN:-0}"
 SKIP_API_REBUILD="${SKIP_API_REBUILD:-0}"
+SKIP_INSTALL="${SKIP_INSTALL:-0}"
 
 TN="$ROOT/fabric-samples/test-network"
 ORG1_TLS="$TN/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt"
@@ -58,6 +60,7 @@ detect_sequence() {
   fi
 }
 
+# Séquence = commitée + 1, sauf si vous exportez CC_SEQUENCE avant d’exécuter le script.
 if [[ -z "${CC_SEQUENCE:-}" ]]; then
   CC_SEQUENCE="$(detect_sequence)"
 fi
@@ -71,50 +74,64 @@ echo ""
 run "peer lifecycle chaincode querycommitted -C \"$CC_CHANNEL\" -n \"$CC_NAME\" || true"
 echo ""
 
-echo "=== 1/7 Package Go chaincode ==="
-run "peer lifecycle chaincode package \"$PKG_OUT\" --path \"$CHAINCODE_DIR\" --lang golang --label \"$CC_LABEL\""
-
-if [[ "$DRY_RUN" == "1" ]]; then
-  PACKAGE_ID="${CC_LABEL}:<hash-dry-run>"
+if [[ "$SKIP_INSTALL" == "1" ]]; then
+  echo "=== 1–3/7 Install ignoré (SKIP_INSTALL=1) ==="
+  if [[ -z "${PACKAGE_ID:-}" ]] && [[ -f "$PKG_OUT" ]] && [[ "$DRY_RUN" != "1" ]]; then
+    PACKAGE_ID="$(peer lifecycle chaincode calculatepackageid "$PKG_OUT")"
+  fi
+  PACKAGE_ID="${PACKAGE_ID:-}"
+  if [[ -z "$PACKAGE_ID" ]]; then
+    echo "ERREUR: export PACKAGE_ID=chaincacao_v2:... ou laissez SKIP_INSTALL vide."
+    exit 1
+  fi
+  export PACKAGE_ID
+  echo "PACKAGE_ID=$PACKAGE_ID (existant)"
 else
-  PACKAGE_ID="$(peer lifecycle chaincode calculatepackageid "$PKG_OUT")"
+  echo "=== 1/7 Package Go chaincode ==="
+  run "peer lifecycle chaincode package \"$PKG_OUT\" --path \"$CHAINCODE_DIR\" --lang golang --label \"$CC_LABEL\""
+
+  if [[ "$DRY_RUN" == "1" ]]; then
+    PACKAGE_ID="${CC_LABEL}:<hash-dry-run>"
+  else
+    PACKAGE_ID="$(peer lifecycle chaincode calculatepackageid "$PKG_OUT")"
+  fi
+  export PACKAGE_ID
+  echo "PACKAGE_ID=$PACKAGE_ID"
+
+  echo ""
+  echo "=== 2/7 Install Org1 ($PEER1) ==="
+  run "peer lifecycle chaincode install \"$PKG_OUT\""
+  echo ""
+
+  echo "=== 3/7 Install Org2 ($PEER2) ==="
+  run "source \"$ROOT/scripts/fabric-ec2-org2-env.sh\" && peer lifecycle chaincode install \"$PKG_OUT\""
 fi
-export PACKAGE_ID
-echo "PACKAGE_ID=$PACKAGE_ID"
-
-echo ""
-echo "=== 2/7 Install Org1 ($PEER1) ==="
-run "peer lifecycle chaincode install \"$PKG_OUT\""
-echo ""
-
-echo "=== 3/7 Install Org2 ($PEER2) ==="
-run "source \"$ROOT/scripts/fabric-ec2-org2-env.sh\" && peer lifecycle chaincode install \"$PKG_OUT\""
 
 echo ""
 echo "=== 4/7 Approve Org1 ==="
 run "peer lifecycle chaincode approveformyorg \\
   --channelID \"$CC_CHANNEL\" --name \"$CC_NAME\" \\
   --version \"$CC_VERSION\" --package-id \"$PACKAGE_ID\" --sequence \"$CC_SEQUENCE\" \\
-  --tls --cafile \"$ORDERER_CA\""
+  --tls --cafile \"$ORDERER_CA\" $ORDERER_OPTS"
 
 echo ""
 echo "=== 5/7 Approve Org2 ==="
 run "source \"$ROOT/scripts/fabric-ec2-org2-env.sh\" && peer lifecycle chaincode approveformyorg \\
   --channelID \"$CC_CHANNEL\" --name \"$CC_NAME\" \\
   --version \"$CC_VERSION\" --package-id \"$PACKAGE_ID\" --sequence \"$CC_SEQUENCE\" \\
-  --tls --cafile \"$ORDERER_CA\""
+  --tls --cafile \"$ORDERER_CA\" $ORDERER_OPTS"
 
 echo ""
 echo "=== 6/7 Commit readiness + commit (2 peers) ==="
 run "source \"$ROOT/scripts/fabric-ec2-env.sh\" && peer lifecycle chaincode checkcommitreadiness \\
   --channelID \"$CC_CHANNEL\" --name \"$CC_NAME\" \\
   --version \"$CC_VERSION\" --sequence \"$CC_SEQUENCE\" \\
-  --tls --cafile \"$ORDERER_CA\" --output json || true"
+  --tls --cafile \"$ORDERER_CA\" $ORDERER_OPTS --output json || true"
 
 run "peer lifecycle chaincode commit \\
   --channelID \"$CC_CHANNEL\" --name \"$CC_NAME\" \\
   --version \"$CC_VERSION\" --sequence \"$CC_SEQUENCE\" \\
-  --tls --cafile \"$ORDERER_CA\" \\
+  --tls --cafile \"$ORDERER_CA\" $ORDERER_OPTS \\
   --peerAddresses \"$PEER1\" --tlsRootCertFiles \"$ORG1_TLS\" \\
   --peerAddresses \"$PEER2\" --tlsRootCertFiles \"$ORG2_TLS\""
 

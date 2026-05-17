@@ -11,7 +11,7 @@ source "$ROOT/scripts/fabric-ec2-env.sh"
 
 CC_NAME="${CC_NAME:-chaincacao}"
 CC_CHANNEL="${CC_CHANNEL:-chaincacao-channel}"
-CC_SEQUENCE="${CC_SEQUENCE:-2}"
+CC_SEQUENCE="${CC_SEQUENCE:-}"
 
 TN="$ROOT/fabric-samples/test-network"
 ORG1_TLS="$TN/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt"
@@ -32,17 +32,22 @@ source "$ROOT/scripts/fabric-ec2-org2-env.sh"
 peer lifecycle chaincode queryinstalled || true
 
 echo ""
-echo "=== Commit readiness (séquence $CC_SEQUENCE) — les deux orgs doivent être true ==="
+COMMITTED_SEQ="$(peer lifecycle chaincode querycommitted -C "$CC_CHANNEL" -n "$CC_NAME" 2>/dev/null \
+  | sed -n 's/.*Sequence: \([0-9][0-9]*\).*/\1/p' | head -1 || true)"
+CHECK_SEQ="${CC_SEQUENCE:-$COMMITTED_SEQ}"
+echo "=== Commit readiness (séquence $CHECK_SEQ) — les deux orgs doivent être true ==="
 # shellcheck source=/dev/null
 source "$ROOT/scripts/fabric-ec2-env.sh"
-peer lifecycle chaincode checkcommitreadiness \
-  --channelID "$CC_CHANNEL" --name "$CC_NAME" \
-  --version 1.0 --sequence "$CC_SEQUENCE" \
-  --tls --cafile "$ORDERER_CA" \
-  --output json 2>/dev/null || peer lifecycle chaincode checkcommitreadiness \
-  --channelID "$CC_CHANNEL" --name "$CC_NAME" \
-  --version 1.0 --sequence "$CC_SEQUENCE" \
-  --tls --cafile "$ORDERER_CA" || true
+if [[ -n "$CHECK_SEQ" ]]; then
+  peer lifecycle chaincode checkcommitreadiness \
+    --channelID "$CC_CHANNEL" --name "$CC_NAME" \
+    --version 1.0 --sequence "$CHECK_SEQ" \
+    --tls --cafile "$ORDERER_CA" $ORDERER_OPTS \
+    --output json 2>/dev/null || peer lifecycle chaincode checkcommitreadiness \
+    --channelID "$CC_CHANNEL" --name "$CC_NAME" \
+    --version 1.0 --sequence "$CHECK_SEQ" \
+    --tls --cafile "$ORDERER_CA" $ORDERER_OPTS || true
+fi
 
 echo ""
 echo "=== Conteneurs chaincode (docker) ==="

@@ -9,8 +9,8 @@ export PATH="$ROOT/fabric-samples/bin:${PATH}"
 
 export CC_NAME="${CC_NAME:-chaincacao}"
 export CC_CHANNEL="${CC_CHANNEL:-chaincacao-channel}"
-export CC_SEQUENCE="${CC_SEQUENCE:-2}"
 export CC_LABEL="${CC_LABEL:-chaincacao_v2}"
+# Ne pas fixer CC_SEQUENCE ici : l’upgrade doit utiliser (séquence commitée + 1).
 
 TN="$ROOT/fabric-samples/test-network"
 ORG1="$TN/organizations/peerOrganizations/org1.example.com"
@@ -23,6 +23,11 @@ export CORE_PEER_TLS_ROOTCERT_FILE="${CORE_PEER_TLS_ROOTCERT_FILE:-$ORG1/peers/p
 
 export ORDERER_CA="${ORDERER_CA:-$TN/organizations/ordererOrganizations/example.com/tlsca/tlsca.example.com-cert.pem}"
 export PEER_TLS_ROOTCERT="${PEER_TLS_ROOTCERT:-$CORE_PEER_TLS_ROOTCERT_FILE}"
+
+# Sur EC2, orderer.example.com ne résout pas en DNS : joindre localhost + override TLS.
+export ORDERER_ADDRESS="${ORDERER_ADDRESS:-localhost:7050}"
+export ORDERER_TLS_HOSTNAME_OVERRIDE="${ORDERER_TLS_HOSTNAME_OVERRIDE:-orderer.example.com}"
+export ORDERER_OPTS="-o ${ORDERER_ADDRESS} --ordererTLSHostnameOverride ${ORDERER_TLS_HOSTNAME_OVERRIDE}"
 
 if [[ ! -f "$FABRIC_CFG_PATH/core.yaml" ]]; then
   echo "ERREUR: core.yaml introuvable dans FABRIC_CFG_PATH=$FABRIC_CFG_PATH"
@@ -40,4 +45,5 @@ echo "OK — Fabric EC2"
 echo "  ROOT=$ROOT"
 echo "  FABRIC_CFG_PATH=$FABRIC_CFG_PATH"
 echo "  CORE_PEER_ADDRESS=$CORE_PEER_ADDRESS"
-echo "  CC_CHANNEL=$CC_CHANNEL  CC_NAME=$CC_NAME  CC_SEQUENCE=$CC_SEQUENCE  CC_LABEL=$CC_LABEL"
+echo "  CC_CHANNEL=$CC_CHANNEL  CC_NAME=$CC_NAME  CC_LABEL=$CC_LABEL"
+echo "  ORDERER_ADDRESS=$ORDERER_ADDRESS  ORDERER_TLS_HOSTNAME_OVERRIDE=$ORDERER_TLS_HOSTNAME_OVERRIDE"
